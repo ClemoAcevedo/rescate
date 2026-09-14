@@ -32,11 +32,13 @@
   overflow-wrap: anywhere;
 }
 
-.page__link {
+.page__link,
+.page__button {
   display: inline-block;
   max-width: 100%;
   margin-top: 2rem;
   padding: 0.75rem 1rem;
+  border: 0;
   border-radius: 0.5rem;
   background: #276749;
   color: #fff;
@@ -45,6 +47,38 @@
   text-decoration: none;
 }
 
-.page__link:hover {
+.page__button:not(:disabled) {
+  cursor: pointer;
+}
+
+.page__link:hover,
+.page__button:not(:disabled):hover {
   background: #1c5a3c;
+}
+
+.page__button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.connection-status {
+  min-height: 3.5rem;
+  max-width: 40rem;
+  margin-top: 1.25rem;
+  color: #3d5144;
+  line-height: 1.6;
+}
+
+.connection-status p {
+  margin: 0;
+}
+
+.connection-status__success {
+  color: #1c5a3c;
+  font-weight: 700;
+}
+
+.connection-status__error {
+  color: #9b2c2c;
+  font-weight: 700;
 }

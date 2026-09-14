@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
+import { ConnectionCheckPage } from '../pages/ConnectionCheckPage'
 import { LoginPage } from '../pages/LoginPage'
 import { LotDetailPage } from '../pages/LotDetailPage'
 import { LotsPage } from '../pages/LotsPage'
@@ -22,6 +23,7 @@ function App() {
           <Route path="/lotes/:id" element={<LotDetailPage />} />
           <Route path="/registro" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/conexion" element={<ConnectionCheckPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

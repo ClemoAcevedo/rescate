@@ -23,14 +23,16 @@ producción en `dist/`.
 - `/lotes` muestra el listado provisional.
 - `/lotes/:id` muestra el detalle provisional de un lote.
 - `/registro` y `/login` muestran sus pantallas provisionales.
+- `/conexion` ofrece una comprobación técnica separada de la navegación principal.
 - Cualquier otra dirección muestra una página 404.
 
 ## API
 
 La propuesta de contrato de identidad y lotes está en
 [docs/api-contract.md](docs/api-contract.md). Configura la URL base mediante
-`VITE_API_BASE_URL`; consulta `.env.example`. El contrato está pendiente de
-validación con backend y no hay llamadas HTTP integradas todavía.
+`VITE_API_BASE_URL`; consulta `.env.example`. La prueba técnica de salud y sus
+límites de despliegue están documentados en
+[docs/connection-check.md](docs/connection-check.md).
 
 ## Despliegue
 
