@@ -1,5 +1,5 @@
 .page {
-  width: min(100% - 2rem, 52rem);
+  width: min(calc(100% - 2rem), 52rem);
   margin: 0 auto;
   padding-block: clamp(3rem, 10vw, 7rem);
 }
@@ -20,24 +20,28 @@
   font-size: clamp(2.25rem, 7vw, 4.5rem);
   line-height: 1.05;
   letter-spacing: -0.055em;
+  overflow-wrap: anywhere;
 }
 
 .page__description {
   max-width: 40rem;
   margin: 1.5rem 0 0;
   color: #3d5144;
-  font-size: 1.125rem;
+  font-size: clamp(1rem, 2.5vw, 1.125rem);
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .page__link {
   display: inline-block;
+  max-width: 100%;
   margin-top: 2rem;
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
   background: #276749;
   color: #fff;
   font-weight: 700;
+  overflow-wrap: anywhere;
   text-decoration: none;
 }
 

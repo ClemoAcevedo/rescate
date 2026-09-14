@@ -9,7 +9,7 @@
 
 .app-header__content {
   display: flex;
-  width: min(100% - 2rem, 72rem);
+  width: min(calc(100% - 2rem), 72rem);
   min-height: 4.5rem;
   margin: 0 auto;
   align-items: center;
@@ -18,6 +18,7 @@
 }
 
 .app-header__brand {
+  flex: 0 0 auto;
   color: #276749;
   font-size: 1.35rem;
   font-weight: 800;
@@ -55,13 +56,24 @@
 @media (max-width: 38rem) {
   .app-header__content {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+    align-items: stretch;
+    gap: 0.875rem;
     padding-block: 1rem;
   }
 
   .app-header__nav-list {
-    flex-wrap: wrap;
-    margin-inline: -0.5rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .app-header__nav-list li:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .app-header__nav-link {
+    min-height: 2.75rem;
+    padding: 0.625rem;
+    text-align: center;
   }
 }
