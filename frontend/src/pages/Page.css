@@ -1,0 +1,46 @@
+.page {
+  width: min(100% - 2rem, 52rem);
+  margin: 0 auto;
+  padding-block: clamp(3rem, 10vw, 7rem);
+}
+
+.page__eyebrow {
+  margin: 0 0 0.75rem;
+  color: #4b6353;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page h1 {
+  max-width: 15ch;
+  margin: 0;
+  color: #1c3325;
+  font-size: clamp(2.25rem, 7vw, 4.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.055em;
+}
+
+.page__description {
+  max-width: 40rem;
+  margin: 1.5rem 0 0;
+  color: #3d5144;
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+
+.page__link {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: #276749;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.page__link:hover {
+  background: #1c5a3c;
+}

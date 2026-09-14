@@ -1,6 +1,6 @@
 # Frontend de Rescate
 
-Aplicación web construida con React, TypeScript y Vite.
+Aplicación web construida con React, TypeScript, Vite y React Router.
 
 ## Comandos
 
@@ -16,3 +16,18 @@ npm run build
 `npm run dev` inicia el servidor de desarrollo y muestra la URL local en la
 terminal. `npm run build` realiza la comprobación de tipos y crea la versión de
 producción en `dist/`.
+
+## Rutas
+
+- `/` redirige a `/lotes`.
+- `/lotes` muestra el listado provisional.
+- `/lotes/:id` muestra el detalle provisional de un lote.
+- `/registro` y `/login` muestran sus pantallas provisionales.
+- Cualquier otra dirección muestra una página 404.
+
+## Despliegue
+
+La aplicación usa rutas del lado del cliente mediante `BrowserRouter`. El
+alojamiento debe responder con `index.html` para solicitudes a rutas internas
+que no correspondan a archivos estáticos (por ejemplo, `/lotes/demo`) para que
+React Router pueda resolverlas después de una recarga o acceso directo.
