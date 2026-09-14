@@ -25,6 +25,13 @@ producción en `dist/`.
 - `/registro` y `/login` muestran sus pantallas provisionales.
 - Cualquier otra dirección muestra una página 404.
 
+## API
+
+La propuesta de contrato de identidad y lotes está en
+[docs/api-contract.md](docs/api-contract.md). Configura la URL base mediante
+`VITE_API_BASE_URL`; consulta `.env.example`. El contrato está pendiente de
+validación con backend y no hay llamadas HTTP integradas todavía.
+
 ## Despliegue
 
 La aplicación usa rutas del lado del cliente mediante `BrowserRouter`. El
