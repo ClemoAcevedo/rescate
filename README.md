@@ -29,6 +29,23 @@ npm install
 npm run dev
 ```
 
+La aplicación se abrirá en la dirección que Vite indique en la terminal, normalmente
+`http://localhost:5173`.
+
+Para crear una compilación de producción:
+
+```bash
+cd web
+npm run build
+```
+
+Para comprobar las reglas de estilo y calidad:
+
+```bash
+cd web
+npm run lint
+```
+
 ### API
 
 ```bash
