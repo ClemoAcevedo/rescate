@@ -46,6 +46,12 @@ cd web
 npm run lint
 ```
 
+### Rutas del frontend
+
+La aplicación usa rutas gestionadas en el navegador. En producción, el servidor web debe
+responder con `index.html` para las rutas internas desconocidas (fallback de SPA); de otro
+modo, una recarga directa, por ejemplo en `/lotes/demo`, puede responder 404.
+
 ### API
 
 ```bash
