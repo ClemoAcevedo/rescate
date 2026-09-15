@@ -12,6 +12,7 @@
 
 - Prefijo y formato: las rutas siguientes son propuestas relativas a la URL base configurada en `VITE_API_BASE_URL`.
 - Cuerpos exitosos: JSON UTF-8 cuando contengan datos. `204 No Content` es una respuesta válida para cierre de sesión.
+- Desarrollo local: el ejemplo de frontend usa `VITE_API_BASE_URL=/api`; Vite reenvía ese prefijo al backend local `http://localhost:3000` y elimina `/api`. En otro entorno, la URL base debe configurarse según su proxy o despliegue.
 - Errores: el cliente debe usar el estado HTTP y tolerar cuerpos vacíos, texto o JSON. Una posible envoltura `{ "error": { "code", "message" } }` requiere validación previa; no está confirmada.
 - Fechas: si se acuerdan, se transportarían como texto ISO 8601. Este formato tampoco está confirmado.
 

@@ -181,3 +181,46 @@ h1 {
     padding-top: 1.25rem;
   }
 }
+
+.connection-actions {
+  margin-top: 1.75rem;
+}
+
+.primary-action {
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid #155832;
+  border-radius: 0.5rem;
+  background: #155832;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-action:hover:not(:disabled) {
+  background: #0e4727;
+}
+
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.connection-result {
+  margin: 1.25rem 0 0;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  background: #f1f4ef;
+  color: #395043;
+  line-height: 1.5;
+}
+
+.connection-result--success {
+  background: #dbeedd;
+  color: #155832;
+}
+
+.connection-result--error {
+  background: #fce9e5;
+  color: #8b2d1a;
+}
