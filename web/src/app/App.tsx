@@ -1,6 +1,6 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { AppLayout } from '../layouts/AppLayout'
-import { ConnectionCheckPage } from '../pages/ConnectionCheckPage'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { AppLayout } from '../components/AppLayout'
+import { ConnectionPage } from '../pages/ConnectionPage'
 import { LoginPage } from '../pages/LoginPage'
 import { LotDetailPage } from '../pages/LotDetailPage'
 import { LotsPage } from '../pages/LotsPage'
@@ -15,19 +15,17 @@ function RootRedirect() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<RootRedirect />} />
-        <Route element={<AppLayout />}>
-          <Route path="/lotes" element={<LotsPage />} />
-          <Route path="/lotes/:id" element={<LotDetailPage />} />
-          <Route path="/registro" element={<RegisterPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/conexion" element={<ConnectionCheckPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route index element={<RootRedirect />} />
+        <Route path="lotes" element={<LotsPage />} />
+        <Route path="lotes/:id" element={<LotDetailPage />} />
+        <Route path="registro" element={<RegisterPage />} />
+        <Route path="login" element={<LoginPage />} />
+        <Route path="conexion" element={<ConnectionPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
   )
 }
 

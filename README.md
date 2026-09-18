@@ -29,6 +29,57 @@ npm install
 npm run dev
 ```
 
+La aplicación se abrirá en la dirección que Vite indique en la terminal, normalmente
+`http://localhost:5173`.
+
+### Configuración de la API local
+
+Para usar la comprobación técnica de conexión, inicia primero la API en otra terminal:
+
+```bash
+cd api
+npm install
+npm run dev
+```
+
+En `web`, copia el ejemplo de entorno antes de iniciar Vite:
+
+```bash
+cp .env.example .env
+npm run dev
+```
+
+El valor `VITE_API_BASE_URL=/api` usa el proxy de desarrollo de Vite hacia
+`http://localhost:3000`. Para otro despliegue, configura `VITE_API_BASE_URL` con la
+URL base correspondiente y asegúrate de que el servidor o CORS permita las solicitudes.
+
+La vista técnica está disponible en `http://localhost:5173/conexion`. Selecciona
+**Comprobar conexión** para consultar el endpoint real `GET /health`; si falla, usa
+**Reintentar comprobación** después de restablecer la API local.
+
+La matriz de criterios y los pasos de revisión manual están en
+`docs/verificacion-navegacion-web.md`.
+
+Para crear una compilación de producción:
+
+```bash
+cd web
+npm run build
+```
+
+Para comprobar las reglas de estilo y calidad:
+
+```bash
+cd web
+npm run lint
+```
+
+### Rutas del frontend
+
+La aplicación usa rutas gestionadas en el navegador. En producción, el servidor web debe
+responder con `index.html` para las rutas internas desconocidas (fallback de SPA); de otro
+modo, una recarga directa, por ejemplo en `/lotes/demo`, puede responder 404.
+
 ### API
 
 ```bash
