@@ -2,9 +2,9 @@ export function LoginPage() {
   return (
     <main className="page-content">
       <section className="content-card" aria-labelledby="login-title">
-        <p className="eyebrow">Cuenta Rescate</p>
+        <p className="eyebrow">Cuenta</p>
         <h1 id="login-title">Iniciar sesión</h1>
-        <p>Accede a tu cuenta para gestionar tu participación en Rescate.</p>
+        <p>Esta pantalla permitirá acceder a Rescate cuando la autenticación esté disponible.</p>
       </section>
     </main>
   )

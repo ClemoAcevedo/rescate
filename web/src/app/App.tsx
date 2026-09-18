@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { ConnectionPage } from '../pages/ConnectionPage'
 import { LoginPage } from '../pages/LoginPage'
@@ -7,11 +7,17 @@ import { LotsPage } from '../pages/LotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { RegisterPage } from '../pages/RegisterPage'
 
+function RootRedirect() {
+  const { search } = useLocation()
+
+  return <Navigate replace to={{ pathname: '/lotes', search }} />
+}
+
 function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route index element={<Navigate to="/lotes" replace />} />
+        <Route index element={<RootRedirect />} />
         <Route path="lotes" element={<LotsPage />} />
         <Route path="lotes/:id" element={<LotDetailPage />} />
         <Route path="registro" element={<RegisterPage />} />

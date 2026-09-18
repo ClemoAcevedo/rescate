@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { RescateLogo } from './RescateLogo'
 
 const navigationItems = [
   { to: '/lotes', label: 'Explorar lotes' },
@@ -35,7 +36,7 @@ export function SiteHeader() {
         aria-label="Rescate, explorar lotes"
         onClick={closeMenu}
       >
-        Rescate
+        <RescateLogo />
       </Link>
       <button
         className="menu-toggle"
