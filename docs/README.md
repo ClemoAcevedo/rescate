@@ -1,5 +1,10 @@
 # Documentación
 
+## K005 — Fotos
+
+- [Evaluación y prototipo de almacenamiento](k005-fotos.md)
+- [Evidencia de ejecución y bloqueos](k005-evidencia.md)
+
 ## E1
 
 La documentación correspondiente a la primera entrega se encuentra en `entregas/e1`.
