@@ -91,3 +91,21 @@ Los tipos propuestos se encuentran en `web/src/services/api-types.ts`. Son delib
 3. Definir el modelo de usuario: roles, nombre visible y campos obligatorios.
 4. Definir modelo y ciclo de vida de lote: estados, cantidades, alimentos, ubicación, disponibilidad y permisos.
 5. Definir filtros, orden, paginación y límites del listado.
+
+## Decisión de dominio posterior a E1
+
+[ADR 0002](adr/0002-ofertas-parciales.md) permite ofrecer la cantidad disponible
+a la primera solicitud aunque sea menor que la solicitada. Aceptar confirma solo
+lo ofrecido y cierra la solicitud en cola sin prioridad residual. Los contratos
+futuros de solicitudes/ofertas/reservas deberán distinguir las cantidades
+solicitada, ofrecida y confirmada, y comunicar ese cierre antes de aceptar.
+La cantidad publicada de un lote no equivale a su disponibilidad asignable.
+
+Rechazar o dejar vencer sin respuesta también cierra la solicitud y la saca de
+la cola sin prioridad residual. No genera otra solicitud automáticamente: volver
+a solicitar exige una nueva acción explícita y una nueva posición FIFO.
+
+Se mantiene como riesgo futuro la representación de solicitudes posteriores
+sobre el mismo lote: K003 limita a un compromiso confirmado por usuario/lote y
+el modelo de solicitud/oferta/reingreso deberá resolver esa compatibilidad. Este registro no agrega operaciones, campos de transporte ni
+implementación al contrato propuesto de identidad y lotes.

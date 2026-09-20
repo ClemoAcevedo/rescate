@@ -135,6 +135,10 @@ docs/
 
 Estos documentos contienen el contexto, requerimientos y decisiones definidas durante la primera etapa del proyecto.
 
+El [índice de documentación](docs/README.md) incluye las decisiones posteriores.
+La regla vigente de [ofertas parciales y resolución de la solicitud](docs/adr/0002-ofertas-parciales.md)
+complementa E1 sin modificar los PDF históricos ni implementar todavía ese flujo.
+
 ## Flujo de trabajo
 
 Las ramas permanentes del proyecto son:

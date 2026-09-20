@@ -3,6 +3,16 @@
 Derivado antes de escribir la migración, sobre `development` `00597b8`.
 Alcance: persistencia de RF01, RF02 y RF04; no implementación de sus operaciones.
 
+**Aclaración de dominio posterior a E1 (2026-09-20):**
+[ADR 0002](adr/0002-ofertas-parciales.md) permite ofertas parciales a la cabeza
+FIFO y cierra la solicitud al aceptar, rechazar o vencer sin respuesta, sin
+prioridad residual ni reingreso automático. Volver a solicitar exige una nueva
+solicitud explícita y una nueva posición FIFO. Las precisiones
+de cantidades de abajo corresponden a esa decisión posterior; no cambian el
+esquema, migración, pruebas ni alcance de K003. La representación de solicitudes
+posteriores sobre el mismo lote y su compatibilidad con una reserva confirmada
+activa permanecen registradas allí como riesgo futuro del modelo.
+
 ## Fuentes y clasificación
 
 - **A: requisito E1/anexos.** [Informe E1](entregas/e1/informe-e1.pdf),
@@ -36,7 +46,7 @@ historia en cascada). Los campos siguientes son NOT NULL salvo `conditions` y
 | `establishments`: negocio u organización que publica (A: informe p. 1) | `id`, `name` text, `address` text, `latitude`/`longitude` double precision, `time_zone` text | `id` | — |
 | `memberships`: pertenencia de un operador a un establecimiento (A: RF01/B) | `id`, `user_id`, `establishment_id` | `id` | `user_id → users.id`, `establishment_id → establishments.id` |
 | `lots`: packs equivalentes ofrecidos por un establecimiento (A: RF02/B/F) | `id`, `establishment_id`, `description` text, `category` text, `quantity` integer, `conditions` text nullable, `address` text, `latitude`/`longitude` double precision, `time_zone` text, `pickup_starts_at`/`pickup_ends_at` timestamptz, `status` text, `created_at` timestamptz, `published_at` timestamptz nullable | `id` | `establishment_id → establishments.id` |
-| `commitments`: solicitud de un usuario sobre una cantidad de un lote; K003 representa únicamente la variante confirmada (A: RF04/B/F) | `id`, `user_id`, `lot_id`, `quantity` integer, `status` text, `created_at` timestamptz | `id` | `user_id → users.id`, `lot_id → lots.id` |
+| `commitments`: compromiso de un usuario sobre una cantidad de un lote; K003 representa únicamente la variante confirmada (A: RF04/B/F). Tras una oferta parcial, la cantidad confirmada es la aceptada (decisión posterior: ADR 0002). | `id`, `user_id`, `lot_id`, `quantity` integer, `status` text, `created_at` timestamptz | `id` | `user_id → users.id`, `lot_id → lots.id` |
 
 ### Justificación y nullability
 
@@ -104,11 +114,19 @@ congela contenido ni verifica fotos. El índice UNIQUE parcial
 `status = 'confirmed'` (**A**, RF04, implementación **B**). Al incorporar espera y
 ofertas, la misma migración deberá ampliar el predicado a esos estados activos;
 no sustituirlo por UNIQUE permanente que impida nuevos compromisos históricos.
+ADR 0002 no elimina esta restricción: cerrar la solicitud en cola al aceptar
+parcialmente no termina la reserva confirmada. Antes de admitir una nueva
+solicitud simultánea del mismo usuario/lote debe resolverse esa compatibilidad;
+no se presupone reingreso inmediato ni se cambia el índice de K003.
 
 ## Cantidades y demás restricciones
 
 - `lots.quantity` representa Q, cantidad declarada/publicada, entera y > 0.
-- `commitments.quantity` representa packs solicitados, entera y > 0.
+- `commitments.quantity`, en la única variante `confirmed` de K003, representa
+  packs comprometidos, entera y > 0. Aclaración posterior a E1 (ADR 0002): si se
+  solicitaron 10 y se ofrecieron/aceptaron 4, la reserva corresponde a 4. K003 no
+  representa por separado solicitud original, oferta ni cierre de la posición;
+  su trazabilidad corresponde al diseño futuro, sin migración en esta revisión.
 - Ambas son NOT NULL con CHECK nombrados. Cero, negativos y NULL se rechazan.
   El tipo integer rechaza parámetros de texto fraccionarios y fuera de rango;
   la API futura deberá rechazar fracciones antes de cualquier cast SQL que redondee.
@@ -121,6 +139,8 @@ no sustituirlo por UNIQUE permanente que impida nuevos compromisos históricos.
   Incorporarlos, conciliarlos con compromisos y validar cantidad contra Q y
   disponibilidad bajo bloqueo corresponde a la reserva transaccional posterior.
   Los CHECK actuales no garantizan ausencia de sobreasignación entre filas.
+  ADR 0002 precisa que F → O y O → R mueven solo la cantidad ofrecida y aceptada;
+  Q no cambia y la demanda restante no constituye inventario ni prioridad residual.
 - UNIQUE: correo exacto, par de membresía y compromiso activo usuario/lote.
 - CHECK: cantidades, estados, ventana ordenada, coherencia de publicación,
   latitud [-90,90], longitud [-180,180], textos requeridos no vacíos y descripción
