@@ -14,9 +14,13 @@ El repositorio está organizado en las siguientes carpetas:
 
 ## Requisitos
 
-Para ejecutar el proyecto localmente se necesita:
+Para levantar todos los servicios, usa Docker con Compose v2 siguiendo la
+[guía de entorno local y CI (K006)](docs/desarrollo-local.md). Incluye clonación,
+variables, verificaciones, detención y limpieza. No depende de K002.
 
-- Node.js 24 recomendado (API: mínimo 22.13)
+Para ejecutar web/API directamente en el host se necesita:
+
+- Node.js 24.14.0 recomendado (API: mínimo 22.13)
 - npm
 
 ## Desarrollo
@@ -25,7 +29,7 @@ Para ejecutar el proyecto localmente se necesita:
 
 ```bash
 cd web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -38,7 +42,7 @@ Para usar la comprobación técnica de conexión, inicia primero la API en otra 
 
 ```bash
 cd api
-npm install
+npm ci
 npm run dev
 ```
 
@@ -84,7 +88,7 @@ modo, una recarga directa, por ejemplo en `/lotes/demo`, puede responder 404.
 
 ```bash
 cd api
-npm install
+npm ci
 npm run dev
 ```
 

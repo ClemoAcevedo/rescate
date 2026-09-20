@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "worker": "tsx src/worker.ts",
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up",
     "db:create": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create --migration-file-language sql",
     "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down 1",
