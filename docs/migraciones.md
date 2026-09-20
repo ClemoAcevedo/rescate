@@ -2,7 +2,39 @@
 
 Gestor: node-pg-migrate 9.0.0; controlador: pg 8.23.0.
 La [decisión y comparación](adr/0001-gestor-de-migraciones.md) explica las alternativas.
-La única migración crea `public.migration_tool_test`, sin entidades de K003.
+K002 creó `public.migration_tool_test`, que se conserva sin modificaciones.
+K003 añade las cinco entidades del [modelo inicial](modelo-inicial.md).
+La evidencia histórica de K002 más abajo conserva su contexto original.
+
+## Prueba actual de K003
+
+Con el servicio `db` del Compose K006 operativo y dependencias de API instaladas:
+
+```bash
+cd api
+npm ci
+npm run db:test:compose
+```
+
+Este comando crea una base `rescate_k003_test_<timestamp>_<sufijo>` desde
+`template0` en el PostgreSQL existente, toma su configuración sin imprimirla y
+ejecuta `db:test`. No cambia `.env`, no levanta otro servidor ni borra bases.
+Conserva la base con datos ficticios para inspección, incluso ante fallo.
+Requiere Docker Compose y acceso desde el host al puerto loopback de K006.
+
+Para una base vacía dedicada ya provisionada, configura `DATABASE_URL` y ejecuta
+`npm run db:test`. Su nombre debe empezar por `rescate_k003_test_`.
+La suite comprueba tablas/PK/FK, datos válidos e inválidos, historial, segunda
+ejecución, down exclusivamente de K003 y reaplicación desde la versión K002.
+Rechaza bases con relaciones existentes y carpetas con migraciones no revisadas.
+No ejecutar primero `db:migrate` sobre esa base de prueba: debe empezar vacía.
+
+El job Compose existente ejecuta la misma suite en CI. No hay migración automática
+al arrancar la API. Para migrar una base normal siguen vigentes `db:migrate` y
+`db:rollback`; este último ahora elimina las tablas y datos de K003 si es la última
+migración. No usarlo en una base con datos que deban conservarse.
+Ver [resultados K003](k003-evidencia.md). La sección de aceptación K002 de abajo
+describe la versión histórica del script, reemplazada por esta prueba integrada.
 
 ## Preparación
 
