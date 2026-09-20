@@ -1,7 +1,14 @@
 # Documentación
 
+<<<<<<< HEAD
+## K005 — Fotos
+
+- [Evaluación y prototipo de almacenamiento](k005-fotos.md)
+- [Evidencia de ejecución y bloqueos](k005-evidencia.md)
+=======
 - [Migraciones: configuración, comandos y verificación de K002](migraciones.md).
 - [ADR 0001: elección del gestor de migraciones](adr/0001-gestor-de-migraciones.md).
+>>>>>>> origin/development
 
 ## E1
 

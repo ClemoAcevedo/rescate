@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "photos": "node --env-file-if-exists=.env dist/prototypes/photos/cli.js",
+    "test:photos": "npm run build && node --test test/photos.test.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "worker": "tsx src/worker.ts",
@@ -19,6 +21,8 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1136.0",
+    "@aws-sdk/s3-request-presigner": "3.1136.0",
     "express": "^5.2.1",
     "pg": "8.23.0"
   },
