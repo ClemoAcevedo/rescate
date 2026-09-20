@@ -14,7 +14,8 @@
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up",
     "db:create": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create --migration-file-language sql",
     "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down 1",
-    "db:test": "node --env-file-if-exists=.env scripts/test-migrations.mjs"
+    "db:test": "node --env-file-if-exists=.env scripts/test-migrations.mjs",
+    "db:test:compose": "node scripts/test-migrations-compose.mjs"
   },
   "keywords": [],
   "author": "",

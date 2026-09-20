@@ -74,6 +74,15 @@ jobs:
           curl --fail --silent --show-error http://localhost:5173/api/health
       - name: PostgreSQL and PostGIS
         run: docker compose exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT current_database(), PostGIS_Version();"'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - name: Install migration test dependencies
+        run: npm --prefix api ci
+      - name: K003 migrations on empty PostgreSQL and rollback
+        run: npm --prefix api run db:test:compose
       - name: Worker
         run: |
           test "$(docker inspect --format '{{.State.Running}}' "$(docker compose ps -q worker)")" = true
