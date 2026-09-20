@@ -6,10 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-<<<<<<< HEAD
     "photos": "node --env-file-if-exists=.env dist/prototypes/photos/cli.js",
-    "test:photos": "npm run build && node --test test/photos.test.mjs"
-=======
+    "test:photos": "npm run build && node --test test/photos.test.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "worker": "tsx src/worker.ts",
@@ -17,21 +15,16 @@
     "db:create": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create --migration-file-language sql",
     "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down 1",
     "db:test": "node --env-file-if-exists=.env scripts/test-migrations.mjs"
->>>>>>> origin/development
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
-<<<<<<< HEAD
     "@aws-sdk/client-s3": "3.1136.0",
     "@aws-sdk/s3-request-presigner": "3.1136.0",
-    "express": "^5.2.1"
-=======
     "express": "^5.2.1",
     "pg": "8.23.0"
->>>>>>> origin/development
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
