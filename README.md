@@ -14,9 +14,13 @@ El repositorio está organizado en las siguientes carpetas:
 
 ## Requisitos
 
-Para ejecutar el proyecto localmente se necesita:
+Para levantar todos los servicios, usa Docker con Compose v2 siguiendo la
+[guía de entorno local y CI (K006)](docs/desarrollo-local.md). Incluye clonación,
+variables, verificaciones, detención y limpieza. No depende de K002.
 
-- Node.js
+Para ejecutar web/API directamente en el host se necesita:
+
+- Node.js 24.14.0 recomendado (API: mínimo 22.13)
 - npm
 
 ## Desarrollo
@@ -25,7 +29,7 @@ Para ejecutar el proyecto localmente se necesita:
 
 ```bash
 cd web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -38,7 +42,7 @@ Para usar la comprobación técnica de conexión, inicia primero la API en otra 
 
 ```bash
 cd api
-npm install
+npm ci
 npm run dev
 ```
 
@@ -84,7 +88,7 @@ modo, una recarga directa, por ejemplo en `/lotes/demo`, puede responder 404.
 
 ```bash
 cd api
-npm install
+npm ci
 npm run dev
 ```
 
@@ -103,6 +107,19 @@ Una ejecución correcta responde:
 ```
 
 ## Documentación
+
+### Migraciones PostgreSQL (K002)
+
+Usamos `node-pg-migrate` con SQL en `api/migrations/` y mantenemos `pg`.
+Con una base PostgreSQL disponible, desde `api/`: ejecuta `npm ci`, copia
+`.env.example` a `.env`, configura `DATABASE_URL` y ejecuta `npm run db:migrate`.
+`npm run db:create -- nombre` crea una migración y `npm run db:rollback` revierte
+la última. K002 incluye solamente una tabla técnica de prueba.
+
+Consulta la [guía y prueba reproducible](docs/migraciones.md) y el
+[ADR de elección](docs/adr/0001-gestor-de-migraciones.md).
+La prueba completa de K002 pasó contra PostgreSQL 16.15: aplicación, historial,
+segunda ejecución sin cambios, rollback y reaplicación.
 
 Las entregas y documentos asociados al proyecto se encuentran en `docs`.
 
