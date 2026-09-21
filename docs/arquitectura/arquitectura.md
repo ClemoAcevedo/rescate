@@ -1,7 +1,7 @@
 # Arquitectura de Rescate
 
-Fecha de revisión: 2026-09-21, reconciliación K010 con development.
-Estado: K010 implementado incrementalmente; K008 y restantes operaciones pendientes.
+Fecha de revisión: 2026-09-21, integración K008 con K010 en el árbol de trabajo.
+Estado: K008 y K010 implementados; pantallas de negocio y restantes operaciones pendientes.
 Decisión: [ADR 0003](../adr/0003-arquitectura-incremental-s02.md).
 
 Este documento separa el código existente del diseño que guiará S02. No acredita
@@ -28,7 +28,7 @@ visualmente todas las maquetas. No se modificaron los PDF.
 | --- | --- |
 | Informe pp. 3–4 | Propone monolito modular, PostgreSQL/PostGIS, objetos y trabajador con reglas compartidas. Las cuatro responsabilidades internas de este documento detallan esa dirección; no se atribuyen literalmente a E1. |
 | Anexos C p. 5 y H p. 23 | Operaciones críticas coordinadas bajo transacción, mismo cliente PostgreSQL, relectura tras bloqueo y ausencia de llamadas externas bajo bloqueo. Son diseño para futuras operaciones, no capacidades actuales. |
-| Anexos H p. 21 | Ya define contraseña con scrypt, sesión opaca persistida en PostgreSQL, plazo de 12 horas, cookie HttpOnly/Secure/SameSite Lax, token CSRF y validación de origen. K008 debe materializarlo; no se considera indeciso por el texto preliminar de K004. |
+| Anexos H p. 21 | Ya define contraseña con scrypt, sesión opaca persistida en PostgreSQL, plazo de 12 horas, cookie HttpOnly/Secure/SameSite Lax, token CSRF y validación de origen. K008 lo materializa; no se considera indeciso por el texto preliminar de K004. |
 | Anexos I pp. 24–25 y 27 | Migraciones versionadas, fotos opcionales en objetos y copias separadas. ADR 0001 concreta el gestor y K005 documenta el prototipo B2. |
 | Informe p. 5 y anexos E p. 7 | E2 prevé modelos, arquitectura, Walking Skeleton, fotos, CI y migraciones; no demuestra su cumplimiento actual. |
 
@@ -57,8 +57,8 @@ flowchart LR
   persona["Persona"] --> web["Web React en navegador"]
   web -->|GET /api/health| vite["Vite / proxy de desarrollo"]
   vite -->|GET /health| api["API Express"]
-  cliente["Cliente de desarrollo K010"] -->|Lotes: actor temporal| api
-  api -->|Casos de uso y repositorio K010| db
+  cliente["Cliente HTTPS K008/K010"] -->|Sesión, CSRF y lotes| api
+  api -->|Identidad, sesiones y lotes| db
   migraciones["Migraciones y scripts de prueba"] --> db["PostgreSQL / PostGIS"]
   fotos["CLI de fotos K005 aislada"] --> b2["Backblaze B2 privado / S3"]
   fotos --> disco["Disco local de prueba"]
@@ -76,8 +76,8 @@ HTTPS de producción ni un despliegue público ya disponible.
 | --- | --- |
 | Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. Login, registro y lotes no consumen operaciones de negocio. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
-| API | [app.ts](../../api/src/app.ts) expone salud y cuatro rutas de lotes. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aún no aporta credenciales/sesiones. |
-| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. Tener tablas no implementa sus operaciones. |
+| API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth y cuatro de lotes. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
+| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; commitments sigue sin flujo implementado. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS. No hay consultas espaciales en la API. |
 | Worker | [worker.ts](../../api/src/worker.ts) registra inicio, mantiene vivo el proceso y maneja señales. No consulta la base, no hace polling ni ejecuta trabajos. Comparte paquete e imagen con API, pero es otro proceso. |
 | Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../k005-evidencia.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
@@ -219,7 +219,7 @@ casos de uso de producto. No se introduce un verificador automático en este PR.
 ### Ejemplos futuros de responsabilidades
 
 Los ejemplos de esta sección ilustran el objetivo; las firmas reales K010 están
-en [use-cases.ts](../../api/src/application/lots/use-cases.ts). K008 sigue pendiente.
+en [lotes](../../api/src/application/lots/use-cases.ts) e [identidad](../../api/src/application/identity/use-cases.ts).
 
 | Ejemplo | Ubicación responsable | Motivo |
 | --- | --- | --- |
@@ -277,8 +277,7 @@ la [guía OpenAPI](../api/README.md); su mapeo concreto se probará en las tarje
 Se adopta antes de K008/K010: ocho operaciones, requests, responses, errores y
 seguridad, con validación estructural/de ejemplos en CI. La [guía](../api/README.md)
 registra decisiones y límites. K010 genera DTO del YAML y prueba respuestas HTTP
-con Ajv 2020-12; Redocly verifica estructura/ejemplos. Sesión y CSRF aún no se
-prueban: K008/K012 deben completar esa integración.
+con Ajv 2020-12; Redocly verifica estructura/ejemplos. K008 prueba sesión/CSRF con PostgreSQL, reinicio real de API y Chromium HTTPS.
 
 | Fuente de verdad | Qué define |
 | --- | --- |
@@ -318,12 +317,13 @@ de la instrucción de este PR; no se atribuye a una pauta del profesor no revisa
 4. **Contratos:** enlazar el OpenAPI versionado y, cuando existan handlers, contrastar
    una request/response real, su seguridad y errores. Relacionar el DTO con tipos de
    aplicación y persistencia sin confundirlos. K010 prueba respuestas reales
-   contra schemas OpenAPI; la seguridad de sesión y CSRF queda pendiente de K008.
+   contra schemas OpenAPI; K008 agrega seguridad de sesión y CSRF.
 5. **Recorrido trazable:** documentar la secuencia web → HTTP → Application →
    Domain/port → Infrastructure → PostgreSQL de una operación ya integrada de
    S02. Mostrar autorización, atomicidad y traducción de error donde corresponda.
    K010 demuestra HTTP de lotes con repositorio en memoria y, por separado,
-   Application/Infrastructure con PostgreSQL real; el navegador autenticado queda pendiente.
+   Application/Infrastructure con PostgreSQL real; K008 agrega navegador HTTPS autenticado.
+   Las pantallas integradas K009/K011 siguen pendientes.
 6. **Pruebas y operación:** asociar reglas puras con sus pruebas, casos de uso con
    sus escenarios y adaptadores con integración real. Adjuntar comandos,
    entorno, commit y resultado observado; distinguir pruebas nuevas de registros
@@ -351,12 +351,10 @@ tarjetas y evidencia de entrega; cualquier cambio de alcance se registra aparte.
 
 - Incorporar las responsabilidades al implementar K008/K010, sin refactorización
   preventiva ni mover archivos solo para coincidir con un árbol ideal.
-- K008 debe concretar credenciales, sesiones y permisos conforme a E1 H p. 21.
-  La normalización de correo está acordada en la guía OpenAPI; representación
-  interna de habilitación/administración y granularidad de permisos siguen
-  pendientes. El esquema
-  actual no contiene credenciales ni sesiones. El comportamiento de cookies en el
-  entorno HTTP local debe resolverse explícitamente sin debilitar producción.
+- K008 implementa credenciales, sesiones y permisos conforme a E1 H p. 21.
+  Correo canónico usa PostgreSQL como fuente única. Membership existente significa
+  habilitación operativa; no hay roles ni workflow administrativo. HTTPS es requisito
+  para cookies Secure; [K008](../k008-identidad.md) documenta ejecución y límites.
 - K010 materializa borradores completos, PATCH parcial, condiciones opcionales/null,
   versión optimista y publicación explícita acordados en OpenAPI. Las categorías
   conservan texto provisional; no se ha acordado un catálogo.
@@ -364,7 +362,7 @@ tarjetas y evidencia de entrega; cualquier cambio de alcance se registra aparte.
   en requisito obligatorio sin una decisión de negocio.
 - K010 añade UUID públicos persistidos para lotes y establecimientos. Application
   resuelve el establecimiento y autoriza por membership sobre su PK interna;
-  HTTP expone solo IDs públicos. K008 debe resolver el actor interno desde sesión.
+  HTTP expone solo IDs públicos. K008 resuelve el actor interno desde sesión.
 - K010 concreta port transaccional, mapeo de errores y generación de tipos HTTP. Estas reglas tienen
   revisión manual, no enforcement
   automático de dependencias en CI todavía.
@@ -393,7 +391,7 @@ ejecuta SELECT FOR UPDATE y escritura con el mismo cliente proporcionado por
 No hay llamadas externas bajo bloqueo ni políticas de permisos escondidas en SQL.
 [Composition](../../api/src/composition.ts) ensambla dependencias concretas.
 
-`Authenticate → Actor` es el punto de conexión K008; el actor por cabecera requiere
-habilitación explícita y rechaza producción. K008 deberá incorporar sesión,
-Origin y CSRF a los comandos HTTP sin introducir cookies en Application.
+`Authenticate → Actor` usa sesión persistente K008; no hay actor por cabecera
+en runtime. Origin y CSRF protegen los comandos HTTP sin introducir cookies
+en Application. Ver [implementación y evidencia K008](../k008-identidad.md).
 [Pruebas y límites](../k010-evidencia.md) distinguen ejecución local de CI remoto.

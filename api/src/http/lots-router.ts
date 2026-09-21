@@ -12,6 +12,7 @@ import { handleError, sendError } from "./errors.js"
 export interface LotsRouterOptions {
   useCases: LotUseCases
   authenticate: Authenticate
+  protectCommand: (request: Request) => Promise<void>
   log?: (error: unknown) => void
 }
 
@@ -84,14 +85,14 @@ function readVersion(payload: Payload): number {
 }
 function routeId(value: unknown): string { return typeof value === "string" ? value : "" }
 
-export function createLotsRouter({ useCases, authenticate, log = console.error }: LotsRouterOptions): Router {
+export function createLotsRouter({ useCases, authenticate, protectCommand, log = console.error }: LotsRouterOptions): Router {
   const router = Router()
   const withActor = (handler: (actor: Actor, request: Request, response: Response) => Promise<void>) =>
     async (request: Request, response: Response): Promise<void> => {
       try {
         const actor = await authenticate(request)
         if (actor === null) throw notAuthenticated()
-        // K008 sustituirá Authenticate y aplicará Origin/CSRF en HTTP a los comandos.
+        if (request.method !== "GET") await protectCommand(request)
         if (request.method !== "GET" && !request.is("application/json")) {
           sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Se requiere application/json.")
           return

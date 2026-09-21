@@ -89,6 +89,12 @@ jobs:
         run: npm --prefix api run db:test:compose
       - name: K010 lots on empty PostgreSQL
         run: npm --prefix api run db:test:lots:compose
+      - name: K008 identity infrastructure on empty PostgreSQL
+        run: npm --prefix api run db:test:identity:compose
+      - name: Install Chromium for HTTPS cookie validation
+        run: cd api && npx playwright install --with-deps chromium
+      - name: K008 auth, restart and K010 integration over HTTPS
+        run: npm --prefix api run db:test:auth:compose
       - name: Worker
         run: |
           test "$(docker inspect --format '{{.State.Running}}' "$(docker compose ps -q worker)")" = true

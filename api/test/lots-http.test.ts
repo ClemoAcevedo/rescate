@@ -10,7 +10,12 @@ import type { Server } from "node:http"
 import { createApp } from "../src/app.js"
 import { createLotUseCases } from "../src/application/lots/use-cases.js"
 import { createLotsRouter } from "../src/http/lots-router.js"
-import { createDevActorAuthentication, noAuthentication, selectAuthentication } from "../src/http/actor.js"
+import type { Authenticate } from "../src/http/actor.js"
+const noAuthentication: Authenticate = async () => null
+const createDevActorAuthentication = (): Authenticate => async req => {
+  const userId = req.header("x-rescate-dev-actor")
+  return userId ? { userId } : null
+}
 import { createInMemoryLots } from "./support/in-memory-lots.js"
 import type { InMemoryLots } from "./support/in-memory-lots.js"
 
@@ -54,6 +59,7 @@ async function startApi(options: { now?: Date; authenticate?: "dev" | "none" } =
     lotsRouter: createLotsRouter({
       useCases,
       authenticate: options.authenticate === "none" ? noAuthentication : createDevActorAuthentication(),
+      protectCommand: async () => {}, // Aislado: seguridad real se prueba con K008.
       log: () => {},
     }),
   })
@@ -267,16 +273,6 @@ test("un lote inexistente responde 404 y un identificador inválido no filtra de
     assert.equal(response.status, 404, id)
     assert.equal(response.body.error.code, "NOT_FOUND", id)
   }
-})
-
-test("el actor de desarrollo está deshabilitado salvo decisión explícita", () => {
-  assert.equal(selectAuthentication({}), noAuthentication)
-  assert.equal(selectAuthentication({ RESCATE_DEV_ACTOR: "" }), noAuthentication)
-  assert.notEqual(selectAuthentication({ RESCATE_DEV_ACTOR: "enabled" }), noAuthentication)
-  assert.throws(
-    () => selectAuthentication({ RESCATE_DEV_ACTOR: "enabled", NODE_ENV: "production" }),
-    /NODE_ENV=production/,
-  )
 })
 
 

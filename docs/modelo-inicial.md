@@ -8,8 +8,8 @@ sin cambiar este SQL: borradores completos, condiciones particulares opcionales/
 correo con trim exterior y comparación sin distinguir mayúsculas (preservando puntos
 y sufijos +), versión optimista y publicación explícita. Las ambigüedades históricas
 de abajo conservan el contexto K003; estas decisiones ya no están abiertas. K008/K010
-deberán añadir los cambios de persistencia necesarios mediante nuevas migraciones,
-incluida unicidad del correo normalizado, versión e identificadores públicos opacos.
+añaden cambios mediante migraciones posteriores, incluida unicidad del correo
+normalizado, versión e identificadores públicos opacos.
 
 **Aclaración de dominio posterior a E1 (2026-09-20):**
 [ADR 0002](adr/0002-ofertas-parciales.md) permite ofertas parciales a la cabeza
@@ -25,7 +25,10 @@ activa permanecen registradas allí como riesgo futuro del modelo.
 Las migraciones aditivas K010 incorporan `lots.public_id`, `version`, `updated_at`
 y `establishments.public_id`. El [documento K010](k010-publicacion-lotes.md)
 describe publicación, inmutabilidad, autorización y PATCH parcial implementados;
-K008 sigue pendiente. No se reinterpretan las restricciones históricas de K003.
+K008 añade `users.public_id`, correo canónico y las tablas `user_credentials`,
+`sessions`, `login_security_state` y `login_failures`; mantiene memberships sin roles
+ni estados. Su migración exige users vacío y aborta si hay filas. Ver [K008](k008-identidad.md).
+No se reinterpretan las restricciones históricas de K003.
 
 **Modelo conceptual E2 (K013, 2026-09-21):** las secciones
 [Modelo conceptual E2](#modelo-conceptual-e2-k013) y posteriores describen el
@@ -183,7 +186,7 @@ Los términos se usan así:
 
 | Concepto | Responsabilidad conceptual | Relaciones y cardinalidad | Situación frente a la implementación |
 | --- | --- | --- | --- |
-| Usuario | Identificar a quien rescata y/o actúa como operador; es autor de solicitudes, mensajes e incidencias. | Un usuario tiene 0..N membresías y 0..N compromisos; cada uno pertenece a un usuario. | `users` existe; credenciales, sesión y habilitación siguen pendientes de K008. |
+| Usuario | Identificar a quien rescata y/o actúa como operador; es autor de solicitudes, mensajes e incidencias. | Un usuario tiene 0..N membresías y 0..N compromisos; cada uno pertenece a un usuario. | K008 implementa credenciales y sesión; una membresía existente habilita la operación. La administración de membresías sigue pendiente. |
 | Establecimiento | Representar al negocio que publica y acredita retiros. | Tiene 0..N membresías y publica 0..N lotes; una membresía y un lote pertenecen a un establecimiento. | `establishments` existe. |
 | Membresía | Vincular un usuario con el establecimiento que puede operar. Es la base del permiso de operador, no un catálogo de roles. | Resuelve la relación N:M entre usuario y establecimiento; una sola por par. | Existe y K010 la comprueba al gestionar el lote. |
 | Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Existe como borrador/publicado; no guarda fotos ni contadores. |
@@ -234,7 +237,7 @@ establecimiento sea una persona.
 
 | Elemento | Consulta | Modificación confirmada | Límite o pendiente |
 | --- | --- | --- | --- |
-| Establecimiento y membresía | El usuario consulta sus establecimientos operables en el futuro contrato de sesión. | La administración de membresías no está especificada. | Registrarse no concede una membresía; K010 exige una existente. |
+| Establecimiento y membresía | El usuario consulta sus establecimientos operables mediante la sesión K008; esa lista no sustituye la autorización por operación. | La administración de membresías no está especificada. | Registrarse no concede una membresía; K010 exige una existente. |
 | Lote | El operador miembro puede consultar su lote; RF03 exige el recorrido de descubrimiento, aún sin contrato integrado. | Sólo el operador miembro crea, edita borradores y publica; lo publicado es inmutable. | La visibilidad exacta de fotos y del detalle para quien rescata debe acordarse con K014/RF03. |
 | Fotos | Quien esté autorizado a consultar el lote visible podrá recibir sólo fotos listas; el acceso al objeto no debe ser público por defecto. | Operador autorizado antes de publicar; después el conjunto es fijo. | Faltan carga, validación, eliminación, autorización y contrato HTTP. |
 | Compromiso, oferta, código y entrega | El titular consulta cantidad, estado, lugar, plazo y código de su reserva; el operador autorizado lo revisa para confirmar el retiro. | Solicitar/aceptar/cancelar corresponde a quien rescata; ofrecer y acreditar corresponde al flujo autorizado del establecimiento/sistema. | El código no va en URL, historial ni logs, y no sustituye sesión, membresía ni comprobación de reserva. |

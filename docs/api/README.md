@@ -5,9 +5,9 @@ OpenAPI **3.1.0**, versión inicial del contrato **0.1.0**, un solo archivo.
 Se prepara después de [ADR 0003](../adr/0003-arquitectura-incremental-s02.md) y
 antes de implementar esas tarjetas. K010 ahora implementa las cuatro operaciones
 de lotes con PostgreSQL, además de [`GET /health`](../../api/src/app.ts).
-K008 (sesión, Origin y CSRF) sigue pendiente; el actor temporal solo sirve para
-desarrollo. El YAML se conserva sin cambios respecto de development; sus notas
-iniciales describen el contexto de adopción, no el avance actual.
+K008 implementa identidad, sesiones, Origin/CSRF y conexión real con Actor/K010.
+[La guía K008](../k008-identidad.md) reúne operación, decisiones y evidencia nueva.
+Se actualiza la descripción de estado del YAML; no cambian rutas ni schemas.
 
 OpenAPI define transporte, seguridad, requests, responses y errores. Las
 [migraciones](../../api/migrations) definen persistencia; Domain y la documentación
@@ -55,15 +55,15 @@ el check más `git diff --check`. No cambiar silenciosamente una regla de produc
 No dividir el YAML sin necesidad. El job API del [CI](../../.github/workflows/ci.yml)
 ejecuta el mismo check después de `npm ci`; un error impide pasar ese job.
 
-**Validación actual K010:** Redocly comprueba estructura y ejemplos; los tests HTTP
+**Validación actual K008/K010:** Redocly comprueba estructura y ejemplos; los tests HTTP
 validan además status, `Cache-Control` y cuerpos reales con Ajv 2020-12 contra los
 schemas del YAML, incluidas respuestas de error y el condicional de publicación.
 `npm run api:types` deriva DTO mediante json-schema-to-typescript; `api:types:check`
 detecta desincronización en CI. YAML, generador y Ajv son dependencias de desarrollo,
 no middleware ni un framework de runtime. Los tipos no validan entradas por sí solos.
 Las pruebas PostgreSQL verifican autorización, versión, rollback y concurrencia.
-K008/K012 deben probar sesión, Origin/CSRF, cookies y recorrido completo de navegador;
-no se afirma conformidad de seguridad todavía.
+K008 prueba sesión, Origin/CSRF, cookies, reinicio y navegador HTTPS con PostgreSQL.
+K009/K011 todavía deben conectar las pantallas de negocio.
 
 ## Operaciones, seguridad y trazabilidad
 
@@ -156,7 +156,8 @@ nombre y describe sus dos instancias. CSRF aparece como parámetros requeridos,
 no como alternativa de autenticación a la cookie de sesión.
 
 HTTPS y mismo origen web/API mediante proxy son el objetivo de este contrato.
-El Compose HTTP actual no demuestra cookies Secure: K008/K009 deben preparar y
+El Compose HTTP por sí solo no demuestra cookies Secure. K008 incluye una prueba
+Chromium HTTPS y TLS directo opcional; K009 deberá integrar las pantallas y
 probar un entorno HTTPS local. No se rebaja `Secure` silenciosamente. El frontend
 conservará el token CSRF en memoria y no registrará tokens/contraseñas en logs.
 
@@ -249,7 +250,7 @@ arquitectura, ADR 0001–0003, K003, K004, estructuras api/web, SQL, paquetes y 
 | Fotos opcionales, solo listas visibles, fijas al publicar | Anexos I p. 25 |
 | Borrador completo sin autosave incompleto | Decisión explícita de este trabajo S02; no atribuirla a E1 |
 | Condiciones particulares opcionales/null | Decisión explícita de Producto durante esta revisión, 2026-09-21 |
-| Normalizar correo igual en registro/login: trim exterior + minúsculas, preservar puntos y sufijos + | Decisión explícita de Producto durante esta revisión, 2026-09-21; requiere resolver unicidad normalizada al implementar K008 |
+| Normalizar correo igual en registro/login: trim exterior + minúsculas, preservar puntos y sufijos + | Decisión explícita de Producto durante esta revisión, 2026-09-21; unicidad normalizada implementada por K008 |
 | Nombres HTTP, schemas, errores, cookie concreta, bootstrap/CSRF firmado, session=null, lista de establecimientos, reglas PATCH | Decisiones técnicas S02 de esta guía, no citas literales de E1 |
 
 **BLOCKING DECISIONS:** condiciones y comparación del correo se identificaron y
@@ -266,6 +267,104 @@ corresponden a K008. El cliente sigue tratando esos valores como opacos. El cont
 como string público. Tampoco elige granularidad de roles ni un flujo de administración:
 la lista solo representa establecimientos que ya se pueden operar.
 
+## Decisiones de persistencia K008 — etapa 1B (2026-09-21)
+
+La migración `1790000000001_identity-sessions.sql` requiere `users` vacío.
+Bloquea esa tabla antes de comprobarlo y aborta transaccionalmente si existe
+cualquier usuario. No transforma ni elimina cuentas previas. El down conserva
+usuarios y memberships, pero elimina credenciales, sesiones, bloqueos e IDs
+públicos de usuario; no es recuperación de datos. Reaplicar sobre usuarios
+conservados debe fallar. Los tests históricos K010 fijan su destino de migración.
+
+La política canónica de correo tiene una única implementación PostgreSQL:
+`public.canonicalize_email(text)`, compartida por el CHECK y el port de
+Application. No se duplicará con `toLowerCase()` de Node: sus versiones Unicode
+pueden diferir. El adaptador/port se incorporó en etapa 2.
+El trim exterior enumera WhiteSpace y LineTerminator de ECMAScript, incluidos
+NBSP y BOM; no quita U+0085, U+180E ni U+200B. Minúsculas usa ICU raíz (`und`),
+sin depender del locale de la base. Conserva puntos, `+`, acentos y espacios
+interiores; no aplica case folding, NFC/NFKC ni reglas de proveedor. Esto no
+sustituye validar el formato de correo después de normalizar. `email` usa
+collation `C` para igualdad exacta y UNIQUE. PostgreSQL requiere soporte ICU;
+una actualización de ICU requiere revisar normalización/constraints antes de
+cambiar su versión, no solo refrescar la versión de la collation.
+
+Una membership existente representa habilitación administrativa y permiso
+operativo; no se agregan roles ni estados. Registro crea usuario y credencial
+atómicamente. Las credenciales guardan sal de 16 bytes, resultado scrypt de 64
+y parámetros explícitos sin defaults de costo; el perfil y su medición aparecen
+en la sección siguiente. Sesión usa secreto de 32 bytes y huella SHA-256 de 32;
+la tabla guarda solo esta última, con vencimiento absoluto de 12 horas.
+
+Se persisten estado por cuenta y eventos de fallos para la ventana móvil de
+15 minutos. Éxito no borra fallos recientes; el quinto fallo responde como
+credencial incorrecta y bloquea 15 minutos. Durante el bloqueo no se verifica,
+registra otro fallo ni extiende el plazo; no revoca sesiones existentes. Scrypt
+se calcula fuera del lock y la decisión se relee bajo lock antes de crear
+sesión. Etapa 1B aportó esquema; las etapas posteriores implementan estas reglas
+en Application y prueban su integración HTTP/PostgreSQL.
+
+## Decisiones de Infrastructure K008 — etapa 2 (2026-09-21)
+
+Se implementan [ports](../../api/src/application/identity/ports.ts) y adaptadores
+de PostgreSQL/criptografía. Esta sección registra el alcance y medición de etapa 2;
+las etapas posteriores añaden Application, HTTP y Actor/K010.
+El port de canonicalización ejecuta la misma función SQL del CHECK; no hay
+normalización Unicode paralela en Node. Los ports usan strings para bigint,
+Date y Uint8Array; no exponen clientes pg ni cookies.
+
+`createUserWithCredential` confirma usuario y credencial juntos o revierte ambos;
+solo la restricción conocida de correo se representa como `email_exists`.
+`withAccountLock` inicializa estado si falta, bloquea la cuenta y relee estado y
+eventos antes del callback. El writer comparte el cliente para fallos, bloqueo,
+creación y revocación de sesión. Su lock_timeout es 2 s (E1 H p. 20). No decide
+cinco fallos/15 minutos, no borra fallos por éxito, no verifica contraseñas ni
+decide vigencia: esas políticas están en Application.
+La lectura preliminar no autoriza un login posterior. Scrypt debe ejecutarse
+fuera del callback; el reloj y las reglas se reevalúan después de esperar.
+
+**Perfil scrypt elegido para creación:** N=65536, r=8, p=2, sal aleatoria de 16
+bytes y resultado de 64. Configuración explícita del adaptador, sin defaults SQL
+ni cambios de migración. Verificación usa los parámetros de cada credencial y
+admite solo los dos perfiles medidos de abajo; rechaza costos arbitrarios antes
+de calcular. No modifica ni normaliza la contraseña. Compara los bytes con
+`timingSafeEqual`. Los perfiles corresponden a alternativas publicadas por
+[OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt);
+E1 exige scrypt, pero no fija N/r/p.
+
+Medición con `npm --prefix api run crypto:benchmark`: Node 24.14.0, OpenSSL 3.5.5,
+Linux x64/WSL2, Intel i5-13420H, 12 CPU lógicas, 7792.6 MiB visibles al host.
+Cada perfil en un proceso separado: un calentamiento, diez cálculos secuenciales
+y tres pares concurrentes. Password/sal de fixture; sin SQL/HTTP. RSS inicial
+47.6 MiB; el pico incluye runtime y la fase concurrente, no solo scrypt.
+
+| N, r, p | Secuencial min/mediana/máx. ms | Dos simultáneos min/mediana/máx. ms por cálculo | Pico RSS MiB |
+| --- | --- | --- | --- |
+| 131072, 8, 1 | 231.0 / 241.7 / 263.8 | 241.1 / 247.7 / 253.3 | 305.1 |
+| **65536, 8, 2** | **207.3 / 211.3 / 217.1** | **210.5 / 212.9 / 214.8** | **177.0** |
+
+Se elige el segundo por menor memoria y costo observado moderado en este entorno.
+No es prueba de capacidad del despliegue ni cumplimiento de latencia HTTP. El
+adaptador usa scrypt asíncrono, maxmem=192 MiB por cálculo como techo técnico
+(no reserva fija) y como máximo dos cálculos simultáneos por instancia compartida.
+No acumula una cola: saturación produce `PasswordHashingCapacityError`, distinto
+de contraseña incorrecta; HTTP lo traduce a 503. Composition crea
+una única instancia; varias instancias/procesos multiplican el consumo.
+Volver a medir al cambiar hardware o presupuesto del despliegue.
+
+Sesión genera 32 bytes con `randomBytes`, transportables como base64url canónico,
+y SHA-256 de esos bytes. El port de persistencia solo recibe la huella, no el
+secreto. Rechaza representaciones alternativas; HTTP transporta el secreto en cookie.
+Los repositorios devuelven expiración/revocación como hechos, sin resolver sesiones.
+
+Validación específica: [pruebas crypto](../../api/test/identity-crypto.test.ts) y
+[prueba PostgreSQL](../../api/scripts/test-identity.mjs), ejecutable con
+`npm --prefix api run db:test:identity:compose` en una base dedicada vacía.
+Verifica atomicidad, rollback, duplicado concurrente, relectura tras lock,
+escrituras conjuntas de sesión/estado y persistencia al recrear Pool/adaptadores.
+No equivale a reiniciar una API autenticada ni demuestra el caso de uso login.
+CI incorpora ese comando; su ejecución remota no se acredita en esta etapa.
+
 ## Tipos, implementación futura y E2
 
 Los dos catálogos TypeScript de web siguen siendo **antecedentes sin consumidores
@@ -280,14 +379,13 @@ Para E2 se preparará una fila por operationId con enlaces reales a:
 **OpenAPI → HTTP handler → Application use case → Domain/port/Infrastructure → test**.
 K010 aporta esos eslabones para las cuatro operaciones de lotes, con evidencia
 de autorización, transacciones, errores y respuestas contra el contrato. Las cuatro
-operaciones de identidad y su protección siguen pendientes de K008. K009/K011 demostrarán formulario, selección
+operaciones de identidad y su protección se trazan en [K008](../k008-identidad.md). K009/K011 demostrarán formulario, selección
 de establecimiento, cookie/CSRF y conflicto visible. Escenarios necesarios:
 registro sin login/membresía, sesión vencida, acceso ajeno, CSRF/origen inválidos,
 dos ediciones con misma versión, edición contra publicación y publicación sin fotos.
 
 Nada de esto acredita todavía el Walking Skeleton ni toda E2: E1 incluye además
-búsqueda/reserva/fotos. Se posponen handlers de identidad, credenciales reales,
-persistencia de sesiones y protección CSRF/origen, K014, descubrimiento, reserva,
+búsqueda/reserva/fotos. Se posponen K014, descubrimiento, reserva,
 FIFO/ofertas, cancelación/retiro, chat, incidencias,
 worker y estadísticas. ADR 0001 y ADR 0002 se conservan sin modificaciones.
 

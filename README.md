@@ -48,6 +48,7 @@ Para usar la comprobación técnica de conexión, inicia primero la API en otra 
 ```bash
 cd api
 npm ci
+# Configurar api/.env según la sección API de abajo.
 npm run dev
 ```
 
@@ -60,7 +61,7 @@ npm run dev
 
 El valor `VITE_API_BASE_URL=/api` usa el proxy de desarrollo de Vite hacia
 `http://localhost:3000`. Para otro despliegue, configura `VITE_API_BASE_URL` con la
-URL base correspondiente y asegúrate de que el servidor o CORS permita las solicitudes.
+URL base correspondiente. Para autenticación usa HTTPS del mismo origen; no habilites CORS abierto con credenciales.
 
 La vista técnica está disponible en `http://localhost:5173/conexion`. Selecciona
 **Comprobar conexión** para consultar el endpoint real `GET /health`; si falla, usa
@@ -100,8 +101,11 @@ npm ci
 npm run dev
 ```
 
-La API necesita `DATABASE_URL` y un esquema ya migrado. Copia `api/.env.example`
-a `api/.env` y aplica las migraciones con `npm run db:migrate` antes de iniciarla.
+La API necesita `DATABASE_URL`, `RESCATE_ALLOWED_ORIGINS`, `CSRF_SIGNING_KEY` y
+un esquema ya migrado. Copia `api/.env.example` a `api/.env`, configura una clave
+propia y aplica las migraciones antes de iniciarla. K008 exige `users` vacío al
+aplicar su migración: si hay filas, aborta sin modificarlas. Configuración HTTPS,
+pruebas y explicación de seguridad en [K008](docs/k008-identidad.md).
 
 La API incluye un endpoint básico de salud:
 
@@ -129,8 +133,10 @@ PATCH  /lots/:lotId                          editar parcialmente
 POST   /lots/:lotId/publish                  publicar
 ```
 
-Todas requieren una sesión válida. K008 aún no está integrada, así que responden
-`401` salvo que se habilite el actor de desarrollo descrito en `api/.env.example`.
+Todas requieren una sesión K008 válida y membership del establecimiento. Los
+comandos exigen además Origin permitido y CSRF firmado. La cabecera de actor de
+desarrollo ya no autentica. K008 expone `POST /auth/register`, `POST /auth/login`,
+`GET /auth/session` y `POST /auth/logout`; registro no asigna permisos ni inicia sesión.
 
 El contrato, las decisiones y las pruebas están en
 [docs/k010-publicacion-lotes.md](docs/k010-publicacion-lotes.md).
@@ -230,11 +236,11 @@ K003
 
 ## Estado actual
 
-En `development` `cb5ca3b`, la web tiene navegación, pantallas de demostración y
-comprobación de salud. La API expone `/health` y las cuatro operaciones K010 de lotes; el worker está inactivo.
+En el árbol de trabajo actual, la web tiene navegación, pantallas de demostración y
+comprobación de salud. La API expone `/health`, identidad K008 y lotes K010; el worker está inactivo.
 K002/K003 aportan migraciones y modelo; K005 es un prototipo aislado de fotos.
-OpenAPI S02 rige lotes implementados e identidad pendiente de K008.
+OpenAPI S02 rige las ocho operaciones implementadas de identidad y lotes.
 
 La base de `development` incluye el design system compartido. K010 implementa
-publicación en backend; auth real y pantallas integradas siguen pendientes. El
+publicación en backend con autenticación K008; las pantallas integradas K009/K011 siguen pendientes. El
 [índice documental](docs/README.md) separa referencias vigentes de evidencia histórica.

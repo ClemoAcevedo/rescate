@@ -1,6 +1,26 @@
 /* Generado desde docs/api/openapi.yaml. No editar; npm run api:types. */
 
 /**
+ * Correo identificador, sin afirmar verificación. Registro y login recortan espacios exteriores y comparan sin distinguir mayúsculas/minúsculas; se conservan puntos y sufijos +. La respuesta devuelve el correo normalizado en minúsculas. En entrada el formato se comprueba DESPUÉS de normalizar.
+ */
+export type EmailInput = string
+/**
+ * Contraseña de entrada; mínimo de 12 caracteres. Nunca se devuelve ni se registra en logs.
+ */
+export type Password = string
+/**
+ * Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización.
+ */
+export type PublicId = string
+/**
+ * Correo normalizado en minúsculas, sin espacios exteriores; no afirma verificación ni elimina puntos o sufijos +.
+ */
+export type Email = string
+/**
+ * Token opaco de protección CSRF, no credencial de autenticación. Copiar al header X-CSRF-Token; no URL, logs ni almacenamiento persistente del frontend.
+ */
+export type CsrfToken = string
+/**
  * Contenido del pack indivisible; no hay título adicional. No puede ser solo espacios.
  */
 export type LotDescription = string
@@ -64,18 +84,75 @@ export type LotResponse = {
    */
   publishedAt: string | null
 }
-/**
- * Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización.
- */
-export type PublicId = string
 
 export interface HttpSchemas {
+  LoginRequest: LoginRequest
+  LoginResponse: LoginResponse
+  RegisterRequest: RegisterRequest
+  RegisterResponse: RegisterResponse
+  SessionResponse: SessionResponse
   CreateLotDraftRequest: CreateLotDraftRequest
   UpdateLotDraftRequest: UpdateLotDraftRequest
   PublishLotDraftRequest: PublishLotDraftRequest
   LotResponse: LotResponse
   ErrorResponse: ErrorResponse
   ValidationIssue: ValidationIssue
+}
+export interface LoginRequest {
+  email: EmailInput
+  password: Password
+}
+export interface LoginResponse {
+  session: Session
+  csrfToken: CsrfToken
+}
+/**
+ * Representación pública de sesión. Su credencial opaca viaja exclusivamente en cookie HttpOnly; no hay JWT ni refresh token.
+ */
+export interface Session {
+  user: User
+  /**
+   * Lista sin establecimientos duplicados; puede estar vacía. Una persona puede operar varios. Es información para la UI, no autorización reutilizable.
+   */
+  operableEstablishments: OperableEstablishment[]
+  /**
+   * Vencimiento absoluto de la sesión: 12 horas desde login; consultar sesión no lo renueva.
+   */
+  expiresAt: string
+}
+/**
+ * Representación pública mínima; sin credenciales, estado de verificación ni datos persistidos de autenticación.
+ */
+export interface User {
+  id: PublicId
+  email: Email
+}
+/**
+ * Establecimiento que esta persona puede operar actualmente. Derivado de habilitación y pertenencia reales; no incluye el ID interno de membership ni un catálogo anticipado de roles.
+ */
+export interface OperableEstablishment {
+  id: PublicId
+  name: string
+}
+/**
+ * Crea solo la cuenta; no acepta establishmentId, membresías, roles ni displayName.
+ */
+export interface RegisterRequest {
+  email: EmailInput
+  password: Password
+}
+/**
+ * Cuenta creada sin sesión ni membresías operables automáticas.
+ */
+export interface RegisterResponse {
+  user: User
+}
+export interface SessionResponse {
+  /**
+   * null para visitante, cookie ausente, sesión inválida o vencida. No crea una sesión autenticada.
+   */
+  session: Session | null
+  csrfToken: CsrfToken
 }
 /**
  * Borrador completo en sus campos mínimos. conditions omitido equivale a null. El servidor asigna establecimiento desde la ruta y comprueba permiso. No admite id, propietario, status, version ni timestamps del servidor. Ventana: fin posterior a inicio. Fotos opcionales fuera de este contrato de escritura.
