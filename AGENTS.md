@@ -36,9 +36,11 @@ Actualizar esta descripción cuando cambie la implementación.
 
 ## Contratos, persistencia y decisiones
 
-OpenAPI será el contrato HTTP versionado desde S02, al adoptar su infraestructura.
-Derivar de él los tipos HTTP; no mantener catálogos manuales paralelos. Hasta
-entonces [K004](docs/contrato-api.md) y los tipos existentes son propuestas.
+[OpenAPI S02](docs/api/openapi.yaml) es la fuente de verdad HTTP versionada;
+[su guía](docs/api/README.md) documenta decisiones y validación. Aún no hay handlers
+de negocio ni generación de tipos. Derivar de él los tipos HTTP al integrar
+consumidores; no mantener catálogos manuales paralelos. [K004](docs/contrato-api.md)
+y los tipos existentes quedan como antecedentes.
 OpenAPI no define el esquema SQL ni sustituye las reglas de Domain/documentación.
 
 Mantener node-pg-migrate y SQL según [ADR 0001](docs/adr/0001-gestor-de-migraciones.md).

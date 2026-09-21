@@ -10,8 +10,10 @@
 - [ADR 0003: arquitectura incremental del backend](adr/0003-arquitectura-incremental-s02.md).
   Decisión adoptada después de S01, antes de K008/K010, sin implementar esas tarjetas.
 - [Reglas de desarrollo para agentes](../AGENTS.md).
-- [Propuesta de contrato K004](contrato-api.md). Antecedente, no contrato definitivo:
-  OpenAPI será el contrato HTTP versionado al adoptarse en S02; todavía no existe.
+- [Contrato HTTP OpenAPI S02](api/README.md). Fuente de verdad HTTP para K008–K011,
+  operaciones, decisiones, ejemplos y validación automática. No implementa handlers.
+- [Propuesta de contrato K004](contrato-api.md). Antecedente histórico, sustituido
+  como referencia HTTP por OpenAPI S02.
 
 ## Entorno local y evidencia S01
 

@@ -3,6 +3,14 @@
 Derivado antes de escribir la migración, sobre `development` `00597b8`.
 Alcance: persistencia de RF01, RF02 y RF04; no implementación de sus operaciones.
 
+**Contrato S02 posterior (2026-09-21):** [OpenAPI](api/README.md) concreta transporte
+sin cambiar este SQL: borradores completos, condiciones particulares opcionales/null,
+correo con trim exterior y comparación sin distinguir mayúsculas (preservando puntos
+y sufijos +), versión optimista y publicación explícita. Las ambigüedades históricas
+de abajo conservan el contexto K003; estas decisiones ya no están abiertas. K008/K010
+deberán añadir los cambios de persistencia necesarios mediante nuevas migraciones,
+incluida unicidad del correo normalizado, versión e identificadores públicos opacos.
+
 **Aclaración de dominio posterior a E1 (2026-09-20):**
 [ADR 0002](adr/0002-ofertas-parciales.md) permite ofertas parciales a la cabeza
 FIFO y cierra la solicitud al aceptar, rechazar o vencer sin respuesta, sin

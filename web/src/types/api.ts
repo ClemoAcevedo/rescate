@@ -1,7 +1,7 @@
 /**
- * Tipos de dominio propuestos y pendientes de validación con backend.
- * Los valores posibles de `status` y los campos opcionales deberán confirmarse
- * antes de consumir respuestas reales.
+ * Antecedente HTTP K004; no tipos de dominio vigentes ni tipos generados.
+ * Fuente HTTP: docs/api/openapi.yaml. Sustituir al integrar K009/K011;
+ * no mantener este catálogo manual en paralelo con OpenAPI.
  */
 export interface Identity {
   id: string
