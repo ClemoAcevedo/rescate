@@ -1,0 +1,150 @@
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--control-h);
+  max-width: 100%;
+  padding: var(--sp-2) var(--sp-5);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-md);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-body);
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+
+.ui-button--primary {
+  background: var(--action-primary);
+  color: var(--text-inverse);
+  border-color: var(--action-primary);
+}
+
+.ui-button--primary:hover:not(:disabled) {
+  background: var(--action-primary-hover);
+  border-color: var(--action-primary-hover);
+}
+
+.ui-button--secondary {
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-color: var(--border-control);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.ui-button--secondary:hover:not(:disabled),
+.ui-button--ghost:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.ui-button--danger {
+  background: var(--surface-card);
+  color: var(--text-danger);
+  border-color: var(--border-danger);
+}
+
+.ui-button--danger:hover:not(:disabled) {
+  background: var(--surface-danger-soft);
+}
+
+.ui-button:active:not(:disabled) { transform: translateY(1px); }
+.ui-button--block { width: 100%; }
+
+.ui-button:disabled,
+.ui-control:disabled {
+  background: var(--surface-disabled);
+  color: var(--text-disabled);
+  border-color: var(--border-control);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.ui-button[aria-busy="true"] { cursor: wait; }
+
+.ui-control {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border: var(--border-width) solid var(--border-control);
+  border-radius: var(--radius-md);
+  line-height: var(--lh-body);
+  transition: var(--transition-control);
+}
+
+.ui-control::placeholder { color: var(--text-muted); opacity: 1; }
+.ui-control[aria-invalid="true"] { border-color: var(--border-danger); }
+.ui-control:focus-visible { box-shadow: var(--ring-focus); }
+.ui-textarea { resize: vertical; }
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: var(--field-max);
+  min-width: 0;
+}
+
+.ui-field__label {
+  color: var(--text-strong);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+}
+
+.ui-field__required { color: var(--text-muted); font-weight: var(--fw-regular); }
+.ui-field__description { color: var(--text-muted); font-size: var(--fs-meta); }
+.ui-field__description--error { color: var(--text-danger); }
+
+.ui-card {
+  min-width: 0;
+  padding: var(--sp-5);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.ui-card--sunken { background: var(--surface-sunken); }
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-pill);
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+.ui-badge--success { background: var(--badge-success-bg); color: var(--text-success); }
+.ui-badge--warning { background: var(--badge-warning-bg); color: var(--text-warning); }
+.ui-badge--info { background: var(--badge-info-bg); color: var(--text-info); }
+.ui-badge--danger { background: var(--badge-danger-bg); color: var(--text-danger); }
+
+.ui-alert {
+  padding: var(--sp-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-inline-start: var(--border-width-strong) solid currentColor;
+  border-radius: var(--radius-md);
+  background: var(--surface-info-soft);
+  color: var(--text-info);
+  overflow-wrap: anywhere;
+}
+
+.ui-alert--success { background: var(--surface-success-soft); color: var(--text-success); }
+.ui-alert--warning { background: var(--surface-warning-soft); color: var(--text-warning); }
+.ui-alert--danger { background: var(--surface-danger-soft); color: var(--text-danger); }
+.ui-alert--neutral { background: var(--surface-sunken); color: var(--text-muted); }

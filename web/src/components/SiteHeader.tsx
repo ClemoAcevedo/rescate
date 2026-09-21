@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { Button } from './ui/Button'
 import { RescateLogo } from './RescateLogo'
 
 const navigationItems = [
@@ -9,6 +10,8 @@ const navigationItems = [
 ]
 
 export function SiteHeader() {
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const navigation = useRef<HTMLElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -18,6 +21,9 @@ export function SiteHeader() {
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (navigation.current?.contains(document.activeElement)) {
+          menuButton.current?.focus()
+        }
         setIsMenuOpen(false)
       }
     }
@@ -38,7 +44,9 @@ export function SiteHeader() {
       >
         <RescateLogo />
       </Link>
-      <button
+      <Button
+        ref={menuButton}
+        variant="secondary"
         className="menu-toggle"
         type="button"
         aria-controls="main-navigation"
@@ -46,8 +54,9 @@ export function SiteHeader() {
         onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
       >
         {isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
-      </button>
+      </Button>
       <nav
+        ref={navigation}
         id="main-navigation"
         className={isMenuOpen ? 'main-navigation main-navigation--open' : 'main-navigation'}
         aria-label="Navegación principal"

@@ -1,56 +1,58 @@
 # Documentación
 
-## Arquitectura y desarrollo S02
+Referencia del estado integrado: `development` `cb5ca3b`, comprobado el 2026-09-21.
+La integración visual descrita abajo pertenece a `feat/frontend-design-system`;
+todavía no está incorporada a `development`.
 
-- [Arquitectura actual y objetivo incremental S02](arquitectura/arquitectura.md).
-  Diagramas separados, cuatro responsabilidades (HTTP, Application, Domain,
-  Infrastructure), Composition, reglas de dependencia, transacciones, errores,
-  contratos y propuesta de evidencia trazable para E2. El objetivo no se presenta
-  como código ya implementado.
-- [ADR 0003: arquitectura incremental del backend](adr/0003-arquitectura-incremental-s02.md).
-  Decisión adoptada después de S01, antes de K008/K010, sin implementar esas tarjetas.
-- [Reglas de desarrollo para agentes](../AGENTS.md).
-- [Contrato HTTP OpenAPI S02](api/README.md). Fuente de verdad HTTP para K008–K011,
-  operaciones, decisiones, ejemplos y validación automática. No implementa handlers.
-- [Propuesta de contrato K004](contrato-api.md). Antecedente histórico, sustituido
-  como referencia HTTP por OpenAPI S02.
+## Empezar por área
 
-## Entorno local y evidencia S01
+| Necesidad | Guía |
+| --- | --- |
+| Trabajar en frontend | [Estructura, rutas y checks](../web/README.md) |
+| Reutilizar diseño en esta rama | [Primitives UI](../web/src/components/ui/README.md) y [comparación/decisiones de integración](frontend-design-system.md) |
+| Trabajar en backend | [Punto de entrada al backend](backend.md) |
+| Ejecutar el proyecto | [Entorno local y CI](desarrollo-local.md) |
+| Reglas del repositorio | [AGENTS.md](../AGENTS.md) |
 
-- [Desarrollo local y CI K006](desarrollo-local.md).
-- [Verificación del entorno K006](verificacion-k006.md).
+## Referencias vigentes
 
-Los registros de cada tarjeta conservan el contexto de su ejecución original.
-Para el estado integrado actual consultar la arquitectura y el código enlazado;
-un pendiente histórico no implica que S01 siga sin integrar.
+- [Arquitectura actual y objetivo incremental S02](arquitectura/arquitectura.md):
+  responsabilidades, dependencias, transacciones y evidencia esperada; el objetivo
+  no equivale a funcionalidades implementadas.
+- [Guía del contrato HTTP](api/README.md) y [OpenAPI S02](api/openapi.yaml):
+  autoridad HTTP para K008–K011; todavía sin handlers de negocio.
+- [Modelo inicial K003](modelo-inicial.md): persistencia integrada y diferencias
+  con el contrato posterior. [Migraciones](migraciones.md): operación actual K003
+  y aceptación histórica K002 separadas.
+- [Fotos K005](k005-fotos.md): guía del prototipo aislado. La investigación de
+  proveedores y los resultados allí fechados son históricos, no una nueva evaluación.
 
-## Decisiones de dominio posteriores a E1
+## Decisiones (ADR)
 
-- [ADR 0002: ofertas parciales y resolución de la solicitud](adr/0002-ofertas-parciales.md).
-  Referencia vigente para esta regla: reemplaza la espera obligatoria por cantidad
-  completa y conserva FIFO. Aceptar, rechazar o dejar vencer resuelve la solicitud
-  sin prioridad residual; volver a solicitar exige reingreso explícito. Incluye trazabilidad, inventario, recorrido e
-  impacto futuro; no describe funcionalidad implementada.
+| ADR | Decisión vigente |
+| --- | --- |
+| [0001](adr/0001-gestor-de-migraciones.md) | node-pg-migrate, SQL y pg |
+| [0002](adr/0002-ofertas-parciales.md) | FIFO, oferta parcial y cierre al aceptar/rechazar/vencer, sin prioridad residual ni reingreso automático |
+| [0003](adr/0003-arquitectura-incremental-s02.md) | Arquitectura incremental HTTP, Application, Domain e Infrastructure; Composition ensambla |
 
-## K005 — Fotos
+## Evidencia y antecedentes
 
-- [Evaluación y prototipo de almacenamiento](k005-fotos.md)
-- [Evidencia de ejecución y bloqueos](k005-evidencia.md)
-## Migraciones y modelo
+Los registros conservan su contexto original. Un resultado histórico no demuestra
+un nuevo run y un pendiente histórico no describe por sí solo el estado integrado
+actual. El contexto de los ADR también corresponde a la fecha de cada decisión.
 
-- [Migraciones: configuración, comandos y verificación de K002](migraciones.md).
-- [ADR 0001: elección del gestor de migraciones](adr/0001-gestor-de-migraciones.md).
-- [Modelo inicial K003: fuentes, entidades y decisiones](modelo-inicial.md).
-- [K003: evidencia real y reproducción](k003-evidencia.md).
+- [Evidencia K002](migraciones.md#evidencia-de-esta-implementación-2026-09-20).
+- [Evidencia K003](k003-evidencia.md).
+- [Evidencia K005](k005-evidencia.md).
+- [Evidencia K006](verificacion-k006.md).
+- [Propuesta de contrato K004](contrato-api.md): conservada como antecedente;
+  sustituida como autoridad HTTP por OpenAPI S02.
+- [Evidencia de integración visual](frontend-design-system.md#verificación-ejecutada):
+  comprobaciones locales de esta rama, no funcionalidades K009/K011.
 
-## E1
+## Entrega E1
 
-La documentación correspondiente a la primera entrega se encuentra en `entregas/e1`.
-
-- [Informe E1](entregas/e1/informe-e1.pdf).
-- [Anexos E1](entregas/e1/anexos-e1.pdf).
-
-Estos documentos contienen los requerimientos, decisiones y contexto utilizados como base para la implementación.
-Son artefactos históricos y no se reescriben con decisiones posteriores. Para
-ofertas parciales prevalece ADR 0002 en el alcance que declara; las demás reglas
-se conservan y los puntos pendientes no se consideran decididos.
+[Informe](entregas/e1/informe-e1.pdf) y [anexos](entregas/e1/anexos-e1.pdf)
+contienen los requisitos, decisiones y contexto originales. No se reescriben.
+Los ADR posteriores prevalecen solo sobre las reglas que modifican explícitamente;
+los demás requisitos y pendientes se conservan.

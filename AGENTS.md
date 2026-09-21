@@ -50,6 +50,14 @@ Conservar [ADR 0002](docs/adr/0002-ofertas-parciales.md): FIFO, oferta parcial y
 cierre al aceptar/rechazar/vencer sin prioridad residual ni reingreso automático.
 Los PDF de E1 son históricos; registrar decisiones posteriores sin reescribirlos.
 
+## Frontend compartido
+
+Antes de trabajar en `web/`, revisar los [primitives UI](web/src/components/ui/README.md)
+y reutilizar los [tokens](web/src/styles/tokens.css). Evitar componentes equivalentes
+duplicados y colores/espaciados arbitrarios cuando exista un token. Adaptar el
+material externo al stack local; no copiarlo directamente. Los componentes UI no
+definen contratos HTTP: sigue prevaleciendo OpenAPI S02.
+
 ## Revisión y evidencia
 
 Relacionar decisiones con archivos y pruebas reales en cada PR. Revisar imports,

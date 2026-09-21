@@ -1,0 +1,121 @@
+/* Adaptación selectiva de Claude Design. Sin estados de dominio ni fuentes remotas. */
+:root {
+  color-scheme: light;
+
+  --ink-900: oklch(0.20 0.014 150);
+  --ink-800: oklch(0.28 0.014 150);
+  --ink-700: oklch(0.38 0.013 150);
+  --ink-600: oklch(0.46 0.012 150);
+  --ink-500: oklch(0.54 0.011 150);
+  --ink-200: oklch(0.89 0.008 110);
+  --ink-100: oklch(0.945 0.008 100);
+  --paper-0: oklch(1 0 0);
+  --paper-50: oklch(0.987 0.006 95);
+  --paper-100: oklch(0.972 0.011 95);
+  --verde-800: oklch(0.34 0.088 152);
+  --verde-700: oklch(0.43 0.110 152);
+  --verde-100: oklch(0.935 0.042 152);
+  --verde-50: oklch(0.968 0.024 152);
+  --ambar-700: oklch(0.47 0.110 62);
+  --ambar-100: oklch(0.945 0.045 78);
+  --ambar-50: oklch(0.975 0.022 80);
+  --azul-700: oklch(0.42 0.105 250);
+  --azul-600: oklch(0.51 0.125 250);
+  --azul-100: oklch(0.94 0.035 250);
+  --azul-50: oklch(0.972 0.018 250);
+  --rojo-700: oklch(0.42 0.140 25);
+  --rojo-600: oklch(0.52 0.165 25);
+  --rojo-100: oklch(0.945 0.038 25);
+  --rojo-50: oklch(0.975 0.020 25);
+
+  --text-strong: var(--ink-900);
+  --text-body: var(--ink-800);
+  --text-muted: var(--ink-600);
+  --text-inverse: var(--paper-0);
+  --text-brand: var(--verde-700);
+  --text-link: var(--verde-700);
+  --text-link-hover: var(--verde-800);
+  --text-danger: var(--rojo-700);
+  --text-success: var(--verde-800);
+  --text-warning: var(--ambar-700);
+  --text-info: var(--azul-700);
+  --surface-page: var(--paper-50);
+  --surface-card: var(--paper-0);
+  --surface-sunken: var(--paper-100);
+  --surface-brand-soft: var(--verde-50);
+  --surface-success-soft: var(--verde-50);
+  --surface-warning-soft: var(--ambar-50);
+  --surface-info-soft: var(--azul-50);
+  --surface-danger-soft: var(--rojo-50);
+  --action-primary: var(--verde-700);
+  --action-primary-hover: var(--verde-800);
+  --border-subtle: var(--ink-200);
+  /* El ink-300 externo no distingue suficientemente controles sobre blanco. */
+  --border-control: var(--ink-500);
+  --border-danger: var(--rojo-600);
+  --focus-ring: var(--azul-600);
+  --surface-disabled: var(--ink-100);
+  --text-disabled: var(--ink-600);
+  --badge-neutral-bg: var(--ink-100);
+  --badge-neutral-fg: var(--ink-700);
+  --badge-success-bg: var(--verde-100);
+  --badge-warning-bg: var(--ambar-100);
+  --badge-info-bg: var(--azul-100);
+  --badge-danger-bg: var(--rojo-100);
+
+  /* Pilas locales compatibles: no se distribuyen ni descargan fuentes. */
+  --font-display: "Trebuchet MS", Helvetica, sans-serif;
+  --font-ui: Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --fs-display-lg: 2.125rem;
+  --fs-display-md: 1.6875rem;
+  --fs-title-lg: 1.375rem;
+  --fs-body: 1rem;
+  --fs-meta: 0.875rem;
+  --fs-micro: 0.75rem;
+  --lh-tight: 1.08;
+  --lh-title: 1.22;
+  --lh-body: 1.55;
+  --fw-regular: 400;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 800;
+  --ls-display: -0.022em;
+  --ls-title: -0.012em;
+  --ls-caps: 0.09em;
+  --ls-brand: -0.03em;
+
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+  --sp-10: 2.5rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+  --sp-20: 5rem;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --border-width: 1px;
+  --border-width-strong: 2px;
+  --layout-max: 72.5rem;
+  --layout-gutter: var(--sp-4);
+  --header-h: 4rem;
+  --control-h: 2.75rem;
+  --field-max: 30rem;
+  /* Ancho conservado de las pantallas de Rescate, no del kit de producto. */
+  --content-max: 46rem;
+
+  --shadow-xs: 0 1px 1px oklch(0.20 0.014 150 / 0.05);
+  --ring-focus: 0 0 0 3px oklch(0.51 0.125 250 / 0.35);
+  --dur-fast: 140ms;
+  --dur-instant: 80ms;
+  --ease-out: cubic-bezier(0.22, 0.8, 0.28, 1);
+  --transition-control: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    transform var(--dur-instant) var(--ease-out);
+}
