@@ -90,7 +90,9 @@ propuesta en anexos H p. 22 queda pendiente de integración futura.
 
 La estructura real del backend sigue siendo `app.ts`, `index.ts`, `worker.ts` y
 `prototypes/photos/`. Web tiene `app/`, `components/`, `pages/`, `services/` y
-`types/`. Los dos archivos de tipos preliminares,
+`types/`, además de `styles/` y primitives en `components/ui/` tras la integración
+visual compartida. La [guía de frontend](../../web/README.md) describe esa base;
+no incorpora auth ni publicación. Los dos archivos de tipos preliminares,
 [services/api-types.ts](../../web/src/services/api-types.ts) y
 [types/api.ts](../../web/src/types/api.ts), aún existen y no son un contrato
 definitivo ni modelos de persistencia. Se marcan como antecedentes históricos;

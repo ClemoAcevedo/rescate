@@ -27,6 +27,11 @@ Para ejecutar web/API directamente en el host se necesita:
 
 ### Web
 
+La [guía del frontend](web/README.md) reúne estructura, rutas y checks.
+El [design system compartido](web/src/components/ui/README.md) aporta tokens y
+primitives reutilizables; esta base visual no implementa autenticación ni
+publicación de lotes.
+
 ```bash
 cd web
 npm ci
@@ -85,6 +90,9 @@ responder con `index.html` para las rutas internas desconocidas (fallback de SPA
 modo, una recarga directa, por ejemplo en `/lotes/demo`, puede responder 404.
 
 ### API
+
+La [guía del backend](docs/backend.md) permite encontrar arquitectura, contrato,
+persistencia, operación y evidencia histórica.
 
 ```bash
 cd api
@@ -201,6 +209,11 @@ K003
 
 ## Estado actual
 
-El proyecto se encuentra en su etapa inicial de implementación.
+En `development` `cb5ca3b`, la web tiene navegación, pantallas de demostración y
+comprobación de salud. La API solo expone `/health`; el worker está inactivo.
+K002/K003 aportan migraciones y modelo; K005 es un prototipo aislado de fotos.
+OpenAPI S02 define el contrato de operaciones aún no implementadas.
 
-La estructura inicial contiene la aplicación web y la API sobre las cuales se desarrollarán las funcionalidades del sistema durante las siguientes semanas.
+Esta rama añade el design system compartido del frontend; todavía no está
+integrado en `development`. No implementa auth ni publicación de lotes. El
+[índice documental](docs/README.md) separa referencias vigentes de evidencia histórica.

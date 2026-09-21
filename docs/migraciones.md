@@ -1,4 +1,4 @@
-# Migraciones PostgreSQL — K002
+# Migraciones PostgreSQL — K002/K003
 
 Gestor: node-pg-migrate 9.0.0; controlador: pg 8.23.0.
 La [decisión y comparación](adr/0001-gestor-de-migraciones.md) explica las alternativas.
@@ -22,7 +22,7 @@ ejecuta `db:test`. No cambia `.env`, no levanta otro servidor ni borra bases.
 Conserva la base con datos ficticios para inspección, incluso ante fallo.
 Requiere Docker Compose y acceso desde el host al puerto loopback de K006.
 
-Para una base vacía dedicada ya provisionada, configura `DATABASE_URL` y ejecuta
+Para una base vacía dedicada ya provisionada, exporta `DATABASE_URL` en el entorno y ejecuta
 `npm run db:test`. Su nombre debe empezar por `rescate_k003_test_`.
 La suite comprueba tablas/PK/FK, datos válidos e inválidos, historial, segunda
 ejecución, down exclusivamente de K003 y reaplicación desde la versión K002.
@@ -40,7 +40,7 @@ describe la versión histórica del script, reemplazada por esta prueba integrad
 
 Usa Node 24 (mínimo API: 22.13), npm y una base PostgreSQL accesible.
 El gestor declara soporte PostgreSQL 13+; recomendamos preparar PostgreSQL 16
-para repetir esta prueba. **Ciclo completo validado contra PostgreSQL 16.15.**
+para repetir esta prueba. **Ciclo completo validado históricamente contra PostgreSQL 16.15** (evidencia más abajo).
 La base debe existir y el usuario debe poder crear tablas en `public`.
 Para consultar manualmente el historial se necesita también el cliente `psql`.
 
@@ -59,8 +59,10 @@ DATABASE_URL=postgresql://rescate_example:example_password@localhost:5432/rescat
 ```
 
 Estos valores son ficticios: copiar el ejemplo no crea usuarios ni bases.
-Los scripts `db:*` cargan `.env` mediante Node; la variable del entorno tiene
-prioridad y permite ejecutar en CI sin archivo. `.env` está ignorado por Git.
+`db:migrate`, `db:create`, `db:rollback` y `db:test` cargan `api/.env` mediante
+Node al ejecutarse desde `api/`; la variable del entorno tiene prioridad.
+`db:test:compose` construye e inyecta esa URL desde Compose.
+`.env` está ignorado por Git.
 Codifica caracteres reservados de usuario/contraseña en la URL. Para un servidor
 remoto, configura TLS según sus requisitos; no desactives la validación del certificado.
 La API `/health` no depende de esta variable ni ejecuta migraciones al iniciar.
@@ -99,7 +101,11 @@ terminal. **psql no carga api/.env**: alternativamente usa su conexión interact
 Compara los nombres del historial con los archivos de `migrations/`; antes del
 primer up, la tabla del historial puede no existir.
 
-## Prueba reproducible de aceptación
+## Prueba reproducible de aceptación K002 (histórica)
+
+Desde aquí se conserva el procedimiento y la evidencia originales de K002,
+incluidas las rutas temporales. No son instrucciones para ejecutar el script actual:
+K003 lo sustituyó. Para el código vigente usar [Prueba actual de K003](#prueba-actual-de-k003).
 
 Prepara una **base nueva de uso exclusivo para K002**, sin tablas en `public`,
 y configura DATABASE_URL para esa base. No ejecutes primero `db:migrate`.
