@@ -242,6 +242,117 @@ La tabla diferencia lo respaldado por RF01/RF02 y el alcance de K010 de los
 permisos que todavía requieren una decisión de producto. No convierte la posesión
 de un identificador público, una URL firmada o un código en autorización.
 
+## Estados y reglas de negocio E2 (K013)
+
+### Clasificación
+
+- **Confirmado:** E1 define borrador/publicación, packs indivisibles, conciliación
+  `Q = F + O + R + E + X`, FIFO, cancelación/vencimiento y el retiro; ADR 0002
+  permite la oferta parcial sólo a la cabeza y cierra la solicitud al aceptarla,
+  rechazarla o vencer.
+- **Decisión de diseño:** se muestran estados conceptuales con nombres legibles y
+  se registra la entrega como hecho inmutable. Los nombres no son valores SQL ni
+  amplían los estados `draft`/`published` que K010 implementa.
+- **Pendiente:** formato/ciclo del código, plazos no ya definidos en E1, límite de
+  intentos, entregas parciales, consecuencias comerciales de una incidencia,
+  permisos de resolución y representación persistente. No se fijan aquí.
+
+### Lote y disponibilidad
+
+```mermaid
+stateDiagram-v2
+  [*] --> Borrador: operador crea declaración completa
+  Borrador --> Publicado: publicar con membresía, versión y ventana válida
+  Publicado --> Retirado: retiro del lote para corregirlo
+  Publicado --> Vencido: termina la ventana de retiro
+  Retirado --> [*]
+  Vencido --> [*]
+```
+
+| Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
+| --- | --- | --- | --- | --- | --- |
+| — | Crear borrador | Usuario con membresía del establecimiento | Declaración completa válida. | Borrador. | K010 asigna versión inicial; todavía no hay disponibilidad. |
+| Borrador | Publicar | Operador miembro | Versión vigente, declaración válida y fin de ventana posterior al instante bloqueado. | Publicado. | Fecha de publicación; declaración y conjunto de fotos quedan fijos. Cero fotos es válido. |
+| Publicado | Retirar para corregir | Operador del establecimiento | RF02 exige crear otro lote en vez de editar; el tratamiento de compromisos activos debe definirse. | Retirado (conceptual). | Deja de ser asignable. No se infiere liberación ni cancelación de reservas. |
+| Publicado | Final de ventana | Reloj/regla compartida por API y worker | Llega el cierre de retiro. | Vencido (conceptual). | Deja de admitir ofertas/aceptaciones; qué ocurre con reservas u ofertas activas se rige por sus transiciones, no por un borrado. |
+
+Un lote publicado está **asignable** sólo si su ventana sigue vigente y tiene
+`F > 0` después de releer estado, contadores y prioridad bajo bloqueo. La falta de
+`F` es una condición de disponibilidad, no un nuevo estado de lote. K003/K010 no
+persisten `F/O/R/E/X` ni hacen este cálculo. La autorización y el bloqueo son
+requisitos de la operación que asigna, no propiedades que un cliente pueda
+declarar.
+
+### Solicitud, oferta y reserva del compromiso
+
+```mermaid
+stateDiagram-v2
+  [*] --> En_espera: usuario solicita packs
+  En_espera --> Ofertada: cabeza FIFO y cantidad retenida
+  Ofertada --> Confirmada: acepta oferta vigente
+  Ofertada --> Rechazada: rechaza
+  Ofertada --> Oferta_vencida: vence sin respuesta
+  Confirmada --> Cancelada: cancelación aplicable
+  Confirmada --> Reserva_vencida: vence retiro aplicable
+  Confirmada --> Entregada: retiro acreditado
+  Rechazada --> [*]
+  Oferta_vencida --> [*]
+  Cancelada --> [*]
+  Reserva_vencida --> [*]
+  Entregada --> [*]
+```
+
+| Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
+| --- | --- | --- | --- | --- | --- |
+| — | Solicitar | Usuario que rescata | Lote publicado/vigente y reglas RF04 de compromiso activo. | En espera. | Registra cantidad solicitada y posición FIFO; no mueve packs a `R`. La convivencia con una reserva activa del mismo usuario/lote sigue pendiente. |
+| En espera | Ofrecer | Asignador del sistema/flujo del establecimiento | Es la primera solicitud elegible FIFO; lote vigente; cantidad libre comprobada bajo bloqueo. | Ofertada. | Mueve sólo cantidad ofrecida `F → O`. Puede ser menor que la solicitada por ADR 0002. |
+| Ofertada | Aceptar | Usuario solicitante | Oferta vigente y estado releído bajo bloqueo. | Confirmada. | Mueve sólo la cantidad aceptada `O → R`; cierra la solicitud sin saldo ni prioridad residual. |
+| Ofertada | Rechazar | Usuario solicitante | Oferta vigente. | Rechazada. | Libera sólo lo retenido; vuelve a `F` si el lote sigue vigente o pasa a `X` si no. No crea solicitud nueva. |
+| Ofertada | Vencer sin respuesta | Regla temporal compartida | Se alcanzó su vencimiento sin aceptación. | Oferta vencida. | Mismo cierre y liberación que rechazo; no hay prórroga por desconexión ni reingreso automático. |
+| Confirmada | Cancelar | Usuario solicitante, bajo RF05 | Condiciones de cancelación aplicables. | Cancelada. | La reserva deja de estar activa. La regla exacta de devolución `R → F/X` y el límite temporal deben comprobarse al implementar RF05. |
+| Confirmada | Vencer retiro | Regla temporal compartida | Se alcanza la condición de vencimiento de la reserva. | Reserva vencida. | No se acredita una entrega; efectos sobre `R` se mantienen como regla pendiente si E1 no los concreta para ese caso. |
+| Confirmada | Acreditar retiro | Operador autorizado, tras validación que corresponda | Reserva vigente y no entregada. | Entregada. | Registra entrega; la cantidad acreditada pasa `R → E`. |
+
+Los reintentos de aceptar, rechazar o procesar un vencimiento no deben duplicar una
+reserva ni liberar dos veces la misma retención. ADR 0002 exige esa idempotencia de
+efecto para el recorrido de oferta parcial; la clave, respuesta de reintento y
+contrato técnico siguen abiertos. Las comprobaciones de estado, hora y cantidades
+deben compartir la misma unidad atómica para impedir que dos acciones ganen sobre
+los mismos packs.
+
+### Código y acreditación de entrega
+
+El requisito disponible no fija el tipo de código de retiro. La siguiente máquina
+es una **propuesta de diseño condicional a D-02**, incluida para impedir dos
+errores: acreditar al sólo mostrar un código y crear una segunda entrega ante un
+reintento.
+
+| Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
+| --- | --- | --- | --- | --- | --- |
+| Sin código | Emitir código | Sistema al confirmar una reserva | Si Producto confirma que el retiro usa códigos. | Vigente. | Código asociado a la reserva; formato, expiración y rotación pendientes. |
+| Vigente | Validar correctamente y acreditar | Operador autorizado | Reserva confirmada/vigente, código corresponde a ella y no fue usado. | Usado. | Crea una única entrega y aplica `R → E` de forma atómica. |
+| Vigente | Pierde vigencia o se invalida | Regla temporal o actor que Producto autorice | Regla de vigencia confirmada. | Vencido/inválido. | No acredita entrega; no se asume cancelación de la reserva. |
+| Usado | Nuevo intento de validación | Operador autorizado | Mismo código ya consumido. | Usado. | Rechaza o devuelve el resultado previamente acreditado según se acuerde; nunca crea otra entrega. |
+| — | Código inexistente o no correspondiente | Operador autorizado | No supera validación. | Sin cambio. | No cuenta como entrega ni altera inventario. Límite, bloqueo o auditoría de intentos son pendientes. |
+
+Las fuentes revisadas sí mencionan claves de idempotencia para asignación e
+incidencias (anexos H p. 20, citado también en [API S02](api/README.md)); no
+permiten equipararlas sin más a un código de retiro ni fijar intentos repetidos.
+
+### Entrega e incidencia posterior
+
+| Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
+| --- | --- | --- | --- | --- | --- |
+| Reserva confirmada | Acreditar retiro | Según el flujo autorizado de retiro | No existe una entrega previa para esa reserva en el modelo propuesto. | Entrega registrada. | Hecho histórico; actualiza el contador conceptual `E`. |
+| Entrega registrada | Reportar incidencia | Reportante que tenga acceso contextual a la entrega | La incidencia es posterior a una entrega existente. | Reportada. | Conserva enlace a la entrega, reportante y descripción; no revierte `E` ni el estado de entrega. |
+| Reportada | Tomar atención | Rol resolutor pendiente | Acceso autorizado y caso existente. | En atención. | Puede registrar responsable y acciones, sin efectos comerciales implícitos. |
+| En atención | Resolver | Rol resolutor pendiente | Se documenta resultado de atención. | Resuelta. | Conserva resolución; reembolso, ajuste, sanción o efecto en inventario requieren un RF explícito. |
+
+`Reportada`, `En atención` y `Resuelta` son estados de la incidencia, no de la
+entrega. Una incidencia no borra, revierte ni vuelve no acreditada una entrega por
+sí sola. Tampoco se introduce un plazo de reporte, una sanción, una entrega parcial
+ni un resultado económico porque las fuentes vigentes revisadas no los definen.
+
 ## Cantidades y demás restricciones
 
 - `lots.quantity` representa Q, cantidad declarada/publicada, entera y > 0.
