@@ -27,6 +27,14 @@ y `establishments.public_id`. El [documento K010](k010-publicacion-lotes.md)
 describe publicación, inmutabilidad, autorización y PATCH parcial implementados;
 K008 sigue pendiente. No se reinterpretan las restricciones históricas de K003.
 
+**Modelo conceptual E2 (K013, 2026-09-21):** las secciones
+[Modelo conceptual E2](#modelo-conceptual-e2-k013) y posteriores describen el
+dominio que deben cubrir los siguientes casos de uso. No son una ampliación del
+SQL K003/K010 ni prueban una funcionalidad integrada: fotos, solicitudes, ofertas,
+códigos, entregas, conversaciones e incidencias siguen fuera de la persistencia y
+de las rutas actuales. Conservan las reglas E1 que no fueron modificadas y aplican
+la excepción de oferta parcial de [ADR 0002](adr/0002-ofertas-parciales.md).
+
 ## Fuentes y clasificación
 
 - **A: requisito E1/anexos.** [Informe E1](entregas/e1/informe-e1.pdf),
@@ -132,6 +140,107 @@ ADR 0002 no elimina esta restricción: cerrar la solicitud en cola al aceptar
 parcialmente no termina la reserva confirmada. Antes de admitir una nueva
 solicitud simultánea del mismo usuario/lote debe resolverse esa compatibilidad;
 no se presupone reingreso inmediato ni se cambia el índice de K003.
+
+## Modelo conceptual E2 (K013)
+
+### Alcance, fuentes y vocabulario
+
+Este modelo reúne los RF que E1 sitúa después de la publicación: reserva,
+cancelación, retiro, FIFO, vencimiento, avisos, conversación e incidencias. La
+fuente principal son el [informe E1](entregas/e1/informe-e1.pdf), pp. 1–3 y 5, y
+los [anexos E1](entregas/e1/anexos-e1.pdf), A pp. 1–2, B p. 4, C p. 5, F p. 8,
+H pp. 20–21 e I pp. 24–27. [ADR 0002](adr/0002-ofertas-parciales.md) prevalece
+sólo sobre la cantidad que se puede ofrecer y el cierre de la solicitud parcial.
+La guía [K005](k005-fotos.md) es evidencia de un prototipo de objetos; no define
+la relación de fotos de producto. [OpenAPI S02](api/README.md) es autoridad
+únicamente para las operaciones HTTP K008–K011 ya delimitadas.
+
+Los términos se usan así:
+
+- **Usuario** es la persona con cuenta; puede rescatar lotes y, mediante una
+  membresía, operar uno o más establecimientos. «Operador» no es otra persona ni
+  un rol global: es el usuario cuando actúa para un establecimiento del que es
+  miembro. E1 no define la granularidad administrativa ni la revocación de esa
+  membresía.
+- **Lote** es la oferta publicada por un establecimiento, con su declaración,
+  lugar y ventana de retiro. Contiene `Q` **unidades reservables**: packs
+  equivalentes e indivisibles; la unidad no es un producto individual ni requiere
+  identidad propia. Una cantidad en un compromiso, una oferta o una entrega se
+  mide en esos packs. `Q` no equivale a disponibilidad: la conciliación prevista
+  por E1 es `Q = F + O + R + E + X`.
+- **Compromiso** nombra el ciclo de una persona respecto de un lote. Para no
+  perder el significado que exige ADR 0002, el modelo distingue dentro del ciclo
+  la **solicitud** (cantidad pedida y posición FIFO), la **oferta** (cantidad
+  retenida) y la **reserva confirmada** (cantidad aceptada). K003 sólo persiste la
+  última como `commitments.status = confirmed`; por ello no es aún el modelo
+  completo de este apartado.
+- **Entrega acreditada** es el hecho de que los packs de una reserva fueron
+  retirados y pasan a `E`; no es una edición del lote ni una inferencia a partir
+  de que se muestre un código. Una incidencia posterior se registra contra esa
+  entrega y no deshace por sí misma la acreditación.
+
+### Entidades, responsabilidades y relaciones
+
+| Concepto | Responsabilidad conceptual | Relaciones y cardinalidad | Situación frente a la implementación |
+| --- | --- | --- | --- |
+| Usuario | Identificar a quien rescata y/o actúa como operador; es autor de solicitudes, mensajes e incidencias. | Un usuario tiene 0..N membresías y 0..N compromisos; cada uno pertenece a un usuario. | `users` existe; credenciales, sesión y habilitación siguen pendientes de K008. |
+| Establecimiento | Representar al negocio que publica y acredita retiros. | Tiene 0..N membresías y publica 0..N lotes; una membresía y un lote pertenecen a un establecimiento. | `establishments` existe. |
+| Membresía | Vincular un usuario con el establecimiento que puede operar. Es la base del permiso de operador, no un catálogo de roles. | Resuelve la relación N:M entre usuario y establecimiento; una sola por par. | Existe y K010 la comprueba al gestionar el lote. |
+| Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Existe como borrador/publicado; no guarda fotos ni contadores. |
+| Foto de lote | Ser una imagen opcional que ayuda a describir un lote publicado. Sólo una foto lista y autorizada puede hacerse visible; el conjunto queda fijo al publicar. | Cada foto pertenece a exactamente un lote; un lote tiene de 0 a 3 según anexo I p. 25. | K005 sólo prueba objetos privados con un fixture; no existe asociación, carga ni consulta de fotos de lote. |
+| Compromiso | Conservar la intención del usuario sobre una cantidad y, si corresponde, su reserva confirmada. Debe distinguir cantidad solicitada, ofrecida y confirmada. | Pertenece a un usuario y un lote; puede originar 0..N ofertas sucesivas sólo si las reglas futuras lo permiten; una reserva confirmada puede tener el código y la entrega que correspondan. | Sólo existe la reserva confirmada, sin solicitud/oferta ni cantidades separadas. |
+| Código de retiro | Presentar una credencial comprobable para acreditar una reserva, si el RF define ese mecanismo. Debe permitir saber vigencia y uso sin exponer un secreto como identificador del recurso. | Se asocia a una reserva confirmada; su cardinalidad (un código fijo, códigos rotables o varios por reserva) no está decidida por las fuentes revisadas. | No existe. Véase la decisión pendiente D-02. |
+| Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | No existe. |
+| Incidencia posterior | Registrar un problema comunicado después de una entrega y su atención, sin reescribir la entrega. | Pertenece a una entrega; una entrega puede tener 0..N incidencias mientras no se acuerde una restricción distinta. Tiene un usuario reportante y puede tener un operador responsable de resolución. | No existe. Quién puede abrir/resolver y los desenlaces comerciales deben confirmarse (D-03). |
+| Conversación y mensaje | Mantener el intercambio asociado al compromiso cuando aplique; no sustituye estados ni autorización. | Una conversación corresponde a un compromiso; contiene 1..N mensajes, cada uno de un usuario participante. | E1 menciona chat, pero no hay implementación ni detalle suficiente para definir participantes adicionales o retención. |
+
+El código se presenta como **registro asociado** y no como atributo plano del
+compromiso porque vigencia, consumo y reintentos son hechos que requerirían
+trazabilidad. No obstante, E1 disponible en el repositorio no fija si existe un
+código de retiro, su formato, rotación ni cardinalidad; este es un diseño
+justificado, no una regla confirmada. La entrega también se modela como registro:
+`E` representa una transición histórica y no basta con derivarla del estado actual
+del compromiso. Ninguna de estas elecciones obliga a crear tablas.
+
+```mermaid
+erDiagram
+  USUARIO ||--o{ MEMBRESIA : tiene
+  ESTABLECIMIENTO ||--o{ MEMBRESIA : habilita_operacion
+  ESTABLECIMIENTO ||--o{ LOTE : publica
+  LOTE ||--o{ FOTO_LOTE : describe
+  USUARIO ||--o{ COMPROMISO : solicita
+  LOTE ||--o{ COMPROMISO : recibe
+  COMPROMISO ||--o{ OFERTA : puede_generar
+  COMPROMISO ||--o| CODIGO_RETIRO : habilita
+  COMPROMISO ||--o| ENTREGA : acredita
+  ENTREGA ||--o{ INCIDENCIA : origina
+  USUARIO ||--o{ INCIDENCIA : reporta
+  ESTABLECIMIENTO ||--o{ INCIDENCIA : atiende
+  COMPROMISO ||--o| CONVERSACION : contextualiza
+  CONVERSACION ||--|{ MENSAJE : contiene
+  USUARIO ||--o{ MENSAJE : escribe
+```
+
+La entidad `OFERTA` del diagrama no prescribe una tabla separada: hace visible la
+retención y respuesta que el modelo de compromiso necesita distinguir. Puede
+materializarse como historial asociado o como datos versionados del compromiso
+cuando se diseñe la persistencia. Del mismo modo, la relación de establecimiento
+con incidencia expresa que la atención se realiza en ese contexto, no que el
+establecimiento sea una persona.
+
+### Consulta y modificación por actor
+
+| Elemento | Consulta | Modificación confirmada | Límite o pendiente |
+| --- | --- | --- | --- |
+| Establecimiento y membresía | El usuario consulta sus establecimientos operables en el futuro contrato de sesión. | La administración de membresías no está especificada. | Registrarse no concede una membresía; K010 exige una existente. |
+| Lote | El operador miembro puede consultar su lote; RF03 exige el recorrido de descubrimiento, aún sin contrato integrado. | Sólo el operador miembro crea, edita borradores y publica; lo publicado es inmutable. | La visibilidad exacta de fotos y del detalle para quien rescata debe acordarse con K014/RF03. |
+| Fotos | Quien esté autorizado a consultar el lote visible podrá recibir sólo fotos listas; el acceso al objeto no debe ser público por defecto. | Operador autorizado antes de publicar; después el conjunto es fijo. | Faltan carga, validación, eliminación, autorización y contrato HTTP. |
+| Compromiso, oferta, código y entrega | La persona rescata consulta los suyos; el operador del establecimiento necesita los necesarios para preparar y acreditar el retiro. | Solicitar/aceptar/cancelar corresponde a quien rescata; ofrecer y acreditar corresponde al flujo autorizado del establecimiento/sistema. | Se debe precisar qué acciones automatiza el worker y cómo se autoriza el código. |
+| Incidencia y conversación | Participantes y quien atiende requieren acceso contextual al compromiso/entrega. | El reportante abre información propia; la resolución debe corresponder a un rol autorizado que E1 no detalla. | No se presupone acceso de otros usuarios ni un rol externo de soporte. |
+
+La tabla diferencia lo respaldado por RF01/RF02 y el alcance de K010 de los
+permisos que todavía requieren una decisión de producto. No convierte la posesión
+de un identificador público, una URL firmada o un código en autorización.
 
 ## Cantidades y demás restricciones
 
