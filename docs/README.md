@@ -52,3 +52,8 @@ Estos documentos contienen los requerimientos, decisiones y contexto utilizados 
 Son artefactos históricos y no se reescriben con decisiones posteriores. Para
 ofertas parciales prevalece ADR 0002 en el alcance que declara; las demás reglas
 se conservan y los puntos pendientes no se consideran decididos.
+
+## Publicación de lotes
+
+Las decisiones, el contrato HTTP y las pruebas de la publicación de lotes están en
+[k010-publicacion-lotes.md](k010-publicacion-lotes.md).

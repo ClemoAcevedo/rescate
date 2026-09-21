@@ -15,7 +15,9 @@
     "db:create": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create --migration-file-language sql",
     "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down 1",
     "db:test": "node --env-file-if-exists=.env scripts/test-migrations.mjs",
-    "db:test:compose": "node scripts/test-migrations-compose.mjs"
+    "db:test:compose": "node scripts/test-migrations-compose.mjs",
+    "db:test:lots": "npm run build && node --env-file-if-exists=.env scripts/test-lots.mjs",
+    "db:test:lots:compose": "node scripts/test-lots-compose.mjs"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +32,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.5.1",
+    "@types/pg": "^8.23.1",
     "node-pg-migrate": "9.0.0",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"

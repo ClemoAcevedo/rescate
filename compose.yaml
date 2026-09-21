@@ -22,6 +22,12 @@ services:
     init: true
     environment:
       PORT: "3000"
+      # K010: la API necesita el esquema ya migrado. Las migraciones se aplican
+      # como etapa aparte (npm run db:migrate), no al arrancar el servicio.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     healthcheck:

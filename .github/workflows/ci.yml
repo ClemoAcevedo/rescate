@@ -83,6 +83,8 @@ jobs:
         run: npm --prefix api ci
       - name: K003 migrations on empty PostgreSQL and rollback
         run: npm --prefix api run db:test:compose
+      - name: K010 lots on empty PostgreSQL
+        run: npm --prefix api run db:test:lots:compose
       - name: Worker
         run: |
           test "$(docker inspect --format '{{.State.Running}}' "$(docker compose ps -q worker)")" = true

@@ -92,6 +92,9 @@ npm ci
 npm run dev
 ```
 
+La API necesita `DATABASE_URL` y un esquema ya migrado. Copia `api/.env.example`
+a `api/.env` y aplica las migraciones con `npm run db:migrate` antes de iniciarla.
+
 La API incluye un endpoint básico de salud:
 
 ```text
@@ -105,6 +108,25 @@ Una ejecución correcta responde:
   "status": "ok"
 }
 ```
+
+### Publicación de lotes (K010)
+
+La API expone el borrador y la publicación de lotes en `/lots`, con versión
+optimista, inmutabilidad tras publicar y autorización por establecimiento.
+
+```text
+POST   /lots                  crear borrador
+GET    /lots?establishmentId= listar los lotes del establecimiento
+GET    /lots/:id              consultar un lote
+PATCH  /lots/:id              editar un borrador
+POST   /lots/:id/publication  publicar
+```
+
+Todas requieren una sesión válida. K008 aún no está integrada, así que responden
+`401` salvo que se habilite el actor de desarrollo descrito en `api/.env.example`.
+
+El contrato, las decisiones y las pruebas están en
+[docs/k010-publicacion-lotes.md](docs/k010-publicacion-lotes.md).
 
 ## Documentación
 
