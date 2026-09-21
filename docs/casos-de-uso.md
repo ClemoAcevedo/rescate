@@ -169,32 +169,31 @@ FIFO ni se modifica una entrega histórica.
 
 ## CU-RF06-01 — Acceder al código y acreditar entrega
 
-**Objetivo.** Permitir el retiro de packs confirmados y registrar una única entrega
-acreditada, con o sin código según se resuelva D-02.
+**Objetivo.** Permitir el retiro completo de packs confirmados mediante el código
+de retiro y registrar una única entrega acreditada.
 
 **Actores y permisos.** El usuario titular consulta la información de retiro. Un
 operador del establecimiento acredita la entrega. Un código no equivale por sí
 solo a una identidad ni a autorización de operador.
 
 **Precondiciones.** Reserva Confirmada y vigente; operador con membresía del
-establecimiento. Si Producto confirma un código de retiro, éste debe estar vigente
-y no usado.
+establecimiento; código aleatorio de ocho caracteres asociado a la reserva y no
+consumido. La solicitud En espera no tiene código.
 
 **Flujo principal.**
 
-1. El usuario consulta su información de retiro, incluido el código si existe y
-   tiene derecho a verlo.
+1. El usuario consulta cantidad, estado, lugar, plazo y código de su reserva.
 2. El operador inicia la acreditación y el sistema bloquea/relee reserva, lote y
    entrega previa.
-3. Valida actor, estado y, si aplica, código.
-4. Crea el registro de Entrega, consume el código si corresponde y mueve la
+3. Revisa actor, estado y código; esta revisión sola no acredita el retiro.
+4. Confirma el retiro completo, crea el registro de Entrega, consume el código y mueve la
    cantidad confirmada `R → E` en la misma unidad atómica.
 
-**Alternativos y errores.** Código inválido, vencido, de otra reserva o usado no
-crea entrega ni modifica inventario. Repetir un código usado no puede crear una
-segunda entrega; queda pendiente si la respuesta devuelve el comprobante previo o
-un rechazo. Una reserva cancelada/vencida/entregada se rechaza. No se inventan
-intentos máximos ni bloqueo por intentos.
+**Alternativos y errores.** Código inválido, de otra reserva o usado no crea
+entrega ni modifica inventario. Cinco fallos por operador en quince minutos activan
+el límite definido, junto al límite por origen de H. Repetir una confirmación usada
+no puede crear una segunda entrega. Una reserva cancelada/vencida/entregada se
+rechaza. El código no se muestra en URL, historial ni logs.
 
 **Postcondiciones.** Una Entrega registrada y reserva Entregada, o ningún cambio.
 La posterior apertura de una incidencia no invierte estos hechos.

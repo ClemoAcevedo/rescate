@@ -189,18 +189,20 @@ Los términos se usan así:
 | Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Existe como borrador/publicado; no guarda fotos ni contadores. |
 | Foto de lote | Ser una imagen opcional que ayuda a describir un lote publicado. Sólo una foto lista y autorizada puede hacerse visible; el conjunto queda fijo al publicar. | Cada foto pertenece a exactamente un lote; un lote tiene de 0 a 3 según anexo I p. 25. | K005 sólo prueba objetos privados con un fixture; no existe asociación, carga ni consulta de fotos de lote. |
 | Compromiso | Conservar la intención del usuario sobre una cantidad y, si corresponde, su reserva confirmada. Debe distinguir cantidad solicitada, ofrecida y confirmada. | Pertenece a un usuario y un lote; puede originar 0..N ofertas sucesivas sólo si las reglas futuras lo permiten; una reserva confirmada puede tener el código y la entrega que correspondan. | Sólo existe la reserva confirmada, sin solicitud/oferta ni cantidades separadas. |
-| Código de retiro | Presentar una credencial comprobable para acreditar una reserva, si el RF define ese mecanismo. Debe permitir saber vigencia y uso sin exponer un secreto como identificador del recurso. | Se asocia a una reserva confirmada; su cardinalidad (un código fijo, códigos rotables o varios por reserva) no está decidida por las fuentes revisadas. | No existe. Véase la decisión pendiente D-02. |
+| Código de retiro | Presentar la credencial de una reserva confirmada para que su titular la consulte y un operador autorizado la revise antes de confirmar el retiro completo. No es un identificador público ni una autorización por sí solo. | Una reserva confirmada tiene un código de ocho caracteres; una solicitud en espera no lo tiene. Se consume al acreditar la única entrega completa. | No existe. Anexos A p. 2 y G pp. 13 y 16 lo definen; no se inventan rotaciones ni códigos alternativos. |
 | Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | No existe. |
 | Incidencia posterior | Registrar un problema comunicado después de una entrega y su atención, sin reescribir la entrega. | Pertenece a una entrega; una entrega puede tener 0..N incidencias mientras no se acuerde una restricción distinta. Tiene un usuario reportante y puede tener un operador responsable de resolución. | No existe. Quién puede abrir/resolver y los desenlaces comerciales deben confirmarse (D-03). |
 | Conversación y mensaje | Mantener el intercambio asociado al compromiso cuando aplique; no sustituye estados ni autorización. | Una conversación corresponde a un compromiso; contiene 1..N mensajes, cada uno de un usuario participante. | E1 menciona chat, pero no hay implementación ni detalle suficiente para definir participantes adicionales o retención. |
 
-El código se presenta como **registro asociado** y no como atributo plano del
-compromiso porque vigencia, consumo y reintentos son hechos que requerirían
-trazabilidad. No obstante, E1 disponible en el repositorio no fija si existe un
-código de retiro, su formato, rotación ni cardinalidad; este es un diseño
-justificado, no una regla confirmada. La entrega también se modela como registro:
-`E` representa una transición histórica y no basta con derivarla del estado actual
-del compromiso. Ninguna de estas elecciones obliga a crear tablas.
+El código se presenta como **credencial asociada** a la reserva, no como un
+identificador del recurso: E1 define su uso, formato y el límite de validaciones,
+pero no exige convertirlo en tabla. Puede persistirse como atributo protegido del
+compromiso junto con el hecho de su consumo; el contador de fallos por operador y
+ventana requiere el registro técnico que permita aplicar el límite. No se introduce
+rotación, emisión múltiple ni un vencimiento independiente de la reserva porque E1
+no los define. La entrega sí se modela como registro: `E` representa una transición
+histórica y no basta con derivarla del estado actual del compromiso. Ninguna de
+estas elecciones obliga a crear tablas.
 
 ```mermaid
 erDiagram
@@ -235,7 +237,7 @@ establecimiento sea una persona.
 | Establecimiento y membresía | El usuario consulta sus establecimientos operables en el futuro contrato de sesión. | La administración de membresías no está especificada. | Registrarse no concede una membresía; K010 exige una existente. |
 | Lote | El operador miembro puede consultar su lote; RF03 exige el recorrido de descubrimiento, aún sin contrato integrado. | Sólo el operador miembro crea, edita borradores y publica; lo publicado es inmutable. | La visibilidad exacta de fotos y del detalle para quien rescata debe acordarse con K014/RF03. |
 | Fotos | Quien esté autorizado a consultar el lote visible podrá recibir sólo fotos listas; el acceso al objeto no debe ser público por defecto. | Operador autorizado antes de publicar; después el conjunto es fijo. | Faltan carga, validación, eliminación, autorización y contrato HTTP. |
-| Compromiso, oferta, código y entrega | La persona rescata consulta los suyos; el operador del establecimiento necesita los necesarios para preparar y acreditar el retiro. | Solicitar/aceptar/cancelar corresponde a quien rescata; ofrecer y acreditar corresponde al flujo autorizado del establecimiento/sistema. | Se debe precisar qué acciones automatiza el worker y cómo se autoriza el código. |
+| Compromiso, oferta, código y entrega | El titular consulta cantidad, estado, lugar, plazo y código de su reserva; el operador autorizado lo revisa para confirmar el retiro. | Solicitar/aceptar/cancelar corresponde a quien rescata; ofrecer y acreditar corresponde al flujo autorizado del establecimiento/sistema. | El código no va en URL, historial ni logs, y no sustituye sesión, membresía ni comprobación de reserva. |
 | Incidencia y conversación | Participantes y quien atiende requieren acceso contextual al compromiso/entrega. | El reportante abre información propia; la resolución debe corresponder a un rol autorizado que E1 no detalla. | No se presupone acceso de otros usuarios ni un rol externo de soporte. |
 
 La tabla diferencia lo respaldado por RF01/RF02 y el alcance de K010 de los
@@ -253,9 +255,9 @@ de un identificador público, una URL firmada o un código en autorización.
 - **Decisión de diseño:** se muestran estados conceptuales con nombres legibles y
   se registra la entrega como hecho inmutable. Los nombres no son valores SQL ni
   amplían los estados `draft`/`published` que K010 implementa.
-- **Pendiente:** formato/ciclo del código, plazos no ya definidos en E1, límite de
-  intentos, entregas parciales, consecuencias comerciales de una incidencia,
-  permisos de resolución y representación persistente. No se fijan aquí.
+- **Pendiente:** plazos no ya definidos en E1, entregas parciales, consecuencias
+  comerciales de una incidencia, permisos de resolución y representación
+  persistente. No se fijan aquí.
 
 ### Lote y disponibilidad
 
@@ -322,22 +324,25 @@ los mismos packs.
 
 ### Código y acreditación de entrega
 
-El requisito disponible no fija el tipo de código de retiro. La siguiente máquina
-es una **propuesta de diseño condicional a D-02**, incluida para impedir dos
-errores: acreditar al sólo mostrar un código y crear una segunda entrega ante un
-reintento.
+Anexos E1 A p. 2 y G pp. 13 y 16 definen el código de retiro: el titular lo
+consulta, el operador autorizado lo revisa, y confirmar registra una entrega
+completa dentro de la ventana. Revisarlo no acredita por sí solo. El código es
+aleatorio de ocho caracteres; una solicitud en espera no tiene código y la revisión
+admite cinco fallos por operador cada quince minutos, además del límite por origen
+de H. Es una credencial, por lo que no se expone en rutas, historial ni logs.
 
 | Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
 | --- | --- | --- | --- | --- | --- |
-| Sin código | Emitir código | Sistema al confirmar una reserva | Si Producto confirma que el retiro usa códigos. | Vigente. | Código asociado a la reserva; formato, expiración y rotación pendientes. |
-| Vigente | Validar correctamente y acreditar | Operador autorizado | Reserva confirmada/vigente, código corresponde a ella y no fue usado. | Usado. | Crea una única entrega y aplica `R → E` de forma atómica. |
-| Vigente | Pierde vigencia o se invalida | Regla temporal o actor que Producto autorice | Regla de vigencia confirmada. | Vencido/inválido. | No acredita entrega; no se asume cancelación de la reserva. |
-| Usado | Nuevo intento de validación | Operador autorizado | Mismo código ya consumido. | Usado. | Rechaza o devuelve el resultado previamente acreditado según se acuerde; nunca crea otra entrega. |
-| — | Código inexistente o no correspondiente | Operador autorizado | No supera validación. | Sin cambio. | No cuenta como entrega ni altera inventario. Límite, bloqueo o auditoría de intentos son pendientes. |
+| Sin código | Confirmar reserva | Sistema tras aceptar oferta vigente | La reserva queda Confirmada. | Vigente. | Asocia su código de retiro; la espera no recibe código. |
+| Vigente | Revisar | Operador autorizado | Reserva confirmada, dentro de ventana y código correspondiente. | Vigente. | Muestra la reserva; no acredita ni consume el código. |
+| Vigente | Confirmar retiro | Operador autorizado | Reserva confirmada/vigente, código revisado y sin entrega previa. | Usado. | Crea una única entrega completa y aplica `R → E` de forma atómica. |
+| Usado | Nuevo intento de confirmación | Operador autorizado | El compromiso ya tiene entrega acreditada. | Usado. | No crea una segunda entrega ni altera inventario. |
+| — o Vigente | Código inexistente, no correspondiente o quinto fallo en la ventana | Operador autorizado | No supera validación o alcanza el límite de cinco fallos por operador cada quince minutos. | Sin cambio en reserva/entrega. | No acredita ni altera inventario; se aplica además el límite por origen definido en H. |
 
-Las fuentes revisadas sí mencionan claves de idempotencia para asignación e
-incidencias (anexos H p. 20, citado también en [API S02](api/README.md)); no
-permiten equipararlas sin más a un código de retiro ni fijar intentos repetidos.
+Las claves de idempotencia de asignación e incidencias son una preocupación distinta
+del código de retiro: identifican una intención de operación, mientras el código
+autoriza la comprobación presencial de una reserva. Ambos se confirman con sus
+efectos sin duplicarlos, pero no deben equipararse.
 
 ### Entrega e incidencia posterior
 
