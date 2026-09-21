@@ -61,8 +61,8 @@ La vista técnica está disponible en `http://localhost:5173/conexion`. Seleccio
 **Comprobar conexión** para consultar el endpoint real `GET /health`; si falla, usa
 **Reintentar comprobación** después de restablecer la API local.
 
-La matriz de criterios y los pasos de revisión manual están en
-`docs/verificacion-navegacion-web.md`.
+Las comprobaciones técnicas del entorno y del proxy están en la
+[guía de desarrollo local](docs/desarrollo-local.md).
 
 Para crear una compilación de producción:
 
@@ -136,6 +136,10 @@ docs/
 Estos documentos contienen el contexto, requerimientos y decisiones definidas durante la primera etapa del proyecto.
 
 El [índice de documentación](docs/README.md) incluye las decisiones posteriores.
+La [arquitectura actual y objetivo incremental S02](docs/arquitectura/arquitectura.md)
+separa lo implementado de las cuatro responsabilidades que guiarán el backend.
+El [ADR 0003](docs/adr/0003-arquitectura-incremental-s02.md) registra esa decisión
+y [AGENTS.md](AGENTS.md) contiene las reglas para desarrollar incrementalmente.
 La regla vigente de [ofertas parciales y resolución de la solicitud](docs/adr/0002-ofertas-parciales.md)
 complementa E1 sin modificar los PDF históricos ni implementar todavía ese flujo.
 

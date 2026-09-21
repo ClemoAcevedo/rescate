@@ -1,12 +1,25 @@
 # Contrato API propuesto: identidad y lotes
 
-> Estado: **pendiente de validación con backend**. Este documento no define la API de forma definitiva.
+> Estado: **antecedente/propuesta de K004, pendiente de validación con backend**.
+> Este documento no define la API de forma definitiva. Se conserva para trazabilidad.
+> Según [ADR 0003](adr/0003-arquitectura-incremental-s02.md), OpenAPI será el contrato
+> HTTP versionado entre web y API al adoptarse en S02; este antecedente no será una
+> fuente contractual paralela. Aún no existe OpenAPI en el repositorio.
+
+**Aclaración de fuentes (2026-09-21):** los [anexos E1](entregas/e1/anexos-e1.pdf),
+H p. 21, ya definen contraseña de al menos 12 caracteres con scrypt,
+sesión opaca persistida en PostgreSQL con vigencia de
+12 horas, cookie HttpOnly/Secure/SameSite Lax, token CSRF y validación de origen.
+No están implementados. Las dudas originales de K004 sobre elegir cookies o tokens
+no reabren esas decisiones; K008 debe concretarlas junto a su contrato HTTP.
+Las rutas, cuerpos y códigos siguientes siguen siendo propuestas, no operaciones
+aprobadas por esta aclaración. Véase la [arquitectura](arquitectura/arquitectura.md).
 
 ## Evidencia disponible
 
 - Confirmado: el backend es una API Express y expone `GET /health`, que responde `200` con `{ "status": "ok" }`.
 - No confirmado: no existen en el repositorio rutas, esquemas ni documentación implementada para identidad, sesión o lotes.
-- No confirmado: no se ha decidido si la autenticación usará cookies, tokens u otro mecanismo. El frontend no debe almacenar ni enviar credenciales de sesión hasta acordarlo.
+- Definido en E1, todavía no implementado: sesión opaca persistida y cookie protegida. El frontend no debe integrar credenciales hasta concretar el contrato y su protección en K008.
 
 ## Convenciones propuestas
 
@@ -28,7 +41,7 @@
 | Respuesta esperada | `201 Created` con `{ "user": Identity }`. No se presupone que cree una sesión. |
 | Errores relevantes | `400` o `422` por datos inválidos; `409` por correo ya registrado. Códigos y cuerpo pendientes de confirmación. |
 
-Dudas: reglas de contraseña, normalización de correo, obligatoriedad y nombre de la etiqueta visible, roles iniciales y activación de cuenta.
+Dudas: detalles adicionales de validación de contraseña respetando E1, normalización de correo, obligatoriedad y nombre de la etiqueta visible, representación de permisos y habilitación de cuenta.
 
 ### Inicio de sesión
 
@@ -37,7 +50,7 @@ Dudas: reglas de contraseña, normalización de correo, obligatoriedad y nombre 
 | Método y ruta | `POST /auth/login` |
 | Parámetros | Ninguno en URL. |
 | Cuerpo | `{ "email": string, "password": string }` |
-| Respuesta esperada | `200 OK` con `{ "session": Session }`. La forma en que se mantiene esa sesión (cookie, token u otra) está pendiente de decisión. |
+| Respuesta esperada | `200 OK` con `{ "session": Session }`, cuerpo aún propuesto. E1 define sesión opaca y cookie protegida; sus detalles HTTP se concretarán en K008/OpenAPI. |
 | Errores relevantes | `400` o `422` por formato inválido; `401` por credenciales no válidas; posible `429` por limitación. Todos pendientes de confirmación. |
 
 ### Consulta de sesión
@@ -45,7 +58,7 @@ Dudas: reglas de contraseña, normalización de correo, obligatoriedad y nombre 
 | Campo | Propuesta |
 | --- | --- |
 | Método y ruta | `GET /auth/session` |
-| Parámetros y cuerpo | Ninguno. El mecanismo para asociar la solicitud con una sesión no está definido. |
+| Parámetros y cuerpo | Ninguno propuesto. La asociación mediante cookie de sesión está prevista por E1; el contrato concreto sigue pendiente de implementación. |
 | Respuesta esperada | `200 OK` con `{ "session": Session }`. |
 | Errores relevantes | `401 Unauthorized` si no hay sesión válida; formato de respuesta pendiente de confirmación. |
 
@@ -82,12 +95,17 @@ Dudas: estados posibles, visibilidad de lotes, campos obligatorios, unidad y for
 
 ## Tipos del frontend
 
-Los tipos propuestos se encuentran en `web/src/services/api-types.ts`. Son deliberadamente conservadores: los estados se modelan como texto hasta acordar un catálogo y los campos opcionales reflejan información de dominio aún no definida.
+Existen tipos preliminares en [services/api-types.ts](../web/src/services/api-types.ts)
+y [types/api.ts](../web/src/types/api.ts), con diferencias entre sí. No son fuentes
+de verdad definitivas ni modelos de base de datos. Los estados como texto y campos
+opcionales requieren reconciliación con E1, el modelo inicial y las tarjetas.
+Al incorporar generación desde OpenAPI se sustituirán/consolidarán esos catálogos,
+sin mantener definiciones HTTP manuales paralelas. Este PR no modifica TypeScript.
 
 ## Pendientes para backend
 
 1. Validar rutas, códigos de estado y envolturas JSON.
-2. Definir autenticación, duración y revocación de sesión, CORS y protección CSRF si corresponde.
+2. Materializar la autenticación y vigencia de sesión definidas en E1; concretar revocación, cookies, CORS, CSRF y origen para desarrollo y producción.
 3. Definir el modelo de usuario: roles, nombre visible y campos obligatorios.
 4. Definir modelo y ciclo de vida de lote: estados, cantidades, alimentos, ubicación, disponibilidad y permisos.
 5. Definir filtros, orden, paginación y límites del listado.
