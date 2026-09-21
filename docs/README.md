@@ -1,7 +1,7 @@
 # Documentación
 
-Base integrada: `origin/development` `e4e0460`, comprobada el 2026-09-21.
-Incluye el design system; esta rama añade K010, aún pendiente de commit/revisión.
+Estado del árbol de trabajo al 2026-09-21: K008 integrado con K010 y design system.
+Estos cambios siguen sin commit; no se acredita una nueva ejecución de CI remoto.
 
 ## Empezar por área
 
@@ -19,13 +19,14 @@ Incluye el design system; esta rama añade K010, aún pendiente de commit/revisi
   responsabilidades, dependencias, transacciones y evidencia esperada; el objetivo
   no equivale a funcionalidades implementadas.
 - [Guía del contrato HTTP](api/README.md) y [OpenAPI S02](api/openapi.yaml):
-  autoridad HTTP para K008–K011; K010 implementa lotes, K008 sigue pendiente.
+  autoridad HTTP para K008–K011; K010 implementa lotes y K008 identidad/seguridad.
 - [Modelo inicial K003](modelo-inicial.md): persistencia integrada y diferencias
   con el contrato posterior. [Migraciones](migraciones.md): operación actual K003
   y aceptación histórica K002 separadas.
 - [Fotos K005](k005-fotos.md): guía del prototipo aislado. La investigación de
   proveedores y los resultados allí fechados son históricos, no una nueva evaluación.
 
+- [Identidad y sesiones K008](k008-identidad.md): implementación, decisiones, operación HTTPS y evidencia.
 - [Publicación de lotes K010](k010-publicacion-lotes.md): implementación y límites de integración.
 
 ## Decisiones (ADR)

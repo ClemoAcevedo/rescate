@@ -205,10 +205,19 @@ try {
   ok('fallo después de publicación: rollback conserva borrador, versión y published_at')
 
   // La migración adicional revierte y reaplica sobre establecimientos existentes.
+  // Primero se revierte K008. Su precondición users vacío impide reaplicarla
+  // sobre estos fixtures: el ciclo histórico apunta explícitamente hasta K010.
+  const usersBeforeRollback = await query('SELECT id, email, created_at FROM users ORDER BY id')
+  run('down', '1')
+  assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeRollback)
+  assert.deepEqual((await query('SELECT name FROM public.pgmigrations ORDER BY id')).map(r => r.name), [
+    '1789915246470_migration-tool-test', '1789932753813_initial-rescate-model',
+    '1789999138556_lots-publication-fields', '1790000000000_establishment-public-ids',
+  ])
   const lotsBeforeRollback = await query('SELECT public_id::text FROM lots ORDER BY id')
   run('down', '1')
   assert.deepEqual(await query('SELECT public_id::text FROM lots ORDER BY id'), lotsBeforeRollback)
-  run('up')
+  run('up', '1790000000000', '--timestamp')
   const ids = await query('SELECT public_id::text FROM establishments')
   assert.equal(new Set(ids.map(r => r.public_id)).size, 2)
   assert.ok(ids.every(r => /^[0-9a-f-]{36}$/.test(r.public_id)))
@@ -225,10 +234,10 @@ try {
   ])
   ok('rollback solo K010: K002 y K003 conservan historial y los lotes siguen existiendo')
 
-  run('up')
+  run('up', '1790000000000', '--timestamp')
   const reapplied = await query("SELECT count(*)::int AS total FROM lots WHERE public_id IS NOT NULL")
   assert.deepEqual(reapplied, [{ total: 4 }])
-  run('up')
+  run('up', '1790000000000', '--timestamp')
   ok('reaplicación de K010: filas existentes reciben identificador y segunda ejecución sin cambios')
 
   console.log(`PASS K010: ${checks} comprobaciones sobre PostgreSQL real`)

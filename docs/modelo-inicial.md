@@ -8,8 +8,8 @@ sin cambiar este SQL: borradores completos, condiciones particulares opcionales/
 correo con trim exterior y comparación sin distinguir mayúsculas (preservando puntos
 y sufijos +), versión optimista y publicación explícita. Las ambigüedades históricas
 de abajo conservan el contexto K003; estas decisiones ya no están abiertas. K008/K010
-deberán añadir los cambios de persistencia necesarios mediante nuevas migraciones,
-incluida unicidad del correo normalizado, versión e identificadores públicos opacos.
+añaden cambios mediante migraciones posteriores, incluida unicidad del correo
+normalizado, versión e identificadores públicos opacos.
 
 **Aclaración de dominio posterior a E1 (2026-09-20):**
 [ADR 0002](adr/0002-ofertas-parciales.md) permite ofertas parciales a la cabeza
@@ -25,7 +25,10 @@ activa permanecen registradas allí como riesgo futuro del modelo.
 Las migraciones aditivas K010 incorporan `lots.public_id`, `version`, `updated_at`
 y `establishments.public_id`. El [documento K010](k010-publicacion-lotes.md)
 describe publicación, inmutabilidad, autorización y PATCH parcial implementados;
-K008 sigue pendiente. No se reinterpretan las restricciones históricas de K003.
+K008 añade `users.public_id`, correo canónico y las tablas `user_credentials`,
+`sessions`, `login_security_state` y `login_failures`; mantiene memberships sin roles
+ni estados. Su migración exige users vacío y aborta si hay filas. Ver [K008](k008-identidad.md).
+No se reinterpretan las restricciones históricas de K003.
 
 ## Fuentes y clasificación
 

@@ -22,7 +22,10 @@ services:
     init: true
     environment:
       PORT: "3000"
-      # K010: la API necesita el esquema ya migrado. Las migraciones se aplican
+      # Compose es solo desarrollo: clave pública ficticia para health/smoke.
+      RESCATE_ALLOWED_ORIGINS: ${RESCATE_ALLOWED_ORIGINS:-https://localhost:3443}
+      CSRF_SIGNING_KEY: ${CSRF_SIGNING_KEY:-cmVzY2F0ZS1kZXYtb25seS1ub3QtYS1yZWFsLXNlY3JldA==}
+      # K008/K010: la API necesita el esquema ya migrado. Las migraciones se aplican
       # como etapa aparte (npm run db:migrate), no al arrancar el servicio.
       DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
     depends_on:

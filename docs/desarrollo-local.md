@@ -1,9 +1,9 @@
 # Entorno local y CI
 
-Guía vigente para K010 sobre `development` `e4e0460` (2026-09-21).
+Guía vigente para el árbol de trabajo K008/K010 (2026-09-21).
 Compose levanta web, API, PostgreSQL/PostGIS y un worker inactivo. La API añade
 [operaciones de lotes](k010-publicacion-lotes.md); requiere migraciones aplicadas.
-K008 (sesiones, origen y CSRF) y reservas siguen pendientes. K005 es una CLI aislada.
+K008 integra identidad/sesiones; reservas sigue pendiente. K005 es una CLI aislada.
 Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
 [K006](verificacion-k006.md).
 
@@ -50,6 +50,8 @@ Variables del `.env` raíz (leídas por Compose):
 | `POSTGRES_DB` | `rescate` | Base inicial |
 | `POSTGRES_USER` | `rescate_dev` | Usuario de desarrollo |
 | `POSTGRES_PASSWORD` | `rescate_dev_only` | Contraseña pública, solo local |
+| `RESCATE_ALLOWED_ORIGINS` | `https://localhost:3443` | Orígenes HTTPS exactos para comandos |
+| `CSRF_SIGNING_KEY` | Clave ficticia del ejemplo | Sustituir por 32 bytes aleatorios en base64 para uso real |
 
 Compose tiene los mismos valores por defecto que el ejemplo. Si un puerto está
 ocupado, cámbialo en `.env` y ajusta las URLs de comprobación. Los puertos internos
@@ -104,7 +106,9 @@ ni Compose. El [modelo K003](modelo-inicial.md) describe las cinco entidades.
 Desde el host, configurar `DATABASE_URL` en `api/.env` o en el entorno con el
 usuario, base y puerto de Compose. Ejecutar `npm run db:migrate` desde `api/`.
 El destino del host es `127.0.0.1` y el valor de `POSTGRES_PORT`; dentro de Compose,
-`db:5432`. API/worker todavía no consultan la base ni reciben esa URL desde Compose.
+`db:5432`. API recibe esa URL y consulta PostgreSQL; worker permanece inactivo.
+K008 exige `users` vacío al migrar: nunca borrar datos automáticamente para eludir
+la precondición. Ver [operación y HTTPS K008](k008-identidad.md).
 
 Los comandos `db:migrate`, `db:create`, `db:rollback` y `db:test` cargan
 `api/.env` mediante Node; una variable del entorno tiene prioridad.
@@ -151,10 +155,10 @@ npm --prefix api run build
 
 - `web`: instalación con lockfile, TypeScript, lint y build en pasos separados.
   Actualmente no existen tests web; no se oculta esa ausencia con `--if-present`.
-- `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud/lotes y build de
+- `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud, identidad, seguridad y lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, prueba migraciones y concurrencia K010, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, reinicio de API y Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay

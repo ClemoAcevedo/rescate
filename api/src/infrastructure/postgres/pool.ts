@@ -15,13 +15,17 @@ export interface PoolOptions {
 }
 
 export function createPool(options: PoolOptions): Pool {
-  return new pg.Pool({
+  const pool = new pg.Pool({
     connectionString: options.connectionString,
     max: options.max ?? 8,
     connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5000,
     // Límite de consulta de H p. 20; evita retener un cliente indefinidamente.
     statement_timeout: options.statementTimeoutMillis ?? 5000,
   })
+  // pg retira el cliente ocioso perdido; sin listener el evento derriba Node.
+  // No registrar el Error original: puede contener host, SQL o credenciales.
+  pool.on("error", () => { console.error({ event: "database_idle_connection_lost" }) })
+  return pool
 }
 
 /**

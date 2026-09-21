@@ -3,8 +3,8 @@ import { parse } from 'yaml'
 import { compile } from 'json-schema-to-typescript'
 
 const document = parse(await readFile(new URL('../../docs/api/openapi.yaml', import.meta.url), 'utf8'))
-// Solo DTO consumidos por K010; las definiciones y referencias provienen del YAML.
-const names = ['CreateLotDraftRequest', 'UpdateLotDraftRequest', 'PublishLotDraftRequest', 'LotResponse', 'ErrorResponse', 'ValidationIssue']
+// DTO consumidos por K008/K010; las definiciones y referencias provienen del YAML.
+const names = ['LoginRequest', 'LoginResponse', 'RegisterRequest', 'RegisterResponse', 'SessionResponse', 'CreateLotDraftRequest', 'UpdateLotDraftRequest', 'PublishLotDraftRequest', 'LotResponse', 'ErrorResponse', 'ValidationIssue']
 const definitions = JSON.parse(JSON.stringify(document.components.schemas).replaceAll('#/components/schemas/', '#/definitions/'))
 const output = await compile({
   type: 'object', additionalProperties: false, required: names,

@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP para K008–K011, previa a implementación. Solo contrato: API actual expone /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP para K008–K011. Implementadas las cuatro operaciones auth K008 y las cuatro de lotes K010, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"

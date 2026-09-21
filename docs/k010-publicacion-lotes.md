@@ -65,7 +65,7 @@ PK internas ni `updatedAt`. Todas las respuestas llevan `Cache-Control: no-store
 Errores siguen `{error:{code,message,details?}}`; `details.issues` contiene
 `path` JSON Pointer y mensaje seguro, sin valores sensibles ni violaciones propias
 del contrato anterior. Límites generales/rate limiting y seguridad de identidad
-se integrarán con K008/K012; no se afirma que K010 implemente todo S02.
+se integran mediante K008; no se afirma que K010 implemente todo S02.
 
 ## IDs públicos y migraciones
 
@@ -96,24 +96,19 @@ con N no pueden confirmar ambos. El perdedor obtiene conflicto; no se acepta un
 error indefinido como evidencia de concurrencia. Un fallo posterior a escribir
 revierte contenido, versión y publicación. No hay llamadas externas bajo bloqueo.
 
-## Actor temporal y conexión K008
+## Sesión real y conexión K008
 
-Se conserva `Authenticate → Actor`, con `Actor.userId` como PK interna resuelta
-por el mecanismo autenticador. K008 deberá obtenerla desde la sesión, no desde
-un ID público aportado por el cliente, y aplicar Origin/CSRF en HTTP antes del
-caso de uso. Domain/Application no reciben cookies ni Request de Express.
-
-Sin K008, el mecanismo predeterminado devuelve null y los comandos autenticados
-responden 401. `RESCATE_DEV_ACTOR=enabled` habilita explícitamente la cabecera
-`X-Rescate-Dev-Actor` con usuario ficticio existente; no verifica credenciales.
-Con `NODE_ENV=production` esa configuración impide arrancar. K008 sustituirá
-`selectAuthentication` y retirará este mecanismo. No hay login, hashing, cookies,
-sesiones ni una arquitectura de autenticación alternativa en K010.
+`Authenticate → Actor` obtiene `Actor.userId` (PK interna) desde la sesión K008
+vigente. HTTP extrae la cookie y protege comandos con Origin/CSRF antes del caso
+de uso. Domain/Application no reciben cookies ni Request. K010 vuelve a comprobar
+membership por operación; la lista de establecimientos de sesión no concede permisos.
+La cabecera `X-Rescate-Dev-Actor` ya no autentica en runtime. Los tests unitarios
+HTTP conservan un doble local; el recorrido real está en [K008](k008-identidad.md).
 
 ## Pruebas y límites
 
 - `npm test`: reglas, requests HTTP, permisos, PATCH parcial, versión,
-  inmutabilidad, errores y actor temporal. Ajv 2020-12 valida las respuestas HTTP
+  inmutabilidad y errores con actor de prueba. Ajv 2020-12 valida las respuestas HTTP
   reales contra los schemas del YAML, sin copiar un catálogo alternativo.
 - `api:contract:check`: Redocly comprueba estructura/ejemplos, no runtime.
 - `api:types` / `api:types:check`: genera/verifica DTO con json-schema-to-typescript.
@@ -125,5 +120,5 @@ sesiones ni una arquitectura de autenticación alternativa en K010.
 
 Las bases dedicadas conservan datos ficticios; no se migra ni revierte la base
 de desarrollo. La [evidencia](k010-evidencia.md) separa ejecución original de
-reconciliación. K008/K012 aún deben verificar cookies, origen/CSRF, HTTPS y recorrido
-integrado de navegador; estos tests no sustituyen esa aceptación.
+reconciliación. K008 agrega validación HTTPS/Chromium, sesiones, Origin/CSRF y
+recorrido real hasta K010. La integración de pantallas K009/K011 sigue pendiente.

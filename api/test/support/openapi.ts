@@ -11,12 +11,14 @@ addFormats(ajv)
 ajv.addSchema({ $id: "rescate", components: contract.components })
 const validators = new Map<string, ReturnType<typeof ajv.compile>>()
 export function assertContract(method: string, path: string, response: Response, body: unknown): void {
-  const route = path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
+  const route = path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
     : path.endsWith("/publish") ? "/lots/{lotId}/publish" : "/lots/{lotId}"
   const operation = contract.paths[route][method.toLowerCase()]
   let spec = operation.responses[String(response.status)]
   assert.ok(spec, `${method} ${route}: status ${response.status} no contratado`)
   if (spec.$ref) spec = contract.components.responses[spec.$ref.split("/").at(-1)]
+  assert.equal(response.headers.get("cache-control"), "no-store")
+  if (response.status === 204) { assert.equal(body, undefined); return }
   const ref = spec.content["application/json"].schema.$ref
   let validate = validators.get(ref)
   if (!validate) { validate = ajv.compile({ $ref: `rescate${ref}` }); validators.set(ref, validate) }

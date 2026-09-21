@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import pg from 'pg'
+import { applyIdentityWithPendingInsert, identityTables, verifyIdentitySchema } from './test-identity-schema.mjs'
 
 // Destructiva SOLO para K003: exige nombre dedicado y base inicialmente vacía.
 assert.ok(process.env.DATABASE_URL, 'Configura DATABASE_URL para una base de prueba vacía')
@@ -10,6 +11,7 @@ const migrations = [
   '1789932753813_initial-rescate-model',
   '1789999138556_lots-publication-fields',
   '1790000000000_establishment-public-ids',
+  '1790000000001_identity-sessions',
 ]
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
   'Revisar explícitamente la prueba antes de incluir nuevas migraciones y su rollback')
@@ -40,7 +42,7 @@ const snapshot = () => query(`
 
 async function verifyModel() {
   assert.deepEqual((await snapshot()).map(row => row.relname),
-    [...tables, 'migration_tool_test', 'pgmigrations'].sort())
+    [...tables, ...identityTables, 'migration_tool_test', 'pgmigrations'].sort())
   const constraints = await query(`
     SELECT c.conname, t.relname AS table_name, c.contype,
            pg_get_constraintdef(c.oid) AS definition
@@ -162,7 +164,8 @@ async function verifyModel() {
     ['lots', lot, ['description', 'category', 'address', 'time_zone']],
   ]) {
     for (const field of fields) await rejected(`${table}.${field} vacío`,
-      `UPDATE ${table} SET ${field}=' ' WHERE id=$1`, [row.id], '23514', `${table}_${field}_check`)
+      `UPDATE ${table} SET ${field}=' ' WHERE id=$1`, [row.id], '23514',
+      table === 'users' ? ['users_email_check', 'users_email_canonical_check'] : `${table}_${field}_check`)
   }
   await rejected('descripción excede 2000 caracteres', "UPDATE lots SET description=repeat('x',2001) WHERE id=$1",
     [lot.id], '23514', 'lots_description_check')
@@ -177,9 +180,16 @@ try {
     WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema' AND c.relkind IN ('r','p','v','m','S','f')`)
   assert.deepEqual(existing, [], 'La base debe estar completamente vacía, sin tablas, vistas ni secuencias de usuario')
   ok(`PostgreSQL ${server.version}; base ${server.database}: vacía (0 relaciones de usuario)`)
-  run('up')
+  // Upgrade desde K010 con users vacío: no se fabrican cuentas históricas.
+  run('up', '4')
+  const previousHistory = await history()
+  assert.deepEqual(previousHistory.map(row => row.name), migrations.slice(0, 4))
+  await applyIdentityWithPendingInsert(client)
   assert.deepEqual((await history()).map(row => row.name), migrations)
-  ok('desde cero: K002, K003 y K010 registradas una vez')
+  assert.deepEqual((await history()).slice(0, 4), previousHistory)
+  ok('desde cero y upgrade K010 vacío: K008 aplicada sin cambiar el historial previo')
+  await verifyIdentitySchema(client)
+  ok('K008: correo Unicode, unicidad, credenciales, sesiones y estado de login verificados en PostgreSQL')
   await client.query('INSERT INTO public.migration_tool_test(id) VALUES (1)')
   await verifyModel()
   const applied = await history()
@@ -193,6 +203,30 @@ try {
   ok('segunda ejecución: 0 pendientes; historial, OID de tablas y datos intactos')
 
   assert.deepEqual((await history()).map(row => row.name), migrations)
+  const usersBeforeDown = await query('SELECT id, email, created_at FROM users ORDER BY id')
+  const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
+  run('down', '1')
+  assert.deepEqual(await history(), applied.slice(0, 4))
+  assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeDown)
+  assert.deepEqual(await query('SELECT * FROM memberships ORDER BY id'), membershipsBeforeDown)
+  assert.deepEqual(await query('SELECT * FROM commitments ORDER BY id'), data)
+  assert.deepEqual((await snapshot()).map(row => row.relname), [...tables, 'migration_tool_test', 'pgmigrations'].sort())
+  assert.deepEqual(await query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='public_id'"), [])
+  assert.equal((await query("SELECT to_regprocedure('public.canonicalize_email(text)') AS function"))[0].function, null)
+  const beforeRefused = await snapshot()
+  const refused = spawnSync(process.execPath, ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', 'up'],
+    { encoding: 'utf8', env: process.env })
+  assert.equal(refused.status, 1, 'K008 debe abortar ante cualquier usuario')
+  assert.match(refused.stdout + refused.stderr, /K008 requiere users vacío/)
+  assert.deepEqual(await snapshot(), beforeRefused)
+  assert.deepEqual(await history(), applied.slice(0, 4))
+  assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeDown)
+  assert.deepEqual(await query('SELECT * FROM memberships ORDER BY id'), membershipsBeforeDown)
+  assert.deepEqual(await query('SELECT * FROM commitments ORDER BY id'), data)
+  ok('down K008 conserva cuentas y relaciones; reaplicar con usuarios aborta sin transformar ni borrar datos')
+
+  // Se mantiene el ciclo histórico de rollback K010/K003 sobre esta base
+  // dedicada. No se borran usuarios para conseguir aplicar K008.
   run('down', '1')
   assert.deepEqual(await history(), applied.slice(0, 3))
   assert.deepEqual(await query("SELECT column_name FROM information_schema.columns WHERE table_name='establishments' AND column_name='public_id'"), [])
@@ -216,6 +250,7 @@ try {
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
   await verifyModel()
+  await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')
   assert.deepEqual(await history(), reapplied)
