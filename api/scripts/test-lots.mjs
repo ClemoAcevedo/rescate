@@ -66,9 +66,9 @@ try {
   const [operator] = await query("INSERT INTO users(email) VALUES ('operador-k010@example.invalid') RETURNING id::text")
   const [outsider] = await query("INSERT INTO users(email) VALUES ('ajeno-k010@example.invalid') RETURNING id::text")
   const [establishment] = await query(`INSERT INTO establishments(name, address, latitude, longitude, time_zone)
-    VALUES ('Establecimiento ficticio K010', 'Dirección ficticia', -33.45, -70.66, 'America/Santiago') RETURNING id::text`)
+    VALUES ('Establecimiento ficticio K010', 'Dirección ficticia', -33.45, -70.66, 'America/Santiago') RETURNING id::text, public_id::text`)
   const [otherEstablishment] = await query(`INSERT INTO establishments(name, address, latitude, longitude, time_zone)
-    VALUES ('Otro establecimiento ficticio', 'Otra dirección', -33.46, -70.65, 'America/Santiago') RETURNING id::text`)
+    VALUES ('Otro establecimiento ficticio', 'Otra dirección', -33.46, -70.65, 'America/Santiago') RETURNING id::text, public_id::text`)
   await query('INSERT INTO memberships(user_id, establishment_id) VALUES ($1,$2),($3,$4)',
     [operator.id, establishment.id, outsider.id, otherEstablishment.id])
   ok('datos ficticios: dos operadores, dos establecimientos y sus membresías')
@@ -77,7 +77,11 @@ try {
   const actor = { userId: operator.id }
   const foreign = { userId: outsider.id }
 
-  const draft = await useCases.createDraft(actor, { establishmentId: establishment.id, declaration: declaration() })
+  const draft = await useCases.createDraft(actor, { establishmentId: establishment.public_id, declaration: declaration() })
+  assert.equal(draft.establishmentPublicId, establishment.public_id)
+  assert.equal(draft.establishmentId, establishment.id)
+  assert.notEqual(draft.establishmentPublicId, establishment.id)
+  await failsWith('PK interna no es ID HTTP', useCases.createDraft(actor, { establishmentId: establishment.id, declaration: declaration() }), 'establishment_not_found')
   assert.equal(draft.status, 'draft')
   assert.equal(draft.version, 1)
   assert.equal(draft.publishedAt, null)
@@ -88,7 +92,7 @@ try {
   ok('borrador persistido con identificador público opaco y versión 1')
 
   await failsWith('operador ajeno crea en establecimiento ajeno',
-    useCases.createDraft(foreign, { establishmentId: establishment.id, declaration: declaration() }), 'not_authorized')
+    useCases.createDraft(foreign, { establishmentId: establishment.public_id, declaration: declaration() }), 'not_authorized')
   await failsWith('operador ajeno consulta el lote', useCases.getLot(foreign, draft.publicId), 'not_authorized')
   await failsWith('operador ajeno publica el lote',
     useCases.publish(foreign, { publicId: draft.publicId, expectedVersion: 1 }), 'not_authorized')
@@ -100,10 +104,10 @@ try {
   ok('ninguna operación ajena modificó la fila')
 
   await failsWith('cantidad cero',
-    useCases.createDraft(actor, { establishmentId: establishment.id, declaration: declaration({ quantity: 0 }) }),
+    useCases.createDraft(actor, { establishmentId: establishment.public_id, declaration: declaration({ quantity: 0 }) }),
     'quantity_out_of_range')
   await failsWith('ventana invertida', useCases.createDraft(actor, {
-    establishmentId: establishment.id,
+    establishmentId: establishment.public_id,
     declaration: declaration({ pickupEndsAt: new Date('2026-10-01T14:00:00.000Z') }),
   }), 'pickup_window_invalid')
   assert.deepEqual(await query('SELECT count(*)::int AS total FROM lots'), [{ total: 1 }])
@@ -131,8 +135,7 @@ try {
   const rejected = attempts.filter(result => result.status === 'rejected')
   assert.equal(fulfilled.length, 1, 'exactamente una publicación confirma')
   assert.equal(rejected.length, 1)
-  assert.ok(['version_conflict', undefined].includes(rejected[0].reason.code) ||
-    rejected[0].reason.violations?.includes('lot_already_published'))
+  assert.equal(rejected[0].reason.code, 'version_conflict')
   const [published] = await query(`SELECT status, version, quantity,
     published_at = updated_at AS same_instant FROM lots WHERE public_id=$1`, [draft.publicId])
   assert.deepEqual(published, { status: 'published', version: 3, quantity: 5, same_instant: true })
@@ -149,19 +152,11 @@ try {
   ok('RF02: el lote publicado quedó inmutable')
 
   const lateWindow = await useCases.createDraft(actor, {
-    establishmentId: establishment.id,
+    establishmentId: establishment.public_id,
     declaration: declaration({ pickupStartsAt: new Date('2026-09-01T15:00:00.000Z'), pickupEndsAt: new Date('2026-09-01T17:00:00.000Z') }),
   })
   await failsWith('publicar con la ventana terminada',
     useCases.publish(actor, { publicId: lateWindow.publicId, expectedVersion: 1 }), 'pickup_window_already_ended')
-
-  const listed = await useCases.listEstablishmentLots(actor, establishment.id)
-  assert.equal(listed.length, 2)
-  assert.deepEqual((await useCases.listEstablishmentLots(actor, establishment.id, ['published'])).map(l => l.publicId),
-    [draft.publicId])
-  await failsWith('listar un establecimiento ajeno',
-    useCases.listEstablishmentLots(foreign, establishment.id), 'not_authorized')
-  ok('el panel lista por estado y solo para su establecimiento')
 
   assert.equal(await useCases.getLot(actor, draft.publicId).then(lot => lot.publicId), draft.publicId)
   await failsWith('identificador inexistente',
@@ -169,12 +164,62 @@ try {
   await failsWith('identificador con otra forma', useCases.getLot(actor, 'no-es-uuid'), 'lot_not_found')
   ok('un identificador inexistente o con otra forma no consulta datos ajenos')
 
+  // Dos transacciones reales compiten por la misma versión: editar/publicar.
+  const racing = await useCases.createDraft(actor, { establishmentId: establishment.public_id, declaration: declaration() })
+  const mixed = await Promise.allSettled([
+    useCases.updateDraft(actor, { publicId: racing.publicId, expectedVersion: 1, declaration: { quantity: 7 } }),
+    useCases.publish(actor, { publicId: racing.publicId, expectedVersion: 1 }),
+  ])
+  assert.equal(mixed.filter(r => r.status === 'fulfilled').length, 1)
+  assert.equal(mixed.filter(r => r.status === 'rejected').length, 1)
+  assert.equal(mixed.find(r => r.status === 'rejected').reason.code, 'version_conflict')
+  const afterRace = await useCases.getLot(actor, racing.publicId)
+  assert.equal(afterRace.version, 2)
+  assert.equal(afterRace.declaration.quantity, afterRace.status === 'draft' ? 7 : 3)
+  ok('edición/publicación concurrentes: solo un ganador y conflicto concreto, sin mezcla de estados')
+
+  // Fallo SQL después de una escritura real dentro de la unidad atómica.
+  const repository = createLotRepository(pool)
+  const beforeFailure = await useCases.getLot(actor, lateWindow.publicId)
+  await assert.rejects(repository.withLotTransaction(lateWindow.publicId, async (lot, writer) => {
+    await writer.updateDeclaration({ publicId: lot.publicId, expectedVersion: lot.version,
+      declaration: { ...lot.declaration, quantity: 9 }, updatedAt: NOW })
+    await writer.updateDeclaration({ publicId: lot.publicId, expectedVersion: lot.version + 1,
+      declaration: { ...lot.declaration, quantity: 0 }, updatedAt: NOW })
+  }), error => error.code === '23514')
+  assert.deepEqual(await useCases.getLot(actor, lateWindow.publicId), beforeFailure)
+  ok('fallo SQL tras escribir: ROLLBACK revierte datos/versión y libera conexión')
+
+  // Fallo después de marcar publicado: ningún estado parcial queda confirmado.
+  const unpublished = await useCases.createDraft(actor, { establishmentId: establishment.public_id, declaration: declaration() })
+  const failingUseCases = createLotUseCases({ ...repository,
+    withLotTransaction: (id, operate) => repository.withLotTransaction(id, (lot, writer) => operate(lot, {
+      ...writer, markPublished: async publication => {
+        await writer.markPublished(publication)
+        throw new Error('fallo simulado después de escribir publicación')
+      },
+    })),
+  }, () => NOW)
+  await assert.rejects(failingUseCases.publish(actor, { publicId: unpublished.publicId, expectedVersion: 1 }), /fallo simulado/)
+  assert.deepEqual(await useCases.getLot(actor, unpublished.publicId), unpublished)
+  ok('fallo después de publicación: rollback conserva borrador, versión y published_at')
+
+  // La migración adicional revierte y reaplica sobre establecimientos existentes.
+  const lotsBeforeRollback = await query('SELECT public_id::text FROM lots ORDER BY id')
+  run('down', '1')
+  assert.deepEqual(await query('SELECT public_id::text FROM lots ORDER BY id'), lotsBeforeRollback)
+  run('up')
+  const ids = await query('SELECT public_id::text FROM establishments')
+  assert.equal(new Set(ids.map(r => r.public_id)).size, 2)
+  assert.ok(ids.every(r => /^[0-9a-f-]{36}$/.test(r.public_id)))
+  ok('migración de establecimientos sobre filas existentes: IDs únicos sin cambiar lotes')
+  run('down', '1')
   await pool.end()
   run('down', '1')
   const remaining = await query(`SELECT column_name FROM information_schema.columns
     WHERE table_schema='public' AND table_name='lots' AND column_name = ANY($1)`, [['public_id', 'version', 'updated_at']])
   assert.deepEqual(remaining, [], 'el rollback de K010 retira sus columnas')
-  assert.deepEqual(await query('SELECT count(*)::int AS total FROM lots'), [{ total: 2 }])
+  assert.deepEqual(await query('SELECT count(*)::int AS total FROM lots'), [{ total: 4 }])
   assert.deepEqual((await query('SELECT name FROM public.pgmigrations ORDER BY id')).map(r => r.name), [
     '1789915246470_migration-tool-test', '1789932753813_initial-rescate-model',
   ])
@@ -182,7 +227,7 @@ try {
 
   run('up')
   const reapplied = await query("SELECT count(*)::int AS total FROM lots WHERE public_id IS NOT NULL")
-  assert.deepEqual(reapplied, [{ total: 2 }])
+  assert.deepEqual(reapplied, [{ total: 4 }])
   run('up')
   ok('reaplicación de K010: filas existentes reciben identificador y segunda ejecución sin cambios')
 

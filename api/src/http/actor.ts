@@ -25,7 +25,7 @@ export function createDevActorAuthentication(): Authenticate {
     if (header === undefined) return null
     const userId = header.trim()
     // Clave interna bigint transportada como texto, sin convertir a Number.
-    return /^[1-9][0-9]{0,18}$/.test(userId) ? { userId } : null
+    return /^[1-9][0-9]{0,18}$/.test(userId) && BigInt(userId) <= 9223372036854775807n ? { userId } : null
   }
 }
 

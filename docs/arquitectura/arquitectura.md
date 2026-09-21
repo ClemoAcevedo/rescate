@@ -1,12 +1,14 @@
 # Arquitectura de Rescate
 
-Fecha de revisión: 2026-09-21, después de S01 y antes de K008/K010.
-Estado: arquitectura objetivo adoptada; implementación incremental pendiente.
+Fecha de revisión: 2026-09-21, reconciliación K010 con development.
+Estado: K010 implementado incrementalmente; K008 y restantes operaciones pendientes.
 Decisión: [ADR 0003](../adr/0003-arquitectura-incremental-s02.md).
 
 Este documento separa el código existente del diseño que guiará S02. No acredita
-funcionalidades por el solo hecho de describirlas. El cambio que lo incorpora es
-documental: no implementa casos de uso, endpoints, OpenAPI ni cambios de esquema.
+funcionalidades por el solo hecho de describirlas. La adopción arquitectónica
+original fue documental. La revisión posterior del
+contrato incorpora [OpenAPI S02](../api/README.md). K010 materializa HTTP,
+Application, Domain, Infrastructure y Composition para lotes con PostgreSQL.
 
 ## Fuentes y relación con E1
 
@@ -47,8 +49,7 @@ regla tampoco está implementada. No se reabren esas decisiones con este documen
 ### Sistema actual: entorno de desarrollo
 
 Las flechas continuas representan caminos existentes en código/configuración,
-no una nueva comprobación de servicios en ejecución. Los componentes separados
-no tienen conexión funcional con el recorrido HTTP. CI es automatización de
+no una nueva comprobación de servicios en ejecución. K010 conecta HTTP con PostgreSQL; B2 y worker siguen aislados. CI es automatización de
 verificación, no un servicio usado por una persona.
 
 ```mermaid
@@ -56,6 +57,8 @@ flowchart LR
   persona["Persona"] --> web["Web React en navegador"]
   web -->|GET /api/health| vite["Vite / proxy de desarrollo"]
   vite -->|GET /health| api["API Express"]
+  cliente["Cliente de desarrollo K010"] -->|Lotes: actor temporal| api
+  api -->|Casos de uso y repositorio K010| db
   migraciones["Migraciones y scripts de prueba"] --> db["PostgreSQL / PostGIS"]
   fotos["CLI de fotos K005 aislada"] --> b2["Backblaze B2 privado / S3"]
   fotos --> disco["Disco local de prueba"]
@@ -73,25 +76,30 @@ HTTPS de producción ni un despliegue público ya disponible.
 | --- | --- |
 | Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. Login, registro y lotes no consumen operaciones de negocio. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
-| API | [app.ts](../../api/src/app.ts) configura `express.json()` y únicamente `GET /health`, con `{ "status": "ok" }`. [index.ts](../../api/src/index.ts) lee el puerto y arranca Express. No hay Pool, repositorios, credenciales, sesiones ni casos de uso. |
+| API | [app.ts](../../api/src/app.ts) expone salud y cuatro rutas de lotes. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aún no aporta credenciales/sesiones. |
 | Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. Tener tablas no implementa sus operaciones. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS. No hay consultas espaciales en la API. |
 | Worker | [worker.ts](../../api/src/worker.ts) registra inicio, mantiene vivo el proceso y maneja señales. No consulta la base, no hace polling ni ejecuta trabajos. Comparte paquete e imagen con API, pero es otro proceso. |
 | Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../k005-evidencia.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
-| CI | [ci.yml](../../.github/workflows/ci.yml) configura tres jobs: web (tipos/lint/build), API (tipos/test de salud/build) y Compose (configuración, imágenes, arranque, web/API/proxy, PostGIS, migraciones K003 y worker). No prueba login/publicación, no ejecuta el smoke remoto B2 ni despliega producción. |
+| CI | [ci.yml](../../.github/workflows/ci.yml) configura tres jobs: web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y Compose (configuración, imágenes, arranque, web/API/proxy, PostGIS, migraciones y publicación concurrente K010, worker). No prueba login, no ejecuta el smoke remoto B2 ni despliega producción. |
 
-**Conexiones todavía ausentes:** API HTTP → PostgreSQL, API HTTP → B2,
+**Conexiones todavía ausentes:** API HTTP → B2,
 worker → base/casos de uso, web → operaciones de identidad/lotes. Compose no
-inyecta conexión de base a API/worker ni ejecuta migraciones al arrancarlos.
+ejecuta migraciones al arrancar. Inyecta DATABASE_URL a API, no al worker.
 `/health` comprueba el proceso HTTP, no la base; esa diferencia frente a la salud
 propuesta en anexos H p. 22 queda pendiente de integración futura.
 
-La estructura real del backend sigue siendo `app.ts`, `index.ts`, `worker.ts` y
-`prototypes/photos/`. Web tiene `app/`, `components/`, `pages/`, `services/` y
-`types/`. Los dos archivos de tipos preliminares,
+La estructura real añade `http/`, `application/lots/`, `domain/`,
+`infrastructure/postgres/` y `composition.ts` para K010; conserva `app.ts`,
+`index.ts`, `worker.ts` y `prototypes/photos/`. Web tiene `app/`, `components/`, `pages/`, `services/` y
+`types/`, además de `styles/` y primitives en `components/ui/` tras la integración
+visual compartida. La [guía de frontend](../../web/README.md) describe esa base;
+no incorpora auth ni publicación. Los dos archivos de tipos preliminares,
 [services/api-types.ts](../../web/src/services/api-types.ts) y
 [types/api.ts](../../web/src/types/api.ts), aún existen y no son un contrato
-definitivo ni modelos de persistencia. No se mueven ni se consolidan en este PR.
+definitivo ni modelos de persistencia. Se marcan como antecedentes históricos;
+su sustitución por tipos derivados
+corresponde a la integración K009/K011.
 
 ## B. Arquitectura objetivo incremental para S02
 
@@ -210,7 +218,8 @@ casos de uso de producto. No se introduce un verificador automático en este PR.
 
 ### Ejemplos futuros de responsabilidades
 
-Ninguno de estos ejemplos implementa K008/K010 ni fija todavía firmas de métodos.
+Los ejemplos de esta sección ilustran el objetivo; las firmas reales K010 están
+en [use-cases.ts](../../api/src/application/lots/use-cases.ts). K008 sigue pendiente.
 
 | Ejemplo | Ubicación responsable | Motivo |
 | --- | --- | --- |
@@ -259,24 +268,26 @@ comunicarlos mediante el port, pero no decide arbitrariamente que un resultado
 es 403, 404 o 409. El tratamiento depende del caso de uso y del contrato HTTP.
 Los errores inesperados se traducen a una respuesta controlada sin SQL, stack,
 credenciales, cookies ni URLs firmadas. Los detalles de diagnóstico deben quedar
-fuera de la respuesta pública y sin secretos. El catálogo se concretará con
-OpenAPI y las tarjetas correspondientes.
+fuera de la respuesta pública y sin secretos. El catálogo se define en
+la [guía OpenAPI](../api/README.md); su mapeo concreto se probará en las tarjetas.
 
 ### Contratos HTTP y OpenAPI
 
-**OpenAPI será el contrato HTTP versionado entre web y API a partir de S02.**
-Definirá rutas, requests, responses, errores y seguridad HTTP. Su adopción se
-hará junto a las operaciones de S02; este PR no crea `openapi.yaml`, generadores
-ni validadores y no convierte propuestas de K004 en endpoints aprobados.
+**[OpenAPI S02](../api/openapi.yaml) es la fuente de verdad HTTP entre web y API.**
+Se adopta antes de K008/K010: ocho operaciones, requests, responses, errores y
+seguridad, con validación estructural/de ejemplos en CI. La [guía](../api/README.md)
+registra decisiones y límites. K010 genera DTO del YAML y prueba respuestas HTTP
+con Ajv 2020-12; Redocly verifica estructura/ejemplos. Sesión y CSRF aún no se
+prueban: K008/K012 deben completar esa integración.
 
 | Fuente de verdad | Qué define |
 | --- | --- |
-| OpenAPI al adoptarse | Superficie HTTP versionada: operaciones, esquemas de transporte, respuestas y seguridad. |
+| OpenAPI S02 | Superficie HTTP versionada: operaciones, esquemas de transporte, respuestas y seguridad. |
 | Domain y documentación de negocio/ADR | Invariantes, autorización, transiciones y decisiones que OpenAPI no expresa bien. Hoy muchas reglas solo están documentadas. |
 | Migraciones SQL | Persistencia: tablas, columnas, restricciones, índices y evolución del esquema. |
 
-OpenAPI **no es el modelo de base de datos**. Los tipos HTTP deberían derivarse
-de OpenAPI cuando se implemente esa infraestructura. Los tipos propios de
+OpenAPI **no es el modelo de base de datos**. K010 deriva sus tipos HTTP
+con `npm --prefix api run api:types` y comprueba su sincronización en CI. Los tipos propios de
 Application/Domain y el mapeo de persistencia pueden seguir siendo explícitos:
 no son catálogos alternativos de DTO HTTP.
 
@@ -287,9 +298,9 @@ tipos generados a mano. La generación de tipos tampoco sustituye validación de
 datos en ejecución. La herramienta, ubicación y checks se decidirán entonces.
 
 [contrato-api.md](../contrato-api.md) se conserva como **antecedente/propuesta
-K004**, pendiente de reconciliar con E1, el modelo y las tarjetas. Dejará de ser
-referencia contractual definitiva al adoptarse OpenAPI; en realidad hoy tampoco
-es un contrato definitivo. Su incertidumbre sobre cookies no anula H p. 21.
+K004**, sustituido como referencia HTTP por OpenAPI S02. Su incertidumbre
+histórica sobre cookies no anula H p. 21; las decisiones resueltas están en
+la guía del contrato.
 
 ## Cómo demostrar esta arquitectura en E2
 
@@ -304,14 +315,15 @@ de la instrucción de este PR; no se atribuye a una pauta del profesor no revisa
 3. **Responsabilidades y dependencias:** mostrar un handler ligero, un caso de
    uso, una regla pura, su adaptador y el ensamblaje, solo cuando existan. Revisar
    imports para comprobar que Domain no depende de tecnología.
-4. **Contratos:** enlazar OpenAPI versionado cuando exista y contrastar una
-   request/response real, su seguridad y errores. Relacionar el DTO con tipos de
-   aplicación y persistencia sin confundirlos. Hasta entonces, señalar K004 como
-   propuesta y `/health` como única operación implementada.
+4. **Contratos:** enlazar el OpenAPI versionado y, cuando existan handlers, contrastar
+   una request/response real, su seguridad y errores. Relacionar el DTO con tipos de
+   aplicación y persistencia sin confundirlos. K010 prueba respuestas reales
+   contra schemas OpenAPI; la seguridad de sesión y CSRF queda pendiente de K008.
 5. **Recorrido trazable:** documentar la secuencia web → HTTP → Application →
    Domain/port → Infrastructure → PostgreSQL de una operación ya integrada de
    S02. Mostrar autorización, atomicidad y traducción de error donde corresponda.
-   Hoy solo puede demostrarse el recorrido HTTP de salud, sin base.
+   K010 demuestra HTTP de lotes con repositorio en memoria y, por separado,
+   Application/Infrastructure con PostgreSQL real; el navegador autenticado queda pendiente.
 6. **Pruebas y operación:** asociar reglas puras con sus pruebas, casos de uso con
    sus escenarios y adaptadores con integración real. Adjuntar comandos,
    entorno, commit y resultado observado; distinguir pruebas nuevas de registros
@@ -340,18 +352,21 @@ tarjetas y evidencia de entrega; cualquier cambio de alcance se registra aparte.
 - Incorporar las responsabilidades al implementar K008/K010, sin refactorización
   preventiva ni mover archivos solo para coincidir con un árbol ideal.
 - K008 debe concretar credenciales, sesiones y permisos conforme a E1 H p. 21.
-  Normalización del correo, representación de habilitación/administración y
-  granularidad de permisos siguen pendientes según el modelo inicial. El esquema
+  La normalización de correo está acordada en la guía OpenAPI; representación
+  interna de habilitación/administración y granularidad de permisos siguen
+  pendientes. El esquema
   actual no contiene credenciales ni sesiones. El comportamiento de cookies en el
   entorno HTTP local debe resolverse explícitamente sin debilitar producción.
-- K010 debe resolver guardado parcial de borradores, categorías, condiciones,
-  versión y publicación: K003 exige muchos campos completos aun en borrador.
+- K010 materializa borradores completos, PATCH parcial, condiciones opcionales/null,
+  versión optimista y publicación explícita acordados en OpenAPI. Las categorías
+  conservan texto provisional; no se ha acordado un catálogo.
   Las fotos son opcionales según E1 I p. 25; integrar fotos no debe convertirlas
   en requisito obligatorio sin una decisión de negocio.
-- Los identificadores públicos opacos previstos por E1 no están en K003; no
-  exponer bigint como si ya fuera ese contrato ni convertirlo sin control a Number.
-- Detallar el port transaccional mínimo, errores y generación OpenAPI cuando
-  existan operaciones reales. Estas reglas tienen revisión manual, no enforcement
+- K010 añade UUID públicos persistidos para lotes y establecimientos. Application
+  resuelve el establecimiento y autoriza por membership sobre su PK interna;
+  HTTP expone solo IDs públicos. K008 debe resolver el actor interno desde sesión.
+- K010 concreta port transaccional, mapeo de errores y generación de tipos HTTP. Estas reglas tienen
+  revisión manual, no enforcement
   automático de dependencias en CI todavía.
 - B2 y PostgreSQL tienen fallos y ciclos de vida diferentes. Referencias, limpieza,
   validación de fotos, restauración y trabajos recuperables siguen pendientes.
@@ -364,3 +379,21 @@ Al cambiar un límite o decisión relevante, actualizar este documento y registr
 un ADR si cambia la decisión adoptada. Cada PR debe mostrar el vínculo entre
 regla, código y prueba cuando se implemente; la documentación de objetivo no
 sustituye ese trabajo.
+
+
+## Recorrido implementado K010
+
+[HTTP](../../api/src/http/lots-router.ts) valida forma y propiedades permitidas,
+obtiene Actor y mapea respuestas a DTO generados. [Application](../../api/src/application/lots/use-cases.ts)
+resuelve el ID público del establecimiento, exige membership y controla versión.
+Para PATCH combina campos presentes con la declaración bloqueada; [Domain](../../api/src/domain/lots.ts)
+valida el resultado y prohíbe editar publicados. [Infrastructure](../../api/src/infrastructure/postgres/lot-repository.ts)
+ejecuta SELECT FOR UPDATE y escritura con el mismo cliente proporcionado por
+[withTransaction](../../api/src/infrastructure/postgres/pool.ts), incluido COMMIT/ROLLBACK.
+No hay llamadas externas bajo bloqueo ni políticas de permisos escondidas en SQL.
+[Composition](../../api/src/composition.ts) ensambla dependencias concretas.
+
+`Authenticate → Actor` es el punto de conexión K008; el actor por cabecera requiere
+habilitación explícita y rechaza producción. K008 deberá incorporar sesión,
+Origin y CSRF a los comandos HTTP sin introducir cookies en Application.
+[Pruebas y límites](../k010-evidencia.md) distinguen ejecución local de CI remoto.

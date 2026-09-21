@@ -1,10 +1,11 @@
 // K010 · Application: límites tipados hacia Infrastructure.
 // No exponen pg, clientes ni SQL. Se definen junto a su consumidor.
 
-import type { Lot, LotDeclaration, LotStatus } from "../../domain/lots.js"
+import type { Lot, LotDeclaration } from "../../domain/lots.js"
 
 /** Actor autenticado. K008 lo resolverá desde la sesión persistida. */
 export interface Actor {
+  /** ID interno obtenido de la sesión por K008, no del cuerpo HTTP. */
   userId: string
 }
 
@@ -33,10 +34,10 @@ export interface LotPublication {
  * `withLotTransaction`, que Infrastructure resuelve con un único cliente.
  */
 export interface LotRepository {
+  findEstablishment(publicId: string): Promise<{ id: string; publicId: string } | null>
   isMemberOfEstablishment(userId: string, establishmentId: string): Promise<boolean>
   insertLot(lot: NewLot): Promise<Lot>
   findByPublicId(publicId: string): Promise<Lot | null>
-  listByEstablishment(establishmentId: string, statuses?: readonly LotStatus[]): Promise<Lot[]>
   /**
    * Bloquea el lote, entrega el estado releído y confirma los cambios juntos.
    * Devolver `null` desde `operate` deja la transacción sin escrituras.

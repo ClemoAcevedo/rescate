@@ -1,14 +1,12 @@
-// K010 · HTTP: rutas de borrador y publicación de lotes (RF02). Handlers
-// ligeros: validación estructural, llamada al caso de uso y traducción de la
-// respuesta. Sin SQL, sin pg y sin reglas de negocio.
-
+// HTTP: parsing estructural, actor y representación derivada de OpenAPI.
 import { Router } from "express"
 import type { Request, Response } from "express"
-import type { Lot, LotStatus } from "../domain/lots.js"
+import type { Lot, LotDeclaration } from "../domain/lots.js"
 import type { LotUseCases } from "../application/lots/use-cases.js"
 import type { Actor } from "../application/lots/ports.js"
 import { notAuthenticated } from "../application/errors.js"
 import type { Authenticate } from "./actor.js"
+import type { HttpSchemas } from "./openapi.js"
 import { handleError, sendError } from "./errors.js"
 
 export interface LotsRouterOptions {
@@ -17,31 +15,10 @@ export interface LotsRouterOptions {
   log?: (error: unknown) => void
 }
 
-/** Representación HTTP del lote: expone el identificador público, no el bigint. */
-interface LotBody {
-  id: string
-  establishmentId: string
-  status: LotStatus
-  version: number
-  description: string
-  category: string
-  quantity: number
-  conditions: string | null
-  address: string
-  latitude: number
-  longitude: number
-  timeZone: string
-  pickupStartsAt: string
-  pickupEndsAt: string
-  createdAt: string
-  updatedAt: string
-  publishedAt: string | null
-}
-
-function toBody(lot: Lot): LotBody {
+function toBody(lot: Lot): HttpSchemas["LotResponse"] {
   return {
     id: lot.publicId,
-    establishmentId: lot.establishmentId,
+    establishmentId: lot.establishmentPublicId,
     status: lot.status,
     version: lot.version,
     description: lot.declaration.description,
@@ -55,199 +32,106 @@ function toBody(lot: Lot): LotBody {
     pickupStartsAt: lot.declaration.pickupStartsAt.toISOString(),
     pickupEndsAt: lot.declaration.pickupEndsAt.toISOString(),
     createdAt: lot.createdAt.toISOString(),
-    updatedAt: lot.updatedAt.toISOString(),
     publishedAt: lot.publishedAt === null ? null : lot.publishedAt.toISOString(),
   }
 }
 
 class InvalidRequestError extends Error {
-  readonly fields: readonly string[]
-
-  constructor(fields: readonly string[]) {
-    super(`Campos inválidos: ${fields.join(", ")}`)
-    this.name = "InvalidRequestError"
-    this.fields = fields
-  }
+  constructor(readonly fields: readonly string[]) { super("Entrada inválida") }
 }
-
 type Payload = Record<string, unknown>
+const declarationFields = ["description", "category", "quantity", "conditions", "address", "latitude", "longitude", "timeZone", "pickupStartsAt", "pickupEndsAt"] as const satisfies readonly (keyof HttpSchemas["CreateLotDraftRequest"])[]
 
-function asObject(value: unknown): Payload {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new InvalidRequestError(["body"])
-  }
+function readPayload(value: unknown, allowed: readonly string[]): Payload {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new InvalidRequestError([""])
+  const extra = Object.keys(value).filter((key) => !allowed.includes(key))
+  if (extra.length) throw new InvalidRequestError(extra)
   return value as Payload
 }
 
-/**
- * Validación estructural: responde si la entrada tiene la forma esperada.
- * Las reglas del negocio las decide Domain con los valores ya tipados.
- */
-function readDeclaration(payload: Payload): {
-  description: string
-  category: string
-  quantity: number
-  conditions: string | null
-  address: string
-  latitude: number
-  longitude: number
-  timeZone: string
-  pickupStartsAt: Date
-  pickupEndsAt: Date
-} {
+function readDeclaration(payload: Payload, partial: boolean): Partial<LotDeclaration> {
+  const result: Record<string, unknown> = {}
   const invalid: string[] = []
-
-  const text = (field: string): string => {
+  for (const field of declarationFields) {
+    if (!Object.hasOwn(payload, field)) {
+      if (!partial && field !== "conditions") invalid.push(field)
+      else if (!partial) result.conditions = null
+      continue
+    }
     const value = payload[field]
-    if (typeof value !== "string") {
+    if (field === "conditions" && value === null) { result[field] = null; continue }
+    if (["quantity", "latitude", "longitude"].includes(field)) {
+      if (typeof value !== "number" || !Number.isFinite(value)) invalid.push(field)
+      else result[field] = value
+    } else if (typeof value !== "string") {
       invalid.push(field)
-      return ""
-    }
-    return value
+    } else if (field === "pickupStartsAt" || field === "pickupEndsAt") {
+      // RFC 3339: zona explícita, fecha real; no aceptar normalización de febrero 30.
+      const match = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/.exec(value)
+      const parsed = new Date(value)
+      const days = match ? new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate() : 0
+      if (!match || Number(match[2]) < 1 || Number(match[2]) > 12 || Number(match[3]) < 1 || Number(match[3]) > days || Number(match[4]) > 23 || Number(match[5]) > 59 || Number(match[6]) > 59 || !Number.isFinite(parsed.getTime())) invalid.push(field)
+      else result[field] = parsed
+    } else result[field] = value
   }
-
-  const numeric = (field: string): number => {
-    const value = payload[field]
-    // Se aceptan solo números JSON: un texto numérico no se convierte en silencio.
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      invalid.push(field)
-      return Number.NaN
-    }
-    return value
-  }
-
-  const instant = (field: string): Date => {
-    const value = payload[field]
-    if (typeof value !== "string") {
-      invalid.push(field)
-      return new Date(Number.NaN)
-    }
-    const parsed = new Date(value)
-    // ISO 8601 con zona explícita: una fecha sin desfase es ambigua.
-    if (!Number.isFinite(parsed.getTime()) || !/(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) {
-      invalid.push(field)
-      return new Date(Number.NaN)
-    }
-    return parsed
-  }
-
-  const conditionsValue = payload.conditions
-  let conditions: string | null = null
-  if (conditionsValue !== undefined && conditionsValue !== null) {
-    if (typeof conditionsValue !== "string") invalid.push("conditions")
-    else conditions = conditionsValue
-  }
-
-  const declaration = {
-    description: text("description"),
-    category: text("category"),
-    quantity: numeric("quantity"),
-    conditions,
-    address: text("address"),
-    latitude: numeric("latitude"),
-    longitude: numeric("longitude"),
-    timeZone: text("timeZone"),
-    pickupStartsAt: instant("pickupStartsAt"),
-    pickupEndsAt: instant("pickupEndsAt"),
-  }
-
-  if (invalid.length > 0) throw new InvalidRequestError(invalid)
-  return declaration
+  if (invalid.length) throw new InvalidRequestError(invalid)
+  return result as Partial<LotDeclaration>
 }
 
-function readExpectedVersion(payload: Payload): number {
-  const value = payload.expectedVersion
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-    throw new InvalidRequestError(["expectedVersion"])
-  }
-  return value
+function readVersion(payload: Payload): number {
+  if (typeof payload.version !== "number" || !Number.isSafeInteger(payload.version) || payload.version < 1) throw new InvalidRequestError(["version"])
+  return payload.version
 }
+function routeId(value: unknown): string { return typeof value === "string" ? value : "" }
 
-function readEstablishmentId(payload: Payload): string {
-  const value = payload.establishmentId
-  if (typeof value !== "string" || !/^[1-9][0-9]{0,18}$/.test(value.trim())) {
-    throw new InvalidRequestError(["establishmentId"])
-  }
-  return value.trim()
-}
-
-/** El identificador de ruta llega como texto; el repositorio valida su forma. */
-function readPublicId(value: unknown): string {
-  return typeof value === "string" ? value : ""
-}
-
-function readStatuses(value: unknown): readonly LotStatus[] | undefined {
-  if (value === undefined) return undefined
-  const requested = (typeof value === "string" ? value.split(",") : []).map((item) => item.trim())
-  const allowed: LotStatus[] = ["draft", "published"]
-  const statuses = requested.filter((item): item is LotStatus => (allowed as string[]).includes(item))
-  if (statuses.length !== requested.length || statuses.length === 0) {
-    throw new InvalidRequestError(["status"])
-  }
-  return statuses
-}
-
-export function createLotsRouter(options: LotsRouterOptions): Router {
-  const { useCases, authenticate } = options
-  const log = options.log ?? ((error: unknown) => console.error("Error no controlado en /lots", error))
+export function createLotsRouter({ useCases, authenticate, log = console.error }: LotsRouterOptions): Router {
   const router = Router()
-
-  const withActor = (
-    handler: (actor: Actor, request: Request, response: Response) => Promise<void>,
-  ) => async (request: Request, response: Response): Promise<void> => {
-    try {
-      const actor = await authenticate(request)
-      if (actor === null) throw notAuthenticated()
-      await handler(actor, request, response)
-    } catch (error) {
-      if (error instanceof InvalidRequestError) {
-        sendError(response, 400, "invalid_request", "La solicitud no tiene el formato esperado.", error.fields)
-        return
+  const withActor = (handler: (actor: Actor, request: Request, response: Response) => Promise<void>) =>
+    async (request: Request, response: Response): Promise<void> => {
+      try {
+        const actor = await authenticate(request)
+        if (actor === null) throw notAuthenticated()
+        // K008 sustituirá Authenticate y aplicará Origin/CSRF en HTTP a los comandos.
+        if (request.method !== "GET" && !request.is("application/json")) {
+          sendError(response, 415, "UNSUPPORTED_MEDIA_TYPE", "Se requiere application/json.")
+          return
+        }
+        await handler(actor, request, response)
+      } catch (error) {
+        if (error instanceof InvalidRequestError) {
+          sendError(response, 422, "VALIDATION_ERROR", "Revisa los campos indicados.", error.fields.map((field) => ({
+            path: field === "" ? "" : `/${field.replaceAll("~", "~0").replaceAll("/", "~1")}`,
+            message: "Campo desconocido, ausente o con formato inválido.",
+          })))
+        } else handleError(error, response, log)
       }
-      handleError(error, response, log)
     }
-  }
 
-  router.post("/", withActor(async (actor, request, response) => {
-    const payload = asObject(request.body)
+  router.post("/establishments/:establishmentId/lots", withActor(async (actor, request, response) => {
+    const payload = readPayload(request.body, declarationFields)
     const lot = await useCases.createDraft(actor, {
-      establishmentId: readEstablishmentId(payload),
-      declaration: readDeclaration(payload),
+      establishmentId: routeId(request.params.establishmentId),
+      declaration: readDeclaration(payload, false) as LotDeclaration,
     })
     response.status(201).json(toBody(lot))
   }))
-
-  router.get("/", withActor(async (actor, request, response) => {
-    const query = request.query.establishmentId
-    const establishmentId = readEstablishmentId({ establishmentId: typeof query === "string" ? query : undefined })
-    const statuses = readStatuses(request.query.status)
-    const lots = await useCases.listEstablishmentLots(actor, establishmentId, statuses)
-    response.json({ items: lots.map(toBody) })
+  router.get("/lots/:lotId", withActor(async (actor, request, response) => {
+    response.json(toBody(await useCases.getLot(actor, routeId(request.params.lotId))))
   }))
-
-  router.get("/:id", withActor(async (actor, request, response) => {
-    const lot = await useCases.getLot(actor, readPublicId(request.params.id))
-    response.json(toBody(lot))
+  router.patch("/lots/:lotId", withActor(async (actor, request, response) => {
+    const payload = readPayload(request.body, ["version", ...declarationFields])
+    const version = readVersion(payload)
+    if (Object.keys(payload).length < 2) throw new InvalidRequestError([""])
+    response.json(toBody(await useCases.updateDraft(actor, {
+      publicId: routeId(request.params.lotId), expectedVersion: version,
+      declaration: readDeclaration(payload, true),
+    })))
   }))
-
-  router.patch("/:id", withActor(async (actor, request, response) => {
-    const payload = asObject(request.body)
-    const lot = await useCases.updateDraft(actor, {
-      publicId: readPublicId(request.params.id),
-      expectedVersion: readExpectedVersion(payload),
-      declaration: readDeclaration(payload),
-    })
-    response.json(toBody(lot))
+  router.post("/lots/:lotId/publish", withActor(async (actor, request, response) => {
+    const payload = readPayload(request.body, ["version"])
+    response.json(toBody(await useCases.publish(actor, {
+      publicId: routeId(request.params.lotId), expectedVersion: readVersion(payload),
+    })))
   }))
-
-  router.post("/:id/publication", withActor(async (actor, request, response) => {
-    const payload = asObject(request.body)
-    const lot = await useCases.publish(actor, {
-      publicId: readPublicId(request.params.id),
-      expectedVersion: readExpectedVersion(payload),
-    })
-    response.json(toBody(lot))
-  }))
-
   return router
 }

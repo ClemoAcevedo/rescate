@@ -16,6 +16,7 @@ import type { Pool, PoolClient } from "./pool.js"
 interface LotRow {
   public_id: string
   establishment_id: string
+  establishment_public_id: string
   description: string
   category: string
   quantity: number
@@ -33,7 +34,8 @@ interface LotRow {
   published_at: Date | null
 }
 
-const LOT_COLUMNS = `public_id::text, establishment_id::text, description, category, quantity,
+const LOT_COLUMNS = `public_id::text, establishment_id::text,
+  (SELECT public_id::text FROM public.establishments WHERE id = lots.establishment_id) AS establishment_public_id, description, category, quantity,
   conditions, address, latitude, longitude, time_zone, pickup_starts_at, pickup_ends_at,
   status, version, created_at, updated_at, published_at`
 
@@ -41,6 +43,7 @@ function toLot(row: LotRow): Lot {
   return {
     publicId: row.public_id,
     establishmentId: row.establishment_id,
+    establishmentPublicId: row.establishment_public_id,
     status: row.status as LotStatus,
     version: row.version,
     createdAt: row.created_at,
@@ -85,6 +88,13 @@ async function findLot(db: Queryable, publicId: string, forUpdate: boolean): Pro
 
 export function createLotRepository(pool: Pool): LotRepository {
   return {
+    async findEstablishment(publicId) {
+      if (!UUID_PATTERN.test(publicId)) return null
+      const { rows } = await pool.query<{ id: string; publicId: string }>(
+        'SELECT id::text, public_id::text AS "publicId" FROM public.establishments WHERE public_id = $1', [publicId],
+      )
+      return rows[0] ?? null
+    },
     async isMemberOfEstablishment(userId, establishmentId) {
       return membershipExists(pool, userId, establishmentId)
     },
@@ -106,16 +116,6 @@ export function createLotRepository(pool: Pool): LotRepository {
 
     async findByPublicId(publicId) {
       return findLot(pool, publicId, false)
-    },
-
-    async listByEstablishment(establishmentId, statuses) {
-      const { rows } = await pool.query<LotRow>(
-        `SELECT ${LOT_COLUMNS} FROM public.lots
-         WHERE establishment_id = $1 AND ($2::text[] IS NULL OR status = ANY($2::text[]))
-         ORDER BY created_at DESC, id DESC`,
-        [establishmentId, statuses === undefined ? null : [...statuses]],
-      )
-      return rows.map(toLot)
     },
 
     async withLotTransaction(publicId, operate) {

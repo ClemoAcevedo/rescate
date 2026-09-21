@@ -3,8 +3,8 @@
 // pg, cookies ni códigos HTTP.
 
 import { declareDraftEdit, declareLot, publishLot as applyPublication } from "../../domain/lots.js"
-import type { Lot, LotDeclaration, LotStatus } from "../../domain/lots.js"
-import { lotNotFound, notAuthorized, versionConflict } from "../errors.js"
+import type { Lot, LotDeclaration } from "../../domain/lots.js"
+import { establishmentNotFound, lotNotFound, notAuthorized, versionConflict } from "../errors.js"
 import type { Actor, Clock, LotRepository, LotWriter } from "./ports.js"
 
 export interface LotUseCases {
@@ -12,17 +12,17 @@ export interface LotUseCases {
   updateDraft(actor: Actor, input: UpdateDraftInput): Promise<Lot>
   publish(actor: Actor, input: PublishInput): Promise<Lot>
   getLot(actor: Actor, publicId: string): Promise<Lot>
-  listEstablishmentLots(actor: Actor, establishmentId: string, statuses?: readonly LotStatus[]): Promise<Lot[]>
 }
 
 export interface CreateDraftInput {
+  /** ID público recibido por HTTP; se resuelve antes de autorizar. */
   establishmentId: string
   declaration: LotDeclaration
 }
 
 export interface UpdateDraftInput {
   publicId: string
-  declaration: LotDeclaration
+  declaration: Partial<LotDeclaration>
   expectedVersion: number
 }
 
@@ -55,10 +55,12 @@ function requireVersion(lot: Lot, expectedVersion: number): void {
 export function createLotUseCases(repository: LotRepository, now: Clock): LotUseCases {
   return {
     async createDraft(actor, input) {
-      await requireMembership(repository, actor, input.establishmentId)
+      const establishment = await repository.findEstablishment(input.establishmentId)
+      if (establishment === null) throw establishmentNotFound()
+      await requireMembership(repository, actor, establishment.id)
       // Domain valida antes de escribir: un borrador inválido no se persiste.
       const declaration = declareLot(input.declaration)
-      return repository.insertLot({ establishmentId: input.establishmentId, declaration })
+      return repository.insertLot({ establishmentId: establishment.id, declaration })
     },
 
     async updateDraft(actor, input) {
@@ -66,7 +68,7 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
         const target = await authorizeLot(lot, actor, writer)
         requireVersion(target, input.expectedVersion)
         // Rechaza editar un lote publicado y valida la nueva declaración.
-        const declaration = declareDraftEdit(target, input.declaration)
+        const declaration = declareDraftEdit(target, { ...target.declaration, ...input.declaration })
         return writer.updateDeclaration({
           publicId: target.publicId,
           declaration,
@@ -93,11 +95,6 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
     async getLot(actor, publicId) {
       const lot = await repository.findByPublicId(publicId)
       return authorizeLot(lot, actor, repository)
-    },
-
-    async listEstablishmentLots(actor, establishmentId, statuses) {
-      await requireMembership(repository, actor, establishmentId)
-      return repository.listByEstablishment(establishmentId, statuses)
     },
   }
 }

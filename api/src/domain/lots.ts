@@ -20,7 +20,9 @@ export interface LotDeclaration {
 
 export interface Lot {
   publicId: string
+  /** Clave interna para autorización, nunca se expone por HTTP. */
   establishmentId: string
+  establishmentPublicId: string
   status: LotStatus
   version: number
   declaration: LotDeclaration
@@ -36,7 +38,6 @@ export type LotRuleViolation =
   | "category_required"
   | "quantity_not_integer"
   | "quantity_out_of_range"
-  | "conditions_too_long"
   | "address_required"
   | "latitude_out_of_range"
   | "longitude_out_of_range"
@@ -56,13 +57,8 @@ export class LotRuleError extends Error {
   }
 }
 
-// H p. 20: descripción de hasta 2000 caracteres y motivo/condiciones del mismo
-// orden. El esquema de K003 limita la descripción; las condiciones se acotan
-// aquí para no depender solo de la base.
+// H p. 20 y OpenAPI: descripción de hasta 2000 caracteres.
 export const DESCRIPTION_MAX_LENGTH = 2000
-export const CONDITIONS_MAX_LENGTH = 2000
-export const CATEGORY_MAX_LENGTH = 100
-export const ADDRESS_MAX_LENGTH = 500
 
 // integer de PostgreSQL. La cantidad publicada Q es entera y positiva (B p. 4).
 export const QUANTITY_MAX = 2_147_483_647
@@ -72,7 +68,7 @@ function isBlank(value: string): boolean {
 }
 
 function isValidTimeZone(timeZone: string): boolean {
-  if (isBlank(timeZone)) return false
+  if (isBlank(timeZone) || /^[+-]/.test(timeZone)) return false
   try {
     new Intl.DateTimeFormat("en-US", { timeZone })
     return true
@@ -107,20 +103,17 @@ export function checkDeclaration(declaration: LotDeclaration): LotRuleViolation[
   const violations: LotRuleViolation[] = []
 
   if (isBlank(declaration.description)) violations.push("description_required")
-  else if (declaration.description.length > DESCRIPTION_MAX_LENGTH) violations.push("description_too_long")
+  else if ([...declaration.description].length > DESCRIPTION_MAX_LENGTH) violations.push("description_too_long")
 
-  if (isBlank(declaration.category) || declaration.category.length > CATEGORY_MAX_LENGTH) {
+  if (isBlank(declaration.category)) {
     violations.push("category_required")
   }
 
   if (!Number.isInteger(declaration.quantity)) violations.push("quantity_not_integer")
   else if (declaration.quantity < 1 || declaration.quantity > QUANTITY_MAX) violations.push("quantity_out_of_range")
 
-  if (declaration.conditions !== null && declaration.conditions.length > CONDITIONS_MAX_LENGTH) {
-    violations.push("conditions_too_long")
-  }
 
-  if (isBlank(declaration.address) || declaration.address.length > ADDRESS_MAX_LENGTH) {
+  if (isBlank(declaration.address)) {
     violations.push("address_required")
   }
 

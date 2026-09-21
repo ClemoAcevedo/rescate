@@ -9,6 +9,7 @@ const migrations = [
   '1789915246470_migration-tool-test',
   '1789932753813_initial-rescate-model',
   '1789999138556_lots-publication-fields',
+  '1790000000000_establishment-public-ids',
 ]
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
   'Revisar explícitamente la prueba antes de incluir nuevas migraciones y su rollback')
@@ -192,6 +193,11 @@ try {
   ok('segunda ejecución: 0 pendientes; historial, OID de tablas y datos intactos')
 
   assert.deepEqual((await history()).map(row => row.name), migrations)
+  run('down', '1')
+  assert.deepEqual(await history(), applied.slice(0, 3))
+  assert.deepEqual(await query("SELECT column_name FROM information_schema.columns WHERE table_name='establishments' AND column_name='public_id'"), [])
+  ok('rollback de IDs públicos: conserva tablas, datos e historial previo')
+
   // K010 se revierte primero: su rollback no toca las cinco tablas de K003.
   run('down', '1')
   assert.deepEqual(await history(), applied.slice(0, 2))

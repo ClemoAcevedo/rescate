@@ -1,3 +1,4 @@
+import { Card } from '../components/ui/Card'
 import { Link, useLocation } from 'react-router-dom'
 
 export function LotsPage() {
@@ -6,7 +7,7 @@ export function LotsPage() {
 
   return (
     <main className="page-content">
-      <section className="content-card" aria-labelledby="lots-title">
+      <Card as="section" className="content-card" aria-labelledby="lots-title">
         <p className="eyebrow">Explorar</p>
         <h1 id="lots-title">Explorar lotes</h1>
         <p>
@@ -15,7 +16,7 @@ export function LotsPage() {
         <Link className="text-link" to={demoLotPath}>
           Ver lote de demostración
         </Link>
-      </section>
+      </Card>
     </main>
   )
 }

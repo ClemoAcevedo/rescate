@@ -5,8 +5,10 @@
 Antes de implementar backend, revisar la [arquitectura](docs/arquitectura/arquitectura.md),
 [ADR 0003](docs/adr/0003-arquitectura-incremental-s02.md), el
 [modelo inicial](docs/modelo-inicial.md) y los ADR aplicables.
-Separar siempre estado implementado de objetivo. El backend actual solo expone
-`/health`; el worker está inactivo y K005 es un prototipo aislado.
+Separar siempre estado implementado de objetivo. El backend expone `/health` y
+las cuatro operaciones de lotes K010 bajo OpenAPI. K008 (sesiones, origen y CSRF)
+sigue pendiente; sin actor temporal de desarrollo las operaciones requieren una
+autenticación aún no integrada. El worker está inactivo y K005 es un prototipo aislado.
 
 Aplicar estas reglas al código nuevo de S02 de manera incremental. Crear archivos
 y carpetas cuando tengan una responsabilidad real. No mover código existente solo
@@ -36,9 +38,10 @@ Actualizar esta descripción cuando cambie la implementación.
 
 ## Contratos, persistencia y decisiones
 
-OpenAPI será el contrato HTTP versionado desde S02, al adoptar su infraestructura.
-Derivar de él los tipos HTTP; no mantener catálogos manuales paralelos. Hasta
-entonces [K004](docs/contrato-api.md) y los tipos existentes son propuestas.
+[OpenAPI S02](docs/api/openapi.yaml) es la fuente de verdad HTTP versionada;
+[su guía](docs/api/README.md) documenta decisiones y validación. K010 incorpora
+handlers y tipos HTTP generados (`npm --prefix api run api:types`); no mantener catálogos manuales paralelos. [K004](docs/contrato-api.md)
+y los tipos existentes quedan como antecedentes.
 OpenAPI no define el esquema SQL ni sustituye las reglas de Domain/documentación.
 
 Mantener node-pg-migrate y SQL según [ADR 0001](docs/adr/0001-gestor-de-migraciones.md).
@@ -47,6 +50,14 @@ requieren una nueva migración dentro de la tarjeta que los necesite.
 Conservar [ADR 0002](docs/adr/0002-ofertas-parciales.md): FIFO, oferta parcial y
 cierre al aceptar/rechazar/vencer sin prioridad residual ni reingreso automático.
 Los PDF de E1 son históricos; registrar decisiones posteriores sin reescribirlos.
+
+## Frontend compartido
+
+Antes de trabajar en `web/`, revisar los [primitives UI](web/src/components/ui/README.md)
+y reutilizar los [tokens](web/src/styles/tokens.css). Evitar componentes equivalentes
+duplicados y colores/espaciados arbitrarios cuando exista un token. Adaptar el
+material externo al stack local; no copiarlo directamente. Los componentes UI no
+definen contratos HTTP: sigue prevaleciendo OpenAPI S02.
 
 ## Revisión y evidencia
 

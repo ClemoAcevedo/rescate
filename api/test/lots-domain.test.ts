@@ -29,6 +29,7 @@ const validDeclaration = (overrides: Partial<LotDeclaration> = {}): LotDeclarati
 const draft = (overrides: Partial<Lot> = {}): Lot => ({
   publicId: "11111111-1111-4111-8111-111111111111",
   establishmentId: "1",
+  establishmentPublicId: "est_test",
   status: "draft",
   version: 1,
   declaration: validDeclaration(),
@@ -83,7 +84,7 @@ test("ubicación, zona horaria y textos se validan", () => {
   assert.deepEqual(checkDeclaration(validDeclaration({ timeZone: "Marte/Olympus" })), ["time_zone_invalid"])
   assert.deepEqual(checkDeclaration(validDeclaration({ description: "   " })), ["description_required"])
   assert.deepEqual(checkDeclaration(validDeclaration({ description: "x".repeat(2001) })), ["description_too_long"])
-  assert.deepEqual(checkDeclaration(validDeclaration({ conditions: "x".repeat(2001) })), ["conditions_too_long"])
+  assert.deepEqual(checkDeclaration(validDeclaration({ conditions: "x".repeat(2001) })), [])
   assert.deepEqual(checkDeclaration(validDeclaration({ category: " " })), ["category_required"])
 })
 

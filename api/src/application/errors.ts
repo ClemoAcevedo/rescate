@@ -5,6 +5,7 @@ export type ApplicationErrorCode =
   | "not_authenticated"
   | "not_authorized"
   | "lot_not_found"
+  | "establishment_not_found"
   | "version_conflict"
 
 export class ApplicationError extends Error {
@@ -28,3 +29,6 @@ export const lotNotFound = (): ApplicationError =>
 
 export const versionConflict = (): ApplicationError =>
   new ApplicationError("version_conflict", "El lote cambió desde su última lectura.")
+
+export const establishmentNotFound = (): ApplicationError =>
+  new ApplicationError("establishment_not_found", "El establecimiento no existe.")

@@ -3,16 +3,18 @@
 // de pertenencia y escritura condicionada a la versión vigente.
 
 import { randomUUID } from "node:crypto"
-import type { Lot, LotStatus } from "../../src/domain/lots.js"
+import type { Lot } from "../../src/domain/lots.js"
 import type { LotRepository, LotWriter, NewLot } from "../../src/application/lots/ports.js"
 
 export interface InMemoryLots extends LotRepository {
+  establishments: Map<string, string>
   memberships: Set<string>
   lots: Map<string, Lot>
   seedLot(lot: Partial<Lot> & Pick<Lot, "establishmentId" | "declaration">): Lot
 }
 
 export function createInMemoryLots(now: () => Date = () => new Date()): InMemoryLots {
+  const establishments = new Map<string, string>()
   const memberships = new Set<string>()
   const lots = new Map<string, Lot>()
 
@@ -53,6 +55,11 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
   }
 
   return {
+    establishments,
+    async findEstablishment(publicId) {
+      const id = establishments.get(publicId)
+      return id === undefined ? null : { id, publicId }
+    },
     memberships,
     lots,
 
@@ -61,6 +68,7 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
       const lot: Lot = {
         publicId: seed.publicId ?? randomUUID(),
         establishmentId: seed.establishmentId,
+        establishmentPublicId: seed.establishmentPublicId ?? "est_test",
         declaration: seed.declaration,
         status: seed.status ?? "draft",
         version: seed.version ?? 1,
@@ -79,6 +87,7 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
       const created: Lot = {
         publicId: randomUUID(),
         establishmentId: lot.establishmentId,
+        establishmentPublicId: [...establishments].find(([, id]) => id === lot.establishmentId)![0],
         declaration: lot.declaration,
         status: "draft",
         version: 1,
@@ -92,13 +101,6 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
 
     async findByPublicId(publicId) {
       return lots.get(publicId) ?? null
-    },
-
-    async listByEstablishment(establishmentId, statuses?: readonly LotStatus[]) {
-      return [...lots.values()]
-        .filter((lot) => lot.establishmentId === establishmentId)
-        .filter((lot) => statuses === undefined || statuses.includes(lot.status))
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     },
 
     async withLotTransaction(publicId, operate) {

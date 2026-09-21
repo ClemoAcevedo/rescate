@@ -1,10 +1,11 @@
 # Contrato API propuesto: identidad y lotes
 
-> Estado: **antecedente/propuesta de K004, pendiente de validación con backend**.
+> Estado: **antecedente histórico de K004, sustituido por OpenAPI S02**.
 > Este documento no define la API de forma definitiva. Se conserva para trazabilidad.
-> Según [ADR 0003](adr/0003-arquitectura-incremental-s02.md), OpenAPI será el contrato
-> HTTP versionado entre web y API al adoptarse en S02; este antecedente no será una
-> fuente contractual paralela. Aún no existe OpenAPI en el repositorio.
+> La fuente de verdad es [openapi.yaml](api/openapi.yaml), con [decisiones y guía](api/README.md).
+> Las propuestas, dudas y evidencia de abajo conservan el contexto original;
+> no son decisiones pendientes si la guía S02 ya las resolvió. Los endpoints de
+> negocio aún no están implementados.
 
 **Aclaración de fuentes (2026-09-21):** los [anexos E1](entregas/e1/anexos-e1.pdf),
 H p. 21, ya definen contraseña de al menos 12 caracteres con scrypt,

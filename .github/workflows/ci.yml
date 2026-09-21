@@ -33,7 +33,7 @@ jobs:
         run: npm run build
 
   api:
-    name: API / types, tests, build
+    name: API / contract, types, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -48,8 +48,12 @@ jobs:
           cache-dependency-path: api/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: OpenAPI structure, references and examples
+        run: npm run api:contract:check
       - name: TypeScript
         run: npm run typecheck
+      - name: Generated HTTP types
+        run: npm run api:types:check
       - name: Tests
         run: npm test
       - name: Build

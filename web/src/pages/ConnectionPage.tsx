@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Alert } from '../components/ui/Alert'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
 import {
   ConnectionError,
   HttpError,
@@ -75,7 +78,7 @@ export function ConnectionPage() {
 
   return (
     <main className="page-content">
-      <section className="content-card connection-card" aria-labelledby="connection-title">
+      <Card as="section" className="content-card connection-card" aria-labelledby="connection-title">
         <p className="eyebrow">Comprobación técnica</p>
         <h1 id="connection-title">Conexión con la API</h1>
         <p>
@@ -83,31 +86,29 @@ export function ConnectionPage() {
           de lotes.
         </p>
         <div className="connection-actions">
-          <button
-            className="primary-action"
-            type="button"
-            disabled={isLoading}
+          <Button
+            loading={isLoading}
             onClick={() => void checkConnection()}
           >
             {isLoading ? 'Comprobando conexión…' : actionLabel}
-          </button>
+          </Button>
         </div>
         {connectionState.kind === 'loading' && (
-          <p className="connection-result" role="status" aria-live="polite">
+          <Alert className="connection-result" tone="neutral" role="status">
             Consultando el servicio…
-          </p>
+          </Alert>
         )}
         {connectionState.kind === 'success' && (
-          <p className="connection-result connection-result--success" role="status" aria-live="polite">
+          <Alert className="connection-result" tone="success" role="status">
             Conexión disponible: el backend respondió correctamente.
-          </p>
+          </Alert>
         )}
         {connectionState.kind === 'error' && (
-          <p className="connection-result connection-result--error" role="alert">
+          <Alert className="connection-result" tone="danger" role="alert">
             {connectionState.message}
-          </p>
+          </Alert>
         )}
-      </section>
+      </Card>
     </main>
   )
 }

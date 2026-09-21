@@ -1,8 +1,11 @@
-# Entorno local y CI — K006
+# Entorno local y CI
 
-Referencia: E2 / RNF07. Esta infraestructura levanta la web existente, `/health`,
-PostgreSQL con PostGIS y un proceso worker inactivo. No implementa migraciones,
-modelos, autenticación, reservas ni vencimientos.
+Guía vigente para K010 sobre `development` `e4e0460` (2026-09-21).
+Compose levanta web, API, PostgreSQL/PostGIS y un worker inactivo. La API añade
+[operaciones de lotes](k010-publicacion-lotes.md); requiere migraciones aplicadas.
+K008 (sesiones, origen y CSRF) y reservas siguen pendientes. K005 es una CLI aislada.
+Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
+[K006](verificacion-k006.md).
 
 ## Inicio desde un clon
 
@@ -15,8 +18,8 @@ equipos ARM, Docker debe tener emulación amd64 habilitada (puede ser más lenta
 ```bash
 git clone https://github.com/ClemoAcevedo/rescate.git
 cd rescate
-# Antes del merge, seleccionar la rama del PR:
-git switch chore/k006-docker-ci
+# Rama de integración vigente:
+git switch development
 cp .env.example .env
 docker compose config --quiet
 docker compose build
@@ -24,7 +27,7 @@ docker compose up -d --wait --wait-timeout 120
 docker compose ps
 ```
 
-Después del merge, usa la rama de integración que incluya K006. `.env` está
+Para revisar un PR, seleccionar su rama en lugar de `development`. `.env` está
 ignorado por Git. Los ejemplos son credenciales públicas de desarrollo; los
 puertos publicados escuchan solo en `127.0.0.1`. No usar este Compose en producción.
 
@@ -84,32 +87,34 @@ La web debe responder HTML y ambas rutas de salud deben responder
 mostrar la base configurada y la versión de PostGIS.
 
 `db`, `api` y `web` tienen healthchecks; web espera a que API esté saludable.
-`/health` verifica únicamente el proceso HTTP, no la base. API y worker todavía
-no consultan PostgreSQL y no tienen una dependencia de inicio artificial con él.
+`/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable. El worker
+no consulta PostgreSQL. Compose no aplica migraciones automáticamente.
 El worker debe figurar `running` y registrar `Worker K006 iniciado`.
 Permanece inactivo con un temporizador de 24 horas sin tareas, polling ni logs
 periódicos, y termina limpiamente con SIGTERM/SIGINT. No tiene healthcheck de
 trabajos porque todavía no procesa ninguno.
 
-## Persistencia y futura integración de K002
+## Persistencia y migraciones K002/K003
 
-El volumen nombrado `postgres_data` conserva los datos al recrear contenedores.
-La imagen [PostGIS](https://github.com/postgis/docker-postgis) habilita PostGIS en
-`POSTGRES_DB` durante la inicialización de un volumen vacío. No hay SQL de dominio,
-gestor de migraciones ni ejecución automática de migraciones en K006.
+El volumen `postgres_data` conserva datos al recrear contenedores. La imagen
+PostGIS habilita la extensión al inicializar `POSTGRES_DB`. Las tablas de Rescate
+se crean con las [migraciones versionadas](migraciones.md), no al arrancar HTTP
+ni Compose. El [modelo K003](modelo-inicial.md) describe las cinco entidades.
 
-Cuando K002 esté integrada, su gestor podrá conectarse con estos datos:
+Desde el host, configurar `DATABASE_URL` en `api/.env` o en el entorno con el
+usuario, base y puerto de Compose. Ejecutar `npm run db:migrate` desde `api/`.
+El destino del host es `127.0.0.1` y el valor de `POSTGRES_PORT`; dentro de Compose,
+`db:5432`. API/worker todavía no consultan la base ni reciben esa URL desde Compose.
 
-- Desde el host: `127.0.0.1`, puerto `POSTGRES_PORT`.
-- Desde un servicio de Compose: host `db`, puerto `5432`.
-- Base, usuario y contraseña: los valores `POSTGRES_*` de `.env`.
+Los comandos `db:migrate`, `db:create`, `db:rollback` y `db:test` cargan
+`api/.env` mediante Node; una variable del entorno tiene prioridad.
+`db:test:compose` obtiene la conexión
+del servicio `db`, crea una base exclusiva desde template0 y ejecuta la prueba
+K003 con rollback/reaplicación. Conserva esa base; no prueba sobre la de desarrollo.
+Seguir los prerrequisitos de la [guía](migraciones.md#prueba-actual-de-k003).
 
-Ejemplo con los valores de desarrollo:
-`postgresql://rescate_dev:rescate_dev_only@localhost:5432/rescate`.
-K002 decidirá el nombre de la variable de conexión y sus comandos; K006 no los
-presupone ni añade un cliente de base de datos. Si cambia usuario/base/contraseña
-con un volumen ya inicializado, PostgreSQL conserva los valores originales:
-usa los originales o reinicializa explícitamente si los datos son descartables.
+Si cambia usuario/base/contraseña con un volumen existente, PostgreSQL conserva
+los valores originales. No reinicializar datos que deban conservarse.
 
 ## Detener y limpiar
 
@@ -135,6 +140,7 @@ npm --prefix web run typecheck
 npm --prefix web run lint
 npm --prefix web run build
 npm --prefix api ci
+npm --prefix api run api:contract:check
 npm --prefix api run typecheck
 npm --prefix api test
 npm --prefix api run build
@@ -145,10 +151,10 @@ npm --prefix api run build
 
 - `web`: instalación con lockfile, TypeScript, lint y build en pasos separados.
   Actualmente no existen tests web; no se oculta esa ausencia con `--if-present`.
-- `api`: instalación con lockfile, TypeScript, test HTTP de salud y build de
+- `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud/lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones y concurrencia K010, verifica worker y siempre recoge logs y limpia.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
@@ -159,8 +165,9 @@ ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 Consulta [el registro de verificación K006](verificacion-k006.md), con resultados
 locales, limitaciones y la prueba controlada de fallo/restauración.
 
-Después de abrir el PR, comprobar que aparecen los tres jobs y que pasan. Para
-demostrar el fallo remoto, en una rama/PR temporal cambia la expectativa HTTP
+Después de abrir el PR, comprobar que aparecen los tres jobs y que pasan. La
+demostración de fallo de K006 es evidencia histórica, no un paso de cada cambio.
+Solo para reproducir esa demostración, en una rama/PR temporal cambia la expectativa HTTP
 de 200 a 503 en `api/test/health.test.ts`, comprueba que falla el paso `Tests` del
 job API y restaura el test inmediatamente. Conserva enlaces a ambas ejecuciones
 (roja y verde) en el PR. No dejar el test roto en la rama final.

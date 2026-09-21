@@ -1,145 +1,129 @@
 # K010 — Borrador y publicación de lotes
 
-Tarjeta K010 (RF02). Responsable: Felipe Arnolds. Revisor: Clemente Acevedo.
-Depende de K003. Alcance: crear borradores, editarlos con versión optimista,
-publicarlos y consultarlos. No incluye fotos, retiro del lote con motivo,
-búsqueda pública ni reserva.
+Tarjeta K010 (RF02). Implementación original: Felipe Arnolds. Revisión e integración:
+Clemente Acevedo. Reconciliada con `origin/development` `e4e0460` el 2026-09-21.
+La autoridad HTTP es [OpenAPI S02](api/openapi.yaml), sin modificaciones en esta
+reconciliación. [Su guía](api/README.md) define transporte y seguridad objetivo.
 
-## Decisiones tomadas en esta tarjeta
+## Alcance y reglas
 
-### Borrador completo, sin guardado parcial
+K010 implementa crear un borrador completo, consultar, editar parcialmente con
+versión y publicar. Mantiene la decisión original de no persistir formularios
+incompletos: contenido, categoría provisional libre, cantidad, dirección,
+coordenadas, zona horaria y ventana son obligatorios. `conditions` puede omitirse
+al crear (null); no hay catálogo de categorías ni máximo comercial de 100 packs.
+El límite de cantidad es el integer positivo de PostgreSQL; descripción tiene
+hasta 2000 caracteres. Se retiraron los límites extra de categoría/dirección/
+condiciones que el contrato no establecía. El cuerpo JSON tiene límite de 16 KiB.
 
-El [modelo inicial](modelo-inicial.md) y la
-[guía de arquitectura](arquitectura/arquitectura.md) dejaron abierto si el
-borrador admite campos pendientes. K010 mantiene la declaración completa desde la
-creación: contenido, categoría, cantidad, dirección, ubicación, zona horaria y
-ventana. Las condiciones siguen siendo opcionales, como en K003.
+RF02 conserva cantidad, contenido, lugar y plazo después de publicar. Editar o
+republicar responde 409. Publicar exige cierre posterior al inicio y al instante
+servidor leído después de bloquear el lote; ventana inválida responde 422.
+Cero fotos permite publicar. No implementa fotos, retiro, búsqueda, reservas,
+FIFO, ofertas, chat, incidencias ni trabajo de worker.
 
-Motivo: un borrador incompleto obliga a hacer nullable media tabla y a duplicar
-las reglas de RF02 en dos momentos distintos. Guardar un formulario a medias es
-una necesidad de interfaz que K011 puede resolver en el navegador. Si el equipo
-decide persistir borradores parciales, requerirá una migración y una revisión de
-las reglas de publicación; no se asume aquí.
+## Rutas y representación HTTP
 
-### Identificador público opaco
+Rutas Express relativas a la base API (el proxy web elimina `/api`):
 
-E1 (anexos B p. 4) exige identificadores públicos opacos y la guía de
-arquitectura advierte que no se exponga el `bigint` interno. La migración de esta
-tarjeta agrega `lots.public_id uuid` con valor por omisión `gen_random_uuid()` y
-unicidad. El contrato HTTP usa ese identificador; la clave interna no sale de la
-base. Los identificadores de establecimiento todavía se transportan como texto
-numérico, porque `establishments` no tiene aún su identificador público.
-
-### Versión optimista del borrador
-
-Se agrega `lots.version integer NOT NULL DEFAULT 1`. Cada edición y la
-publicación la incrementan. El cliente envía `expectedVersion`; si no coincide
-con la vigente, la operación responde `409 version_conflict` y no escribe.
-
-Anexos C p. 5 propone exactamente esto para borradores: versión y rechazo por
-conflicto, porque la persona puede revisar su edición. El bloqueo pesimista queda
-reservado para inventario y asignación, que no son parte de K010.
-
-### Inmutabilidad después de publicar
-
-RF02 indica que, publicado el lote, no cambian cantidad, contenido, lugar ni
-plazo. Editar un lote publicado responde `409` con la regla
-`published_lot_is_immutable`. Corregir exige retirar y crear otro lote; retirar
-con motivo no está implementado todavía y corresponde a una tarjeta posterior.
-
-### Ventana de retiro vencida
-
-Publicar un lote cuya ventana ya terminó responde `409` con
-`pickup_window_already_ended`. H p. 20 permite reservar desde la publicación
-hasta el cierre: publicar después del cierre dejaría una oferta que nadie puede
-retirar. La comprobación usa el instante leído dentro de la transacción, después
-de bloquear la fila.
-
-### Autenticación: punto de conexión, no implementación
-
-K008 implementa sesión, cookie y CSRF; todavía no está integrada. K010 define el
-límite y **no** inventa un mecanismo propio: sin K008, toda operación responde
-`401 not_authenticated`.
-
-Para poder ejercitar los endpoints en desarrollo existe un actor explícito por
-cabecera `X-Rescate-Dev-Actor`, **deshabilitado salvo que `RESCATE_DEV_ACTOR`
-valga `enabled`**, y que falla al arrancar si `NODE_ENV=production`. No verifica
-credenciales ni es un mecanismo de autenticación. Al integrar K008 se sustituye
-la función `selectAuthentication` por la resolución real de sesión y se elimina
-esta variable.
-
-### Un lote ajeno responde 404
-
-La autorización comprueba la pertenencia real del actor al establecimiento del
-lote. Un operador de otro establecimiento recibe `404`, no `403`, para no
-confirmar la existencia de datos ajenos. La distinción entre "no existe" y "no
-autorizado" se conserva dentro del caso de uso.
-
-## Contrato HTTP
-
-Todas las operaciones requieren actor autenticado. Los cuerpos son JSON con
-límite de 16 KB (H p. 20) y los instantes son ISO 8601 con zona explícita.
-
-| Operación | Ruta | Resultado |
+| Método | Ruta | Resultado |
 | --- | --- | --- |
-| Crear borrador | `POST /lots` | `201` con el lote en estado `draft` y versión 1 |
-| Listar del establecimiento | `GET /lots?establishmentId=&status=` | `200` con `items` |
-| Consultar un lote | `GET /lots/:id` | `200` con el lote |
-| Editar borrador | `PATCH /lots/:id` | `200` con la versión incrementada |
-| Publicar | `POST /lots/:id/publication` | `200` con estado `published` |
+| POST | `/establishments/:establishmentId/lots` | 201, borrador versión 1 |
+| GET | `/lots/:lotId` | 200, lote del operador autorizado |
+| PATCH | `/lots/:lotId` | 200, versión incrementada |
+| POST | `/lots/:lotId/publish` | 200, publicado y versión incrementada |
 
-La publicación es un recurso propio y no un `PATCH` de estado: es una transición
-con reglas propias, no la edición de un campo.
+Se retiraron `POST /lots`, `GET /lots` y `/publication`; no son alias.
+No hay listado adicional ni índice nuevo para anticiparlo. El índice de la
+migración original K010 se conserva para no reescribir historia compartida.
 
-### Errores
+PATCH recibe `version` y al menos un campo editable. Omisión conserva el valor;
+`conditions: null` borra condiciones. Solo ese campo admite null. Application
+combina el patch con la declaración leída bajo bloqueo y Domain valida el
+resultado completo, incluida la ventana. Un PATCH aceptado incrementa versión
+aunque el valor coincida. Publicar recibe únicamente `{ "version": N }`.
+`expectedVersion` permanece como nombre interno, nunca como campo HTTP.
+Se rechazan propiedades desconocidas, reasignación de establecimiento y campos
+de servidor. Fechas deben ser RFC 3339 con zona explícita; responses usan UTC.
 
-| Código HTTP | `error.code` | Cuándo |
+El mapper HTTP deriva su tipo del YAML y expone solo `LotResponse`; no filas SQL,
+PK internas ni `updatedAt`. Todas las respuestas llevan `Cache-Control: no-store`.
+
+| Status | `error.code` | Uso |
 | --- | --- | --- |
-| 400 | `invalid_request` | La entrada no tiene la forma esperada: tipo incorrecto, fecha sin zona o campo ausente. `violations` nombra los campos. |
-| 401 | `not_authenticated` | No hay sesión válida. |
-| 404 | `lot_not_found`, `not_authorized` | El lote no existe, o pertenece a otro establecimiento. |
-| 409 | `version_conflict` | La versión enviada ya no es la vigente. |
-| 409 | `lot_state_conflict` | El estado o el instante impiden la transición: lote publicado o ventana terminada. |
-| 422 | `invalid_lot` | Los datos no cumplen las reglas de RF02. `violations` nombra todas las incumplidas, no solo la primera. |
+| 400 | MALFORMED_REQUEST | JSON ilegible |
+| 401 | UNAUTHENTICATED | Actor ausente |
+| 403 | FORBIDDEN | Falta membership; sin datos del recurso |
+| 404 | NOT_FOUND | Lote/establecimiento inexistente |
+| 409 | CONFLICT | Versión obsoleta o estado incompatible |
+| 413 | PAYLOAD_TOO_LARGE | Cuerpo mayor a 16 KiB |
+| 415 | UNSUPPORTED_MEDIA_TYPE | Cuerpo no JSON |
+| 422 | VALIDATION_ERROR | Tipos, campos, propiedades extra o reglas inválidas |
+| 500 | INTERNAL_ERROR | Fallo inesperado, sin diagnóstico interno público |
+| 503 | SERVICE_UNAVAILABLE | Fallos identificables de disponibilidad PostgreSQL/red |
 
-Una cantidad como texto (`"3"`) es `400`, no `422`: el servidor no convierte
-tipos en silencio. Una cantidad `0` sí es `422`, porque la forma es correcta y la
-regla de negocio es la que falla.
+Errores siguen `{error:{code,message,details?}}`; `details.issues` contiene
+`path` JSON Pointer y mensaje seguro, sin valores sensibles ni violaciones propias
+del contrato anterior. Límites generales/rate limiting y seguridad de identidad
+se integrarán con K008/K012; no se afirma que K010 implemente todo S02.
 
-## Recorrido y responsabilidades
+## IDs públicos y migraciones
+
+`lots.public_id` sigue siendo UUID persistido de la migración original
+`1789999138556_lots-publication-fields.sql`; también conserva versión y updated_at
+internos. La nueva migración **aditiva** `1790000000000_establishment-public-ids.sql`
+añade `establishments.public_id uuid NOT NULL DEFAULT gen_random_uuid()` con UNIQUE.
+Rellena filas existentes. No modifica K002, K003 ni la primera migración K010.
+
+Application pide resolver el ID público del establecimiento a `{id, publicId}`,
+exige membership sobre la PK interna y solo entonces inserta el lote. Los lotes
+leídos conservan el establecimiento interno para autorizar y el público para HTTP.
+Un texto bigint no identifica un establecimiento HTTP; responde 404. Los UUID
+no conceden autoridad. No se añaden identificadores públicos de usuario anticipando K008.
+
+## Responsabilidades y atomicidad
 
 ```text
-POST /lots/:id/publication
-  http/lots-router.ts        valida forma, obtiene el actor, traduce el resultado
-  application/lots/use-cases comprueba pertenencia y versión, define la atomicidad
-  domain/lots.ts             decide si la transición es válida en ese instante
-  infrastructure/postgres    bloquea la fila, relee, escribe y confirma
+HTTP → Application → Domain / ports → Infrastructure
+             ↑ Composition ensambla dependencias concretas
 ```
 
-`src/composition.ts` arma Pool, repositorio, casos de uso y router. Domain no
-importa HTTP, Application ni pg. HTTP no ejecuta SQL.
+HTTP parsea, obtiene actor y traduce errores. Application autoriza y define
+`withLotTransaction`; Infrastructure abre BEGIN, hace SELECT FOR UPDATE, consulta
+membership y escribe con el mismo cliente, confirma y lo libera. Domain mantiene
+reglas puras. La versión se compara después de adquirir bloqueo: dos comandos
+con N no pueden confirmar ambos. El perdedor obtiene conflicto; no se acepta un
+error indefinido como evidencia de concurrencia. Un fallo posterior a escribir
+revierte contenido, versión y publicación. No hay llamadas externas bajo bloqueo.
 
-## Pruebas
+## Actor temporal y conexión K008
 
-| Prueba | Comando | Cubre |
-| --- | --- | --- |
-| Reglas puras | `npm test` (`test/lots-domain.test.ts`) | Cantidades, ventana, ubicación, zona horaria, publicación e inmutabilidad, sin base ni HTTP. |
-| Recorrido HTTP | `npm test` (`test/lots-http.test.ts`) | HTTP → Application → Domain con repositorio en memoria: contrato, errores, autorización, versión y actor deshabilitado. |
-| Integración PostgreSQL | `npm run db:test:lots:compose` | Repositorio real, transacciones, publicación concurrente, rollback y reaplicación de la migración. |
-| Migraciones | `npm run db:test:compose` | Historial completo de K002, K003 y K010 desde base vacía. |
+Se conserva `Authenticate → Actor`, con `Actor.userId` como PK interna resuelta
+por el mecanismo autenticador. K008 deberá obtenerla desde la sesión, no desde
+un ID público aportado por el cliente, y aplicar Origin/CSRF en HTTP antes del
+caso de uso. Domain/Application no reciben cookies ni Request de Express.
 
-La prueba de integración exige una base dedicada `rescate_k010_test_*` creada
-vacía, igual que K003. No se ejecuta contra la base de desarrollo.
+Sin K008, el mecanismo predeterminado devuelve null y los comandos autenticados
+responden 401. `RESCATE_DEV_ACTOR=enabled` habilita explícitamente la cabecera
+`X-Rescate-Dev-Actor` con usuario ficticio existente; no verifica credenciales.
+Con `NODE_ENV=production` esa configuración impide arrancar. K008 sustituirá
+`selectAuthentication` y retirará este mecanismo. No hay login, hashing, cookies,
+sesiones ni una arquitectura de autenticación alternativa en K010.
 
-## Pendiente y fuera de alcance
+## Pruebas y límites
 
-- Sustituir el actor de desarrollo por la sesión de K008 y retirar
-  `RESCATE_DEV_ACTOR`.
-- Fotos del lote: K014 integra la carga; K010 no las exige ni las bloquea.
-- Retirar un lote publicado con motivo, estados `closed` y `expired`.
-- Identificador público de establecimientos.
-- OpenAPI: ADR 0003 lo fija como contrato versionado de S02. Esta tarjeta
-  documenta su superficie aquí; generar el documento y derivar tipos sigue
-  pendiente y conviene acordarlo con K009 y K011.
-- Compose no ejecuta migraciones al arrancar: la API espera un esquema ya
-  migrado, según el despliegue en una etapa controlada de E1.
+- `npm test`: reglas, requests HTTP, permisos, PATCH parcial, versión,
+  inmutabilidad, errores y actor temporal. Ajv 2020-12 valida las respuestas HTTP
+  reales contra los schemas del YAML, sin copiar un catálogo alternativo.
+- `api:contract:check`: Redocly comprueba estructura/ejemplos, no runtime.
+- `api:types` / `api:types:check`: genera/verifica DTO con json-schema-to-typescript.
+  YAML, Ajv y generador solo son dependencias de desarrollo. No se cambió el
+  TypeScript existente ni se forzaron peers incompatibles.
+- `db:test:lots:compose`: PostgreSQL real, IDs, permisos, conflictos concurrentes,
+  edición contra publicación, rollback después de escritura y migraciones aditivas.
+- `db:test:compose`: historial desde base vacía y rollback/reaplicación.
+
+Las bases dedicadas conservan datos ficticios; no se migra ni revierte la base
+de desarrollo. La [evidencia](k010-evidencia.md) separa ejecución original de
+reconciliación. K008/K012 aún deben verificar cookies, origen/CSRF, HTTPS y recorrido
+integrado de navegador; estos tests no sustituyen esa aceptación.

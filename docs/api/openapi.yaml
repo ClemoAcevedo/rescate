@@ -1,0 +1,1125 @@
+# Contrato S02; endpoints todavía no implementados. Ver README.md.
+openapi: "3.1.0"
+info:
+  title: "Rescate — contrato HTTP S02"
+  version: "0.1.0"
+  description: "Fuente de verdad HTTP para K008–K011, previa a implementación. Solo contrato: API actual expone /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+servers:
+  -
+    url: "/api"
+    description: "Base relativa del proxy web, prevista bajo HTTPS para cookies Secure. En Express las rutas no llevan /api; configurar la base del cliente para otro despliegue. El Compose HTTP actual no demuestra autenticación segura."
+tags:
+  -
+    name: "Identity"
+    description: "RF01: cuenta, sesión y establecimientos operables."
+  -
+    name: "Lots"
+    description: "RF02: borrador completo, edición optimista y publicación por operador autorizado."
+paths:
+  "/auth/register":
+    post:
+      operationId: "register"
+      summary: "Crear una cuenta sin iniciar sesión"
+      description: "Correo y contraseña; no crea sesión ni asigna pertenencia. Requiere bootstrap CSRF previo mediante GET /auth/session. 409 si el correo normalizado ya existe. No emite cookie de sesión."
+      tags:
+        - "Identity"
+      security: []
+      parameters:
+        -
+          $ref: "#/components/parameters/Origin"
+        -
+          $ref: "#/components/parameters/CsrfHeader"
+        -
+          $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              email: "persona@example.com"
+              password: "Ejemplo-sin-acceso-2030"
+      responses:
+        "201":
+          description: "Cuenta creada. Sin sesión automática ni Set-Cookie de autenticación."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+              example:
+                user:
+                  id: "usr_demo_A7k"
+                  email: "persona@example.com"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  "/auth/login":
+    post:
+      operationId: "login"
+      summary: "Autenticar y crear sesión persistente"
+      description: "Normaliza correo como registro. Verifica credenciales y crea sesión opaca de 12 horas persistida en PostgreSQL; rota contexto CSRF y credencial de sesión. Requiere bootstrap CSRF previo. No devuelve la credencial de sesión en JSON. 401 no distingue cuenta inexistente de contraseña incorrecta."
+      tags:
+        - "Identity"
+      security: []
+      parameters:
+        -
+          $ref: "#/components/parameters/Origin"
+        -
+          $ref: "#/components/parameters/CsrfHeader"
+        -
+          $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: "persona@example.com"
+              password: "Ejemplo-sin-acceso-2030"
+      responses:
+        "200":
+          description: "Sesión creada; cookies independientes de sesión y CSRF."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Set-Cookie:
+              $ref: "#/components/headers/LoginCookies"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              example:
+                session:
+                  user:
+                    id: "usr_demo_A7k"
+                    email: "persona@example.com"
+                  operableEstablishments:
+                    -
+                      id: "est_demo_P8m"
+                      name: "Establecimiento de ejemplo"
+                  expiresAt: "2030-01-15T22:00:00Z"
+                csrfToken: "csrf_ficticio_no_utilizable"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  "/auth/logout":
+    post:
+      operationId: "logout"
+      summary: "Revocar la sesión actual"
+      description: "Requiere sesión vigente, token CSRF y origen válido. Revoca solo la sesión presentada y borra ambas cookies. Sin request body. Un reintento después de revocar recibe 401; no hay nueva mutación. Obtener contexto CSRF mediante GET /auth/session antes de otro login."
+      tags:
+        - "Identity"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        -
+          $ref: "#/components/parameters/Origin"
+        -
+          $ref: "#/components/parameters/CsrfHeader"
+        -
+          $ref: "#/components/parameters/CsrfCookie"
+      responses:
+        "204":
+          description: "Sesión revocada; sin cuerpo."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Set-Cookie:
+              $ref: "#/components/headers/LogoutCookies"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  "/auth/session":
+    get:
+      operationId: "getSession"
+      summary: "Consultar sesión y obtener protección CSRF"
+      description: "200 con session=null sin sesión válida; con sesión válida devuelve usuario, establecimientos operables actuales y expiresAt. No inicia sesión ni renueva sus 12 horas. Obtiene/reutiliza el token CSRF para comandos, incluidos registro/login. Lectura sin token CSRF ni Origin obligatorio; no habilitar lectura CORS para orígenes no autorizados. Sin request body."
+      tags:
+        - "Identity"
+      security:
+        -
+          SessionCookie: []
+        - {}
+      responses:
+        "200":
+          description: "Estado de sesión y token CSRF, incluso para visitante."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Set-Cookie:
+              $ref: "#/components/headers/CsrfCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+              examples:
+                authenticated:
+                  value:
+                    session:
+                      user:
+                        id: "usr_demo_A7k"
+                        email: "persona@example.com"
+                      operableEstablishments:
+                        -
+                          id: "est_demo_P8m"
+                          name: "Establecimiento de ejemplo"
+                      expiresAt: "2030-01-15T22:00:00Z"
+                    csrfToken: "csrf_ficticio_no_utilizable"
+                visitor:
+                  value:
+                    session: null
+                    csrfToken: "csrf_ficticio_no_utilizable"
+                withoutMemberships:
+                  value:
+                    session:
+                      user:
+                        id: "usr_demo_A7k"
+                        email: "persona@example.com"
+                      operableEstablishments: []
+                      expiresAt: "2030-01-15T22:00:00Z"
+                    csrfToken: "csrf_ficticio_no_utilizable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  "/establishments/{establishmentId}/lots":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    post:
+      operationId: "createLotDraft"
+      summary: "Crear borrador completo"
+      description: "Solo operador autorizado sobre el establecimiento de la ruta; registrarse no concede permiso. Crea status=draft, version=1 y publishedAt=null. Sin autosave incompleto. conditions omitido se representa como null. Ventana con fin posterior al inicio. Publicable con cero fotos; no admite cargas ni referencias de fotos en este alcance."
+      tags:
+        - "Lots"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        -
+          $ref: "#/components/parameters/Origin"
+        -
+          $ref: "#/components/parameters/CsrfHeader"
+        -
+          $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLotDraftRequest"
+            example:
+              description: "Pack de cuatro panes surtidos."
+              category: "Panadería"
+              quantity: 12
+              conditions: null
+              address: "Calle de Ejemplo 123, Santiago"
+              latitude: -33.45
+              longitude: -70.66
+              timeZone: "America/Santiago"
+              pickupStartsAt: "2030-01-15T18:00:00Z"
+              pickupEndsAt: "2030-01-15T21:00:00Z"
+      responses:
+        "201":
+          description: "Borrador creado; conservar id para consultar/editar/publicar."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotResponse"
+              example:
+                description: "Pack de cuatro panes surtidos."
+                category: "Panadería"
+                quantity: 12
+                conditions: null
+                address: "Calle de Ejemplo 123, Santiago"
+                latitude: -33.45
+                longitude: -70.66
+                timeZone: "America/Santiago"
+                pickupStartsAt: "2030-01-15T18:00:00Z"
+                pickupEndsAt: "2030-01-15T21:00:00Z"
+                id: "lot_demo_R4q"
+                establishmentId: "est_demo_P8m"
+                status: "draft"
+                version: 1
+                createdAt: "2030-01-15T10:00:00Z"
+                publishedAt: null
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/lots/{lotId}":
+    parameters:
+      -
+        $ref: "#/components/parameters/LotId"
+    get:
+      operationId: "getLot"
+      summary: "Consultar lote para revisión del operador"
+      description: "Solo operador autorizado del establecimiento del lote, incluso si ya está publicado. Devuelve versión actual. Esta operación S02 no es el detalle público de descubrimiento RF03. No se crea un listado público ni se restringe el futuro requisito de explorar sin sesión. Sin request body ni CSRF por ser lectura."
+      tags:
+        - "Lots"
+      security:
+        -
+          SessionCookie: []
+      responses:
+        "200":
+          description: "Lote con datos revisables y versión actual."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotResponse"
+              example:
+                description: "Pack de cuatro panes surtidos."
+                category: "Panadería"
+                quantity: 12
+                conditions: null
+                address: "Calle de Ejemplo 123, Santiago"
+                latitude: -33.45
+                longitude: -70.66
+                timeZone: "America/Santiago"
+                pickupStartsAt: "2030-01-15T18:00:00Z"
+                pickupEndsAt: "2030-01-15T21:00:00Z"
+                id: "lot_demo_R4q"
+                establishmentId: "est_demo_P8m"
+                status: "draft"
+                version: 1
+                createdAt: "2030-01-15T10:00:00Z"
+                publishedAt: null
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: "updateLotDraft"
+      summary: "Editar borrador con versión esperada"
+      description: "Solo operador autorizado. Compara version y exige estado draft de manera atómica con la actualización; incrementa versión en 1. 409 si obsoleto o publicado; sin cambios parciales. Revalidar el conjunto tras aplicar campos presentes. Tras 409, GET y revisión del usuario antes de reenviar; no sobrescribir automáticamente."
+      tags:
+        - "Lots"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        -
+          $ref: "#/components/parameters/Origin"
+        -
+          $ref: "#/components/parameters/CsrfHeader"
+        -
+          $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLotDraftRequest"
+            example:
+              version: 1
+              conditions: "Traer una bolsa."
+      responses:
+        "200":
+          description: "Borrador editado con nueva versión."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotResponse"
+              example:
+                description: "Pack de cuatro panes surtidos."
+                category: "Panadería"
+                quantity: 12
+                conditions: "Traer una bolsa."
+                address: "Calle de Ejemplo 123, Santiago"
+                latitude: -33.45
+                longitude: -70.66
+                timeZone: "America/Santiago"
+                pickupStartsAt: "2030-01-15T18:00:00Z"
+                pickupEndsAt: "2030-01-15T21:00:00Z"
+                id: "lot_demo_R4q"
+                establishmentId: "est_demo_P8m"
+                status: "draft"
+                version: 2
+                createdAt: "2030-01-15T10:00:00Z"
+                publishedAt: null
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  "/lots/{lotId}/publish":
+    parameters:
+      -
+        $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "publishLotDraft"
+      summary: "Publicar explícitamente el borrador revisado"
+      description: "Solo operador autorizado. En una unidad atómica valida pertenencia, estado draft, versión esperada, campos y ventana (fin posterior a inicio y al instante de publicación); asigna publishedAt, status=published e incrementa versión. Cero fotos es válido. Si existen fotos asociadas, únicamente listas/validadas pueden ser visibles; comprobar sin llamadas externas bajo bloqueo. Publicado no se edita: cantidad, contenido, lugar y plazo quedan fijos; corregir exige retirar y crear otro (retiro fuera de S02). 409 por versión obsoleta o lote ya publicado, incluido reintento. Tras respuesta perdida consultar GET; no se promete reproducción idempotente del 200."
+      tags:
+        - "Lots"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        -
+          $ref: "#/components/parameters/Origin"
+        -
+          $ref: "#/components/parameters/CsrfHeader"
+        -
+          $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishLotDraftRequest"
+            example:
+              version: 2
+      responses:
+        "200":
+          description: "Lote publicado; publishedAt asignado por servidor."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LotResponse"
+              example:
+                description: "Pack de cuatro panes surtidos."
+                category: "Panadería"
+                quantity: 12
+                conditions: "Traer una bolsa."
+                address: "Calle de Ejemplo 123, Santiago"
+                latitude: -33.45
+                longitude: -70.66
+                timeZone: "America/Santiago"
+                pickupStartsAt: "2030-01-15T18:00:00Z"
+                pickupEndsAt: "2030-01-15T21:00:00Z"
+                id: "lot_demo_R4q"
+                establishmentId: "est_demo_P8m"
+                status: "published"
+                version: 3
+                createdAt: "2030-01-15T10:00:00Z"
+                publishedAt: "2030-01-15T10:10:00Z"
+        "400":
+          $ref: "#/components/responses/MalformedRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+components:
+  securitySchemes:
+    SessionCookie:
+      type: "apiKey"
+      in: "cookie"
+      name: "__Host-rescate_session"
+      description: "Credencial de sesión opaca persistida en PostgreSQL. Cookie HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200; sin Domain. Vence absolutamente a las 12 horas del login; GET no renueva. No confundir con el token CSRF."
+  parameters:
+    Origin:
+      name: "Origin"
+      in: "header"
+      required: true
+      description: "Origen exacto permitido por configuración (esquema, host y puerto); ausente, null o no permitido produce 403. El navegador lo envía. No se acepta Referer como sustituto. HTTPS, mismo origen web/API mediante proxy; sin CORS abierto con credenciales."
+      schema:
+        type: "string"
+      example: "https://rescate.example.com"
+    CsrfHeader:
+      name: "X-CSRF-Token"
+      in: "header"
+      required: true
+      description: "Token recibido en GET /auth/session o login, igual a la cookie CSRF, íntegro y vigente, vinculado a la sesión actual si la hay. Ausente o inválido produce 403. Ver mecanismo firmado en README."
+      schema:
+        $ref: "#/components/schemas/CsrfToken"
+    CsrfCookie:
+      name: "__Host-rescate_csrf"
+      in: "cookie"
+      required: true
+      description: "Cookie CSRF HttpOnly/Secure/SameSite=Lax del mismo host, enviada por el navegador. No es cookie de autenticación."
+      schema:
+        $ref: "#/components/schemas/CsrfToken"
+    EstablishmentId:
+      name: "establishmentId"
+      in: "path"
+      required: true
+      description: "Identificador público del establecimiento sobre el que se comprobarán permisos."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "est_demo_P8m"
+    LotId:
+      name: "lotId"
+      in: "path"
+      required: true
+      description: "Identificador público del lote; resolver establecimiento y comprobar permisos en cada acción."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "lot_demo_R4q"
+  headers:
+    NoStore:
+      description: "Todas las respuestas de estas operaciones llevan Cache-Control: no-store."
+      schema:
+        type: "string"
+        const: "no-store"
+    CsrfCookie:
+      description: "Emitir cuando falta o se invalida el contexto CSRF: __Host-rescate_csrf=<token-opaco>; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax. Sin Domain. El mismo token se devuelve en csrfToken. No autentica, no crea cuenta ni sesión autenticada. No reemplazar un token válido en cada GET."
+      schema:
+        type: "string"
+      example: "__Host-rescate_csrf=csrf_ficticio_no_utilizable; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax"
+    LoginCookies:
+      description: "Dos líneas Set-Cookie independientes (nunca concatenar con coma): __Host-rescate_session=<credencial-opaca>; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax y __Host-rescate_csrf=<nuevo-token>; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax. Sin Domain. Login rota ambos valores; sesión persistida en PostgreSQL, vencimiento absoluto a las 12 horas. OpenAPI representa el nombre de header una vez; el ejemplo muestra solo la cookie de sesión."
+      schema:
+        type: "string"
+      example: "__Host-rescate_session=sesion_ficticia_no_utilizable; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax"
+    LogoutCookies:
+      description: "Dos líneas Set-Cookie independientes, una por __Host-rescate_session y __Host-rescate_csrf, valor vacío, Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax; sin Domain. Además se revoca la sesión en servidor."
+      schema:
+        type: "string"
+      example: "__Host-rescate_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"
+    RetryAfter:
+      description: "Segundos hasta poder volver a intentar; no HTTP-date en este contrato."
+      schema:
+        type: "integer"
+        minimum: 1
+      example: 900
+  responses:
+    MalformedRequest:
+      description: "MALFORMED_REQUEST: Solicitud mal formada: JSON ilegible o framing HTTP inválido."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "MALFORMED_REQUEST"
+              message: "No se pudo interpretar la solicitud."
+    Unauthenticated:
+      description: "UNAUTHENTICATED: Sesión ausente, vencida o inválida; en login, correo o contraseña incorrectos sin distinguir cuál."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "UNAUTHENTICATED"
+              message: "No se pudo autenticar la solicitud."
+    Forbidden:
+      description: "FORBIDDEN: Origen o protección CSRF inválidos, o falta de permiso sobre el establecimiento/lote. No expone datos del objeto."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "FORBIDDEN"
+              message: "No se permite esta operación."
+    NotFound:
+      description: "NOT_FOUND: El establecimiento o lote solicitado no existe."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "Recurso inexistente."
+    Conflict:
+      description: "CONFLICT: Conflicto con el estado actual: correo ya registrado, versión obsoleta o lote que ya no es borrador, según la operación."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "CONFLICT"
+              message: "La operación entra en conflicto con el estado actual."
+    PayloadTooLarge:
+      description: "PAYLOAD_TOO_LARGE: El cuerpo JSON supera 16 KiB (16384 bytes); límite de E1 H p. 20 concretado en bytes para S02."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "PAYLOAD_TOO_LARGE"
+              message: "El cuerpo supera el tamaño permitido."
+    UnsupportedMediaType:
+      description: "UNSUPPORTED_MEDIA_TYPE: El cuerpo debe utilizar application/json."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "UNSUPPORTED_MEDIA_TYPE"
+              message: "Se requiere application/json."
+    ValidationError:
+      description: "VALIDATION_ERROR: JSON legible pero entrada inválida: campos, tipos, propiedades desconocidas o reglas de ventana. details puede localizar los campos."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Revisa los campos indicados."
+              details:
+                issues:
+                  -
+                    path: "/quantity"
+                    message: "Debe ser un entero positivo."
+    TooManyRequests:
+      description: "RATE_LIMITED: Límite de solicitudes o de intentos de login alcanzado según E1 H p. 21. Retry-After indica segundos de espera."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "RATE_LIMITED"
+              message: "Espera antes de volver a intentar."
+    InternalError:
+      description: "INTERNAL_ERROR: Fallo inesperado; mensaje público genérico, sin SQL, trazas, credenciales ni detalles internos."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "INTERNAL_ERROR"
+              message: "No se pudo completar la solicitud."
+    Unavailable:
+      description: "SERVICE_UNAVAILABLE: Dependencia temporalmente indisponible; no afirmar que el comando se confirmó. No reintentar automáticamente una creación."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "SERVICE_UNAVAILABLE"
+              message: "El servicio no está disponible temporalmente."
+  schemas:
+    PublicId:
+      type: "string"
+      description: "Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización."
+      minLength: 1
+    EmailInput:
+      type: "string"
+      description: "Correo identificador, sin afirmar verificación. Registro y login recortan espacios exteriores y comparan sin distinguir mayúsculas/minúsculas; se conservan puntos y sufijos +. La respuesta devuelve el correo normalizado en minúsculas. En entrada el formato se comprueba DESPUÉS de normalizar."
+      minLength: 1
+    Email:
+      type: "string"
+      description: "Correo normalizado en minúsculas, sin espacios exteriores; no afirma verificación ni elimina puntos o sufijos +."
+      format: "email"
+    Password:
+      type: "string"
+      description: "Contraseña de entrada; mínimo de 12 caracteres. Nunca se devuelve ni se registra en logs."
+      minLength: 12
+      writeOnly: true
+    RegisterRequest:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "email"
+        - "password"
+      properties:
+        email:
+          $ref: "#/components/schemas/EmailInput"
+        password:
+          $ref: "#/components/schemas/Password"
+      description: "Crea solo la cuenta; no acepta establishmentId, membresías, roles ni displayName."
+    LoginRequest:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "email"
+        - "password"
+      properties:
+        email:
+          $ref: "#/components/schemas/EmailInput"
+        password:
+          $ref: "#/components/schemas/Password"
+    User:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "id"
+        - "email"
+      properties:
+        id:
+          $ref: "#/components/schemas/PublicId"
+        email:
+          $ref: "#/components/schemas/Email"
+      description: "Representación pública mínima; sin credenciales, estado de verificación ni datos persistidos de autenticación."
+    RegisterResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "user"
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+      description: "Cuenta creada sin sesión ni membresías operables automáticas."
+    OperableEstablishment:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "id"
+        - "name"
+      properties:
+        id:
+          $ref: "#/components/schemas/PublicId"
+        name:
+          type: "string"
+          minLength: 1
+      description: "Establecimiento que esta persona puede operar actualmente. Derivado de habilitación y pertenencia reales; no incluye el ID interno de membership ni un catálogo anticipado de roles."
+    Session:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "user"
+        - "operableEstablishments"
+        - "expiresAt"
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        operableEstablishments:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/OperableEstablishment"
+          description: "Lista sin establecimientos duplicados; puede estar vacía. Una persona puede operar varios. Es información para la UI, no autorización reutilizable."
+        expiresAt:
+          type: "string"
+          description: "Vencimiento absoluto de la sesión: 12 horas desde login; consultar sesión no lo renueva."
+          format: "date-time"
+      description: "Representación pública de sesión. Su credencial opaca viaja exclusivamente en cookie HttpOnly; no hay JWT ni refresh token."
+    CsrfToken:
+      type: "string"
+      description: "Token opaco de protección CSRF, no credencial de autenticación. Copiar al header X-CSRF-Token; no URL, logs ni almacenamiento persistente del frontend."
+      minLength: 1
+    SessionResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "session"
+        - "csrfToken"
+      properties:
+        session:
+          oneOf:
+            -
+              $ref: "#/components/schemas/Session"
+            -
+              type: "null"
+          description: "null para visitante, cookie ausente, sesión inválida o vencida. No crea una sesión autenticada."
+        csrfToken:
+          $ref: "#/components/schemas/CsrfToken"
+    LoginResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "session"
+        - "csrfToken"
+      properties:
+        session:
+          $ref: "#/components/schemas/Session"
+        csrfToken:
+          $ref: "#/components/schemas/CsrfToken"
+    LotDescription:
+      type: "string"
+      description: "Contenido del pack indivisible; no hay título adicional. No puede ser solo espacios."
+      minLength: 1
+      maxLength: 2000
+      pattern: "\\S"
+    Category:
+      type: "string"
+      description: "Texto no vacío, representación provisional heredada de K003. No hay catálogo acordado: BLOCKING DECISION solo para fijar un enum/catálogo futuro; no inventar categorías obligatorias."
+      minLength: 1
+      pattern: "\\S"
+    Quantity:
+      type: "integer"
+      minimum: 1
+      description: "Cantidad declarada de packs indivisibles, no stock disponible. Sin máximo funcional de 2 ni de 100 packs."
+    Conditions:
+      type:
+        - "string"
+        - "null"
+      description: "Condiciones particulares para el retiro, por ejemplo traer una bolsa. null significa que no se indican condiciones particulares. Decisión explícita de S02; no sustituye contenido, dirección ni ventana."
+    Address:
+      type: "string"
+      description: "Dirección del retiro, no solo espacios. Instantánea del lote."
+      minLength: 1
+      pattern: "\\S"
+    Latitude:
+      type: "number"
+      minimum: -90
+      maximum: 90
+      description: "Latitud WGS84 en grados."
+    Longitude:
+      type: "number"
+      minimum: -180
+      maximum: 180
+      description: "Longitud WGS84 en grados."
+    TimeZone:
+      type: "string"
+      description: "Identificador IANA válido, por ejemplo America/Santiago. Se valida en aplicación; no se sustituye por un offset fijo."
+      minLength: 1
+    Instant:
+      type: "string"
+      description: "Instante RFC 3339 con Z u offset explícito; respuestas en UTC (Z). No aceptar hora local sin offset."
+      format: "date-time"
+    Version:
+      type: "integer"
+      minimum: 1
+      description: "Versión optimista administrada por servidor. Nace en 1 y aumenta en 1 con cada PATCH aceptado y publicación. En comandos significa versión esperada."
+    CreateLotDraftRequest:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "description"
+        - "category"
+        - "quantity"
+        - "address"
+        - "latitude"
+        - "longitude"
+        - "timeZone"
+        - "pickupStartsAt"
+        - "pickupEndsAt"
+      properties:
+        description:
+          $ref: "#/components/schemas/LotDescription"
+        category:
+          $ref: "#/components/schemas/Category"
+        quantity:
+          $ref: "#/components/schemas/Quantity"
+        conditions:
+          $ref: "#/components/schemas/Conditions"
+        address:
+          $ref: "#/components/schemas/Address"
+        latitude:
+          $ref: "#/components/schemas/Latitude"
+        longitude:
+          $ref: "#/components/schemas/Longitude"
+        timeZone:
+          $ref: "#/components/schemas/TimeZone"
+        pickupStartsAt:
+          $ref: "#/components/schemas/Instant"
+        pickupEndsAt:
+          $ref: "#/components/schemas/Instant"
+      description: "Borrador completo en sus campos mínimos. conditions omitido equivale a null. El servidor asigna establecimiento desde la ruta y comprueba permiso. No admite id, propietario, status, version ni timestamps del servidor. Ventana: fin posterior a inicio. Fotos opcionales fuera de este contrato de escritura."
+    UpdateLotDraftRequest:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "version"
+      properties:
+        version:
+          $ref: "#/components/schemas/Version"
+        description:
+          $ref: "#/components/schemas/LotDescription"
+        category:
+          $ref: "#/components/schemas/Category"
+        quantity:
+          $ref: "#/components/schemas/Quantity"
+        conditions:
+          $ref: "#/components/schemas/Conditions"
+        address:
+          $ref: "#/components/schemas/Address"
+        latitude:
+          $ref: "#/components/schemas/Latitude"
+        longitude:
+          $ref: "#/components/schemas/Longitude"
+        timeZone:
+          $ref: "#/components/schemas/TimeZone"
+        pickupStartsAt:
+          $ref: "#/components/schemas/Instant"
+        pickupEndsAt:
+          $ref: "#/components/schemas/Instant"
+      minProperties: 2
+      description: "PATCH parcial sobre un borrador completo: versión esperada y al menos un campo editable. Omitido conserva el valor; solo conditions admite null para borrar la indicación. Revalidar el conjunto resultante, incluida la ventana. No permite reasignar establecimiento ni modificar un publicado."
+    PublishLotDraftRequest:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "version"
+      properties:
+        version:
+          $ref: "#/components/schemas/Version"
+      description: "Solo versión esperada del borrador que el operador revisó. No admite contenido nuevo, estado ni publishedAt."
+    LotResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "id"
+        - "establishmentId"
+        - "description"
+        - "category"
+        - "quantity"
+        - "conditions"
+        - "address"
+        - "latitude"
+        - "longitude"
+        - "timeZone"
+        - "pickupStartsAt"
+        - "pickupEndsAt"
+        - "status"
+        - "version"
+        - "createdAt"
+        - "publishedAt"
+      properties:
+        id:
+          $ref: "#/components/schemas/PublicId"
+        establishmentId:
+          $ref: "#/components/schemas/PublicId"
+        description:
+          $ref: "#/components/schemas/LotDescription"
+        category:
+          $ref: "#/components/schemas/Category"
+        quantity:
+          $ref: "#/components/schemas/Quantity"
+        conditions:
+          $ref: "#/components/schemas/Conditions"
+        address:
+          $ref: "#/components/schemas/Address"
+        latitude:
+          $ref: "#/components/schemas/Latitude"
+        longitude:
+          $ref: "#/components/schemas/Longitude"
+        timeZone:
+          $ref: "#/components/schemas/TimeZone"
+        pickupStartsAt:
+          $ref: "#/components/schemas/Instant"
+        pickupEndsAt:
+          $ref: "#/components/schemas/Instant"
+        status:
+          type: "string"
+          enum:
+            - "draft"
+            - "published"
+        version:
+          $ref: "#/components/schemas/Version"
+        createdAt:
+          $ref: "#/components/schemas/Instant"
+        publishedAt:
+          type:
+            - "string"
+            - "null"
+          format: "date-time"
+          description: "null en draft; instante asignado por servidor al publicar."
+      description: "Representación para operador autorizado en S02. No incluye reservas, contadores futuros, claves de objetos, fotos sin validar ni columnas internas. Sin updatedAt inventado. Las fotos son opcionales y su transporte se acordará con K014."
+      allOf:
+        -
+          if:
+            properties:
+              status:
+                const: "draft"
+          then:
+            properties:
+              publishedAt:
+                type: "null"
+          else:
+            properties:
+              publishedAt:
+                type: "string"
+                format: "date-time"
+    ValidationIssue:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "path"
+        - "message"
+      properties:
+        path:
+          type: "string"
+          description: "JSON Pointer al campo de entrada; no contiene su valor."
+          examples:
+            - "/quantity"
+        message:
+          type: "string"
+          description: "Descripción segura del problema."
+          minLength: 1
+    ErrorDetails:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "issues"
+      properties:
+        issues:
+          type: "array"
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+      description: "Detalle opcional para validación. Nunca incluye entradas sensibles, secretos ni diagnósticos internos."
+    ErrorResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "error"
+      properties:
+        error:
+          type: "object"
+          additionalProperties: false
+          required:
+            - "code"
+            - "message"
+          properties:
+            code:
+              type: "string"
+              enum:
+                - "MALFORMED_REQUEST"
+                - "UNAUTHENTICATED"
+                - "FORBIDDEN"
+                - "NOT_FOUND"
+                - "CONFLICT"
+                - "PAYLOAD_TOO_LARGE"
+                - "UNSUPPORTED_MEDIA_TYPE"
+                - "VALIDATION_ERROR"
+                - "RATE_LIMITED"
+                - "INTERNAL_ERROR"
+                - "SERVICE_UNAVAILABLE"
+              description: "Código estable para frontend, asociado al estado HTTP documentado."
+            message:
+              type: "string"
+              description: "Mensaje humano seguro; no usarlo como identificador de error."
+              minLength: 1
+            details:
+              $ref: "#/components/schemas/ErrorDetails"

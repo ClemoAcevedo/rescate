@@ -27,6 +27,11 @@ Para ejecutar web/API directamente en el host se necesita:
 
 ### Web
 
+La [guía del frontend](web/README.md) reúne estructura, rutas y checks.
+El [design system compartido](web/src/components/ui/README.md) aporta tokens y
+primitives reutilizables; esta base visual no implementa autenticación ni
+publicación de lotes.
+
 ```bash
 cd web
 npm ci
@@ -86,6 +91,9 @@ modo, una recarga directa, por ejemplo en `/lotes/demo`, puede responder 404.
 
 ### API
 
+La [guía del backend](docs/backend.md) permite encontrar arquitectura, contrato,
+persistencia, operación y evidencia histórica.
+
 ```bash
 cd api
 npm ci
@@ -111,15 +119,14 @@ Una ejecución correcta responde:
 
 ### Publicación de lotes (K010)
 
-La API expone el borrador y la publicación de lotes en `/lots`, con versión
+La API expone el borrador y la publicación de lotes según OpenAPI, con versión
 optimista, inmutabilidad tras publicar y autorización por establecimiento.
 
 ```text
-POST   /lots                  crear borrador
-GET    /lots?establishmentId= listar los lotes del establecimiento
-GET    /lots/:id              consultar un lote
-PATCH  /lots/:id              editar un borrador
-POST   /lots/:id/publication  publicar
+POST   /establishments/:establishmentId/lots  crear borrador
+GET    /lots/:lotId                          consultar un lote
+PATCH  /lots/:lotId                          editar parcialmente
+POST   /lots/:lotId/publish                  publicar
 ```
 
 Todas requieren una sesión válida. K008 aún no está integrada, así que responden
@@ -223,6 +230,11 @@ K003
 
 ## Estado actual
 
-El proyecto se encuentra en su etapa inicial de implementación.
+En `development` `cb5ca3b`, la web tiene navegación, pantallas de demostración y
+comprobación de salud. La API expone `/health` y las cuatro operaciones K010 de lotes; el worker está inactivo.
+K002/K003 aportan migraciones y modelo; K005 es un prototipo aislado de fotos.
+OpenAPI S02 rige lotes implementados e identidad pendiente de K008.
 
-La estructura inicial contiene la aplicación web y la API sobre las cuales se desarrollarán las funcionalidades del sistema durante las siguientes semanas.
+La base de `development` incluye el design system compartido. K010 implementa
+publicación en backend; auth real y pantallas integradas siguen pendientes. El
+[índice documental](docs/README.md) separa referencias vigentes de evidencia histórica.
