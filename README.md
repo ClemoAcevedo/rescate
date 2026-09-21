@@ -100,6 +100,9 @@ npm ci
 npm run dev
 ```
 
+La API necesita `DATABASE_URL` y un esquema ya migrado. Copia `api/.env.example`
+a `api/.env` y aplica las migraciones con `npm run db:migrate` antes de iniciarla.
+
 La API incluye un endpoint básico de salud:
 
 ```text
@@ -113,6 +116,24 @@ Una ejecución correcta responde:
   "status": "ok"
 }
 ```
+
+### Publicación de lotes (K010)
+
+La API expone el borrador y la publicación de lotes según OpenAPI, con versión
+optimista, inmutabilidad tras publicar y autorización por establecimiento.
+
+```text
+POST   /establishments/:establishmentId/lots  crear borrador
+GET    /lots/:lotId                          consultar un lote
+PATCH  /lots/:lotId                          editar parcialmente
+POST   /lots/:lotId/publish                  publicar
+```
+
+Todas requieren una sesión válida. K008 aún no está integrada, así que responden
+`401` salvo que se habilite el actor de desarrollo descrito en `api/.env.example`.
+
+El contrato, las decisiones y las pruebas están en
+[docs/k010-publicacion-lotes.md](docs/k010-publicacion-lotes.md).
 
 ## Documentación
 
@@ -210,10 +231,10 @@ K003
 ## Estado actual
 
 En `development` `cb5ca3b`, la web tiene navegación, pantallas de demostración y
-comprobación de salud. La API solo expone `/health`; el worker está inactivo.
+comprobación de salud. La API expone `/health` y las cuatro operaciones K010 de lotes; el worker está inactivo.
 K002/K003 aportan migraciones y modelo; K005 es un prototipo aislado de fotos.
-OpenAPI S02 define el contrato de operaciones aún no implementadas.
+OpenAPI S02 rige lotes implementados e identidad pendiente de K008.
 
-Esta rama añade el design system compartido del frontend; todavía no está
-integrado en `development`. No implementa auth ni publicación de lotes. El
+La base de `development` incluye el design system compartido. K010 implementa
+publicación en backend; auth real y pantallas integradas siguen pendientes. El
 [índice documental](docs/README.md) separa referencias vigentes de evidencia histórica.

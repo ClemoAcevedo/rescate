@@ -1,11 +1,11 @@
 # Entorno local y CI
 
-Guía vigente para `development` `cb5ca3b` (2026-09-21). La infraestructura K006
-levanta web, `/health`, PostgreSQL/PostGIS y un worker inactivo. K002/K003 ya
-aportan migraciones y modelo; K005 es una CLI de fotos aislada. No hay auth,
-publicación ni reservas implementadas. Ver [backend](backend.md) y
-[frontend](../web/README.md); el design system es trabajo de esta rama, aún no
-integrado en `development`. La [evidencia K006](verificacion-k006.md) es histórica.
+Guía vigente para K010 sobre `development` `e4e0460` (2026-09-21).
+Compose levanta web, API, PostgreSQL/PostGIS y un worker inactivo. La API añade
+[operaciones de lotes](k010-publicacion-lotes.md); requiere migraciones aplicadas.
+K008 (sesiones, origen y CSRF) y reservas siguen pendientes. K005 es una CLI aislada.
+Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
+[K006](verificacion-k006.md).
 
 ## Inicio desde un clon
 
@@ -87,8 +87,8 @@ La web debe responder HTML y ambas rutas de salud deben responder
 mostrar la base configurada y la versión de PostGIS.
 
 `db`, `api` y `web` tienen healthchecks; web espera a que API esté saludable.
-`/health` verifica únicamente el proceso HTTP, no la base. API y worker todavía
-no consultan PostgreSQL y no tienen una dependencia de inicio artificial con él.
+`/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable. El worker
+no consulta PostgreSQL. Compose no aplica migraciones automáticamente.
 El worker debe figurar `running` y registrar `Worker K006 iniciado`.
 Permanece inactivo con un temporizador de 24 horas sin tareas, polling ni logs
 periódicos, y termina limpiamente con SIGTERM/SIGINT. No tiene healthcheck de
@@ -151,10 +151,10 @@ npm --prefix api run build
 
 - `web`: instalación con lockfile, TypeScript, lint y build en pasos separados.
   Actualmente no existen tests web; no se oculta esa ausencia con `--if-present`.
-- `api`: instalación con lockfile, validación OpenAPI, TypeScript, test HTTP de salud y build de
+- `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud/lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones y concurrencia K010, verifica worker y siempre recoge logs y limpia.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay

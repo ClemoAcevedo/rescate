@@ -1,9 +1,11 @@
-# Migraciones PostgreSQL — K002/K003
+# Migraciones PostgreSQL — K002/K003/K010
 
 Gestor: node-pg-migrate 9.0.0; controlador: pg 8.23.0.
 La [decisión y comparación](adr/0001-gestor-de-migraciones.md) explica las alternativas.
 K002 creó `public.migration_tool_test`, que se conserva sin modificaciones.
 K003 añade las cinco entidades del [modelo inicial](modelo-inicial.md).
+K010 añade identidad pública/versión de lotes y una migración posterior de IDs
+públicos de establecimientos; ver [K010](k010-publicacion-lotes.md).
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003
@@ -25,14 +27,14 @@ Requiere Docker Compose y acceso desde el host al puerto loopback de K006.
 Para una base vacía dedicada ya provisionada, exporta `DATABASE_URL` en el entorno y ejecuta
 `npm run db:test`. Su nombre debe empezar por `rescate_k003_test_`.
 La suite comprueba tablas/PK/FK, datos válidos e inválidos, historial, segunda
-ejecución, down exclusivamente de K003 y reaplicación desde la versión K002.
+ejecución, down de las dos migraciones K010 y de K003, y reaplicación desde K002.
 Rechaza bases con relaciones existentes y carpetas con migraciones no revisadas.
 No ejecutar primero `db:migrate` sobre esa base de prueba: debe empezar vacía.
 
 El job Compose existente ejecuta la misma suite en CI. No hay migración automática
 al arrancar la API. Para migrar una base normal siguen vigentes `db:migrate` y
-`db:rollback`; este último ahora elimina las tablas y datos de K003 si es la última
-migración. No usarlo en una base con datos que deban conservarse.
+`db:rollback`; este último revierte una migración: actualmente retira el ID
+público de establecimientos. Retroceder hasta K003 elimina sus tablas y datos. No usarlo en una base con datos que deban conservarse.
 Ver [resultados K003](k003-evidencia.md). La sección de aceptación K002 de abajo
 describe la versión histórica del script, reemplazada por esta prueba integrada.
 

@@ -52,6 +52,8 @@ jobs:
         run: npm run api:contract:check
       - name: TypeScript
         run: npm run typecheck
+      - name: Generated HTTP types
+        run: npm run api:types:check
       - name: Tests
         run: npm test
       - name: Build
@@ -85,6 +87,8 @@ jobs:
         run: npm --prefix api ci
       - name: K003 migrations on empty PostgreSQL and rollback
         run: npm --prefix api run db:test:compose
+      - name: K010 lots on empty PostgreSQL
+        run: npm --prefix api run db:test:lots:compose
       - name: Worker
         run: |
           test "$(docker inspect --format '{{.State.Running}}' "$(docker compose ps -q worker)")" = true

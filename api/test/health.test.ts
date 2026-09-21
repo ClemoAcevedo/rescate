@@ -2,10 +2,10 @@ import assert from "node:assert/strict"
 import { once } from "node:events"
 import type { AddressInfo } from "node:net"
 import test from "node:test"
-import { app } from "../src/app.js"
+import { createApp } from "../src/app.js"
 
 test("GET /health responde 200 con el estado de la API", async () => {
-  const server = app.listen(0, "127.0.0.1")
+  const server = createApp().listen(0, "127.0.0.1")
   try {
     await once(server, "listening")
     const { port } = server.address() as AddressInfo

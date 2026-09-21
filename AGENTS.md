@@ -5,8 +5,10 @@
 Antes de implementar backend, revisar la [arquitectura](docs/arquitectura/arquitectura.md),
 [ADR 0003](docs/adr/0003-arquitectura-incremental-s02.md), el
 [modelo inicial](docs/modelo-inicial.md) y los ADR aplicables.
-Separar siempre estado implementado de objetivo. El backend actual solo expone
-`/health`; el worker está inactivo y K005 es un prototipo aislado.
+Separar siempre estado implementado de objetivo. El backend expone `/health` y
+las cuatro operaciones de lotes K010 bajo OpenAPI. K008 (sesiones, origen y CSRF)
+sigue pendiente; sin actor temporal de desarrollo las operaciones requieren una
+autenticación aún no integrada. El worker está inactivo y K005 es un prototipo aislado.
 
 Aplicar estas reglas al código nuevo de S02 de manera incremental. Crear archivos
 y carpetas cuando tengan una responsabilidad real. No mover código existente solo
@@ -37,9 +39,8 @@ Actualizar esta descripción cuando cambie la implementación.
 ## Contratos, persistencia y decisiones
 
 [OpenAPI S02](docs/api/openapi.yaml) es la fuente de verdad HTTP versionada;
-[su guía](docs/api/README.md) documenta decisiones y validación. Aún no hay handlers
-de negocio ni generación de tipos. Derivar de él los tipos HTTP al integrar
-consumidores; no mantener catálogos manuales paralelos. [K004](docs/contrato-api.md)
+[su guía](docs/api/README.md) documenta decisiones y validación. K010 incorpora
+handlers y tipos HTTP generados (`npm --prefix api run api:types`); no mantener catálogos manuales paralelos. [K004](docs/contrato-api.md)
 y los tipos existentes quedan como antecedentes.
 OpenAPI no define el esquema SQL ni sustituye las reglas de Domain/documentación.
 

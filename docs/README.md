@@ -1,8 +1,7 @@
 # Documentación
 
-Referencia del estado integrado: `development` `cb5ca3b`, comprobado el 2026-09-21.
-La integración visual descrita abajo pertenece a `feat/frontend-design-system`;
-todavía no está incorporada a `development`.
+Base integrada: `origin/development` `e4e0460`, comprobada el 2026-09-21.
+Incluye el design system; esta rama añade K010, aún pendiente de commit/revisión.
 
 ## Empezar por área
 
@@ -20,12 +19,14 @@ todavía no está incorporada a `development`.
   responsabilidades, dependencias, transacciones y evidencia esperada; el objetivo
   no equivale a funcionalidades implementadas.
 - [Guía del contrato HTTP](api/README.md) y [OpenAPI S02](api/openapi.yaml):
-  autoridad HTTP para K008–K011; todavía sin handlers de negocio.
+  autoridad HTTP para K008–K011; K010 implementa lotes, K008 sigue pendiente.
 - [Modelo inicial K003](modelo-inicial.md): persistencia integrada y diferencias
   con el contrato posterior. [Migraciones](migraciones.md): operación actual K003
   y aceptación histórica K002 separadas.
 - [Fotos K005](k005-fotos.md): guía del prototipo aislado. La investigación de
   proveedores y los resultados allí fechados son históricos, no una nueva evaluación.
+
+- [Publicación de lotes K010](k010-publicacion-lotes.md): implementación y límites de integración.
 
 ## Decisiones (ADR)
 
@@ -44,6 +45,7 @@ actual. El contexto de los ADR también corresponde a la fecha de cada decisión
 - [Evidencia K002](migraciones.md#evidencia-de-esta-implementación-2026-09-20).
 - [Evidencia K003](k003-evidencia.md).
 - [Evidencia K005](k005-evidencia.md).
+- [Evidencia K010](k010-evidencia.md).
 - [Evidencia K006](verificacion-k006.md).
 - [Propuesta de contrato K004](contrato-api.md): conservada como antecedente;
   sustituida como autoridad HTTP por OpenAPI S02.

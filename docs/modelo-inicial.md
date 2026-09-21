@@ -21,6 +21,12 @@ esquema, migración, pruebas ni alcance de K003. La representación de solicitud
 posteriores sobre el mismo lote y su compatibilidad con una reserva confirmada
 activa permanecen registradas allí como riesgo futuro del modelo.
 
+**Estado posterior K010:** este documento conserva el modelo inicial K003.
+Las migraciones aditivas K010 incorporan `lots.public_id`, `version`, `updated_at`
+y `establishments.public_id`. El [documento K010](k010-publicacion-lotes.md)
+describe publicación, inmutabilidad, autorización y PATCH parcial implementados;
+K008 sigue pendiente. No se reinterpretan las restricciones históricas de K003.
+
 ## Fuentes y clasificación
 
 - **A: requisito E1/anexos.** [Informe E1](entregas/e1/informe-e1.pdf),

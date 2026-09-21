@@ -16,7 +16,11 @@
     "db:create": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js create --migration-file-language sql",
     "db:rollback": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down 1",
     "db:test": "node --env-file-if-exists=.env scripts/test-migrations.mjs",
-    "db:test:compose": "node scripts/test-migrations-compose.mjs"
+    "db:test:compose": "node scripts/test-migrations-compose.mjs",
+    "db:test:lots": "npm run build && node --env-file-if-exists=.env scripts/test-lots.mjs",
+    "db:test:lots:compose": "node scripts/test-lots-compose.mjs",
+    "api:types": "node scripts/generate-http-types.mjs",
+    "api:types:check": "node scripts/generate-http-types.mjs --check"
   },
   "keywords": [],
   "author": "",
@@ -32,9 +36,14 @@
     "@redocly/cli": "2.53.3",
     "@types/express": "^5.0.6",
     "@types/node": "^26.5.1",
+    "@types/pg": "^8.23.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "json-schema-to-typescript": "16.0.0",
     "node-pg-migrate": "9.0.0",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "yaml": "2.9.1"
   },
   "engines": {
     "node": ">=22.13.0"

@@ -1,29 +1,29 @@
 # Backend: punto de entrada
 
-Referencia vigente: `development` `cb5ca3b`, comprobado contra `origin/development`
-el 2026-09-21. Este índice orienta la lectura; los documentos especializados
+Referencia de integración: K010 sobre `origin/development` `e4e0460`, 2026-09-21. Este índice orienta la lectura; los documentos especializados
 mantienen las decisiones y procedimientos completos.
 
 ## Estado implementado
 
-[app.ts](../api/src/app.ts) expone únicamente `GET /health`;
-[index.ts](../api/src/index.ts) inicia Express. La salud no consulta PostgreSQL
-ni B2. El [worker](../api/src/worker.ts) permanece inactivo. K002/K003 aportan
-migraciones y modelo; [fotos K005](k005-fotos.md) es una CLI aislada.
-No hay auth, publicación, reservas ni casos de uso de negocio implementados.
+[app.ts](../api/src/app.ts) conserva `GET /health` y monta las cuatro operaciones
+[de lotes K010](k010-publicacion-lotes.md). [Composition](../api/src/composition.ts)
+ensambla Pool, repositorio, casos de uso y HTTP. La salud no consulta PostgreSQL
+ni B2. K008 (sesión, origen y CSRF) permanece pendiente; el actor temporal requiere
+habilitación explícita y no funciona en producción. No hay reservas.
+El [worker](../api/src/worker.ts) sigue inactivo y [K005](k005-fotos.md) es una CLI aislada.
 
 ## Documentación vigente por tarea
 
 | Para… | Leer |
 | --- | --- |
 | Entender estado actual y arquitectura objetivo | [Arquitectura](arquitectura/arquitectura.md) y [ADR 0003](adr/0003-arquitectura-incremental-s02.md) |
-| Implementar o consumir contratos HTTP S02 | [Guía HTTP](api/README.md) y [OpenAPI](api/openapi.yaml); las operaciones están definidas, todavía no implementadas |
+| Implementar o consumir contratos HTTP S02 | [Guía HTTP](api/README.md) y [OpenAPI](api/openapi.yaml); lotes implementados; identidad y seguridad real pendientes de K008 |
 | Levantar el entorno y ejecutar checks | [Entorno local y CI](desarrollo-local.md) |
 | Consultar persistencia y operar migraciones | [Modelo K003](modelo-inicial.md), [guía de migraciones](migraciones.md) y [ADR 0001](adr/0001-gestor-de-migraciones.md) |
 | Interpretar FIFO y ofertas parciales | [ADR 0002](adr/0002-ofertas-parciales.md), decisión vigente sin implementación del flujo |
 | Repetir el prototipo local/B2 | [Guía K005](k005-fotos.md); no es un endpoint ni pipeline de imágenes |
 
-Antes de K008/K010, revisar arquitectura, ADR aplicables, modelo y contrato.
+Antes de ampliar backend, revisar arquitectura, ADR aplicables, modelo y contrato.
 OpenAPI determina HTTP; el modelo/SQL determina persistencia. La UI no cambia
 ninguna de esas autoridades. Consultar [AGENTS.md](../AGENTS.md) para las reglas
 de desarrollo y [frontend](../web/README.md) para el otro lado del contrato.

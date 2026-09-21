@@ -3,9 +3,11 @@
 [openapi.yaml](openapi.yaml) es la **fuente de verdad HTTP** para K008–K011:
 OpenAPI **3.1.0**, versión inicial del contrato **0.1.0**, un solo archivo.
 Se prepara después de [ADR 0003](../adr/0003-arquitectura-incremental-s02.md) y
-antes de implementar esas tarjetas. Express sigue exponiendo únicamente
-[`GET /health`](../../api/src/app.ts); esta operación técnica existente no se
-incorpora al contrato de negocio S02. No hay handlers nuevos ni integración a DB.
+antes de implementar esas tarjetas. K010 ahora implementa las cuatro operaciones
+de lotes con PostgreSQL, además de [`GET /health`](../../api/src/app.ts).
+K008 (sesión, Origin y CSRF) sigue pendiente; el actor temporal solo sirve para
+desarrollo. El YAML se conserva sin cambios respecto de development; sus notas
+iniciales describen el contexto de adopción, no el avance actual.
 
 OpenAPI define transporte, seguridad, requests, responses y errores. Las
 [migraciones](../../api/migrations) definen persistencia; Domain y la documentación
@@ -53,10 +55,15 @@ el check más `git diff --check`. No cambiar silenciosamente una regla de produc
 No dividir el YAML sin necesidad. El job API del [CI](../../.github/workflows/ci.yml)
 ejecuta el mismo check después de `npm ci`; un error impide pasar ese job.
 
-**Fase actual:** validez estructural y de ejemplos, no conformidad del servidor.
-**Fase posterior:** cada handler real deberá probar requests/responses, autorización,
-CSRF y errores contra OpenAPI. Un schema válido no prueba SQL, permisos, ventanas,
-normalización de correo, cookies del navegador ni atomicidad.
+**Validación actual K010:** Redocly comprueba estructura y ejemplos; los tests HTTP
+validan además status, `Cache-Control` y cuerpos reales con Ajv 2020-12 contra los
+schemas del YAML, incluidas respuestas de error y el condicional de publicación.
+`npm run api:types` deriva DTO mediante json-schema-to-typescript; `api:types:check`
+detecta desincronización en CI. YAML, generador y Ajv son dependencias de desarrollo,
+no middleware ni un framework de runtime. Los tipos no validan entradas por sí solos.
+Las pruebas PostgreSQL verifican autorización, versión, rollback y concurrencia.
+K008/K012 deben probar sesión, Origin/CSRF, cookies y recorrido completo de navegador;
+no se afirma conformidad de seguridad todavía.
 
 ## Operaciones, seguridad y trazabilidad
 
@@ -254,8 +261,8 @@ acordarlo, sin inventar opciones ni impedir avanzar con texto. El ejemplo
 “Panadería” ilustra texto, no establece un catálogo.
 
 `PublicId` es string opaco sin UUID ni patrón de prefijo; la generación/migración
-concreta corresponde a K008/K010 antes de exponer recursos. La falta de esa decisión
-interna no bloquea el transporte opaco. El contrato no permite usar las PK bigint
+concreta es UUID persistido para lotes/establecimientos en K010; usuarios
+corresponden a K008. El cliente sigue tratando esos valores como opacos. El contrato no permite usar las PK bigint
 como string público. Tampoco elige granularidad de roles ni un flujo de administración:
 la lista solo representa establecimientos que ya se pueden operar.
 
@@ -265,25 +272,29 @@ Los dos catálogos TypeScript de web siguen siendo **antecedentes sin consumidor
 de negocio**, no tipos derivados ni fuentes de verdad. Se marcan como históricos;
 no se actualizan a mano para copiar el YAML. K009/K011 deberán introducir generación
 desde OpenAPI y reemplazar/consolidar esos archivos al conectar consumidores. La
-herramienta de generación queda pendiente; no se exporta un cliente ficticio.
+integración de tipos web queda pendiente; API ya genera sus DTO desde el YAML.
+No se exporta un cliente ficticio.
 Los tipos internos de Application/Domain seguirán siendo propios y no modelos SQL.
 
 Para E2 se preparará una fila por operationId con enlaces reales a:
 **OpenAPI → HTTP handler → Application use case → Domain/port/Infrastructure → test**.
-Hoy solo existe el primer eslabón para estas ocho operaciones. K008/K010 deberán
-aportar evidencia de autorización por objeto, transacciones y mapeo de errores,
-además de pruebas contra el contrato. K009/K011 demostrarán formulario, selección
+K010 aporta esos eslabones para las cuatro operaciones de lotes, con evidencia
+de autorización, transacciones, errores y respuestas contra el contrato. Las cuatro
+operaciones de identidad y su protección siguen pendientes de K008. K009/K011 demostrarán formulario, selección
 de establecimiento, cookie/CSRF y conflicto visible. Escenarios necesarios:
 registro sin login/membresía, sesión vencida, acceso ajeno, CSRF/origen inválidos,
 dos ediciones con misma versión, edición contra publicación y publicación sin fotos.
 
 Nada de esto acredita todavía el Walking Skeleton ni toda E2: E1 incluye además
-búsqueda/reserva/fotos. Se posponen handlers, credenciales reales, persistencia de
-sesiones, IDs públicos, versión persistida, generación de tipos, migraciones,
-K014, descubrimiento, reserva, FIFO/ofertas, cancelación/retiro, chat, incidencias,
+búsqueda/reserva/fotos. Se posponen handlers de identidad, credenciales reales,
+persistencia de sesiones y protección CSRF/origen, K014, descubrimiento, reserva,
+FIFO/ofertas, cancelación/retiro, chat, incidencias,
 worker y estadísticas. ADR 0001 y ADR 0002 se conservan sin modificaciones.
 
-## Verificación de esta revisión (2026-09-21)
+## Verificación histórica de adopción del contrato (2026-09-21)
+
+Registro previo a K010; ver [evidencia K010](../k010-evidencia.md) para la
+reconciliación y pruebas nuevas. No describe el estado actual de implementación.
 
 | Comprobación ejecutada | Resultado observado |
 | --- | --- |

@@ -8,6 +8,8 @@ assert.ok(process.env.DATABASE_URL, 'Configura DATABASE_URL para una base de pru
 const migrations = [
   '1789915246470_migration-tool-test',
   '1789932753813_initial-rescate-model',
+  '1789999138556_lots-publication-fields',
+  '1790000000000_establishment-public-ids',
 ]
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
   'Revisar explícitamente la prueba antes de incluir nuevas migraciones y su rollback')
@@ -177,7 +179,7 @@ try {
   ok(`PostgreSQL ${server.version}; base ${server.database}: vacía (0 relaciones de usuario)`)
   run('up')
   assert.deepEqual((await history()).map(row => row.name), migrations)
-  ok('desde cero: K002 + K003 registradas una vez')
+  ok('desde cero: K002, K003 y K010 registradas una vez')
   await client.query('INSERT INTO public.migration_tool_test(id) VALUES (1)')
   await verifyModel()
   const applied = await history()
@@ -191,6 +193,17 @@ try {
   ok('segunda ejecución: 0 pendientes; historial, OID de tablas y datos intactos')
 
   assert.deepEqual((await history()).map(row => row.name), migrations)
+  run('down', '1')
+  assert.deepEqual(await history(), applied.slice(0, 3))
+  assert.deepEqual(await query("SELECT column_name FROM information_schema.columns WHERE table_name='establishments' AND column_name='public_id'"), [])
+  ok('rollback de IDs públicos: conserva tablas, datos e historial previo')
+
+  // K010 se revierte primero: su rollback no toca las cinco tablas de K003.
+  run('down', '1')
+  assert.deepEqual(await history(), applied.slice(0, 2))
+  assert.deepEqual((await snapshot()).map(row => row.relname), [...tables, 'migration_tool_test', 'pgmigrations'].sort())
+  ok('rollback de K010: columnas propias retiradas; las cinco tablas de K003 permanecen')
+
   run('down', '1')
   assert.deepEqual(await history(), [applied[0]])
   assert.deepEqual((await snapshot()).map(row => row.relname), ['migration_tool_test', 'pgmigrations'])
