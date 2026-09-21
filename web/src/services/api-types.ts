@@ -1,3 +1,8 @@
+/**
+ * Antecedente K004, no contrato vigente ni tipos generados.
+ * Fuente HTTP: docs/api/openapi.yaml. Sustituir al integrar K009/K011;
+ * no mantener este catálogo manual en paralelo con OpenAPI.
+ */
 export interface Identity {
   id: string
   email: string

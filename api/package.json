@@ -9,6 +9,7 @@
     "photos": "node --env-file-if-exists=.env dist/prototypes/photos/cli.js",
     "test:photos": "npm run build && node --test test/photos.test.mjs",
     "typecheck": "tsc --noEmit",
+    "api:contract:check": "REDOCLY_TELEMETRY=off redocly lint ../docs/api/openapi.yaml --config ../docs/api/redocly.yaml --lint-config error",
     "test": "node --import tsx --test test/*.test.ts",
     "worker": "tsx src/worker.ts",
     "db:migrate": "node --env-file-if-exists=.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up",
@@ -28,6 +29,7 @@
     "pg": "8.23.0"
   },
   "devDependencies": {
+    "@redocly/cli": "2.53.3",
     "@types/express": "^5.0.6",
     "@types/node": "^26.5.1",
     "node-pg-migrate": "9.0.0",
