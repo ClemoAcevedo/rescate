@@ -1,7 +1,7 @@
 # Documentación
 
-Base integrada: `origin/development` `e4e0460`, comprobada el 2026-09-21.
-Incluye el design system; esta rama añade K010, aún pendiente de commit/revisión.
+Base integrada: `origin/development` `409d6fa`, comprobada el 2026-09-21.
+Incluye K010 y el design system; esta rama añade la documentación K013.
 
 ## Empezar por área
 
@@ -21,8 +21,10 @@ Incluye el design system; esta rama añade K010, aún pendiente de commit/revisi
 - [Guía del contrato HTTP](api/README.md) y [OpenAPI S02](api/openapi.yaml):
   autoridad HTTP para K008–K011; K010 implementa lotes, K008 sigue pendiente.
 - [Modelo inicial K003](modelo-inicial.md): persistencia integrada y diferencias
-  con el contrato posterior. [Migraciones](migraciones.md): operación actual K003
-  y aceptación histórica K002 separadas.
+  con el contrato posterior; incluye el modelo conceptual y estados E2 de K013.
+  [Casos de uso de dominio](casos-de-uso.md) y [trazabilidad/pendientes K013](k013-trazabilidad.md)
+  cubren el objetivo E2 sin declarar integración futura. [Migraciones](migraciones.md):
+  operación actual K003 y aceptación histórica K002 separadas.
 - [Fotos K005](k005-fotos.md): guía del prototipo aislado. La investigación de
   proveedores y los resultados allí fechados son históricos, no una nueva evaluación.
 
