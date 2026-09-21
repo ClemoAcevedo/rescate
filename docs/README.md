@@ -1,7 +1,9 @@
 # Documentación
 
-Estado del árbol de trabajo al 2026-09-21: K008 integrado con K010 y design system.
-Estos cambios siguen sin commit; no se acredita una nueva ejecución de CI remoto.
+Estado de integración: K008 (`23549d6`) con K010 y el design system, más la
+documentación conceptual K013 de `origin/development` (`91172ea`).
+La integración está pendiente de merge commit; no se acredita una nueva ejecución
+de CI remoto ni un despliegue.
 
 ## Empezar por área
 
@@ -21,8 +23,10 @@ Estos cambios siguen sin commit; no se acredita una nueva ejecución de CI remot
 - [Guía del contrato HTTP](api/README.md) y [OpenAPI S02](api/openapi.yaml):
   autoridad HTTP para K008–K011; K010 implementa lotes y K008 identidad/seguridad.
 - [Modelo inicial K003](modelo-inicial.md): persistencia integrada y diferencias
-  con el contrato posterior. [Migraciones](migraciones.md): operación actual K003
-  y aceptación histórica K002 separadas.
+  con el contrato posterior; incluye el modelo conceptual y estados E2 de K013.
+  [Casos de uso de dominio](casos-de-uso.md) y [trazabilidad/pendientes K013](k013-trazabilidad.md)
+  cubren el objetivo E2 sin declarar integración futura. [Migraciones](migraciones.md):
+  operación actual K003 y aceptación histórica K002 separadas.
 - [Fotos K005](k005-fotos.md): guía del prototipo aislado. La investigación de
   proveedores y los resultados allí fechados son históricos, no una nueva evaluación.
 
