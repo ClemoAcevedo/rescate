@@ -71,3 +71,33 @@ API_PROXY_TARGET=http://localhost:3000 npm run dev
 
 Abre `https://localhost:5173` tras confiar explícitamente en el certificado. No
 usar HTTP para acreditar sesión real: el navegador descartará las cookies Secure.
+
+### Prueba de errores al cerrar sesión
+
+Con las dependencias de `api/` y Chromium instalados, inicia Vite sin
+`VITE_AUTH_MOCK_SCENARIO` y ejecuta desde la raíz:
+
+```bash
+WEB_URL=http://localhost:5173 npm --prefix api run test:web:logout
+```
+
+Esta prueba intercepta HTTP en Chromium: no requiere API ni PostgreSQL y no crea
+cuentas. Comprueba errores de red y 403, mensajes distintos y visibles, conservación
+de sesión, ausencia de reintento automático y de promesas rechazadas sin manejar.
+Después reintenta y verifica que la sesión se conserva hasta recibir el 204.
+
+Para reproducir manualmente el fallo de red, inicia Vite con
+`VITE_AUTH_MOCK_SCENARIO=logout-failure npm --prefix web run dev`, accede con un
+correo válido y una contraseña de al menos 12 caracteres, y pulsa **Cerrar sesión**.
+Debe aparecer el aviso de conexión y mantenerse la sesión. Este escenario siempre
+falla; para probar recuperación usa el test anterior.
+
+El recorrido contra API real sigue requiriendo PostgreSQL migrado, API y Vite HTTPS,
+sin mocks. Con la configuración HTTPS anterior:
+
+```bash
+WEB_URL=https://localhost:5173 npm --prefix api run test:web:auth
+```
+
+Crea una cuenta de prueba y verifica registro sin sesión automática, credenciales
+incorrectas, login, recarga, rechazo CSRF y logout.

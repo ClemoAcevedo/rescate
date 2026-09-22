@@ -87,3 +87,19 @@ HTTPS, API y una base de prueba ya iniciados, y se ejecuta con
 `WEB_URL=https://localhost:5174 npm --prefix api run test:web:auth`. Chromium se
 ejecuta con certificado local aceptado solo para esta prueba. No acredita CI remoto
 ni despliegue de producción.
+
+## Corrección del aviso de logout (2026-09-22)
+
+La revisión posterior reprodujo un fallo: logout conservaba la sesión y guardaba
+el error, pero la vista ocultaba el aviso al volver al estado authenticated.
+Además, el rechazo de la promesa quedaba sin manejar. Se muestra ahora el error
+global también con sesión activa y el provider gestiona el fallo sin relanzarlo.
+El botón de comprobar sesión se reserva para fallos de consulta; el cierre se
+reintenta mediante **Cerrar sesión**.
+
+Nueva evidencia ejecutada: lint y build de web (incluye TypeScript),
+`git diff --check` y `test:web:logout` en Chromium con HTTP interceptado.
+Los dos escenarios, red y 403, comprobaron avisos distintos, sesión conservada,
+reintento manual, espera del 204 y ausencia de errores de página.
+Esta ejecución no repite el recorrido con API/PostgreSQL reales de las secciones
+anteriores. Instrucciones en [web/README](../web/README.md#prueba-de-errores-al-cerrar-sesión).
