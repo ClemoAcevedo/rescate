@@ -90,6 +90,14 @@ code, kbd, samp { font-family: var(--font-mono); }
   color: var(--text-success);
 }
 
+.session-status {
+  align-self: center;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  overflow-wrap: anywhere;
+}
+.session-status--error { color: var(--text-danger); }
+
 .page-content {
   display: grid;
   place-items: center;
@@ -127,6 +135,9 @@ code, kbd, samp { font-family: var(--font-mono); }
 
 .connection-actions { margin-top: var(--sp-6); }
 .connection-result { margin-top: var(--sp-5); }
+.auth-form { display: grid; gap: var(--sp-5); margin-top: var(--sp-6); }
+.form-result { margin-top: var(--sp-5); }
+.auth-switch { margin-top: var(--sp-6); color: var(--text-muted); }
 
 /* Breakpoint de navegación existente. Las variables CSS no sirven en media queries. */
 @media (max-width: 48rem) {
@@ -152,6 +163,7 @@ code, kbd, samp { font-family: var(--font-mono); }
 
   .main-navigation--open { display: flex; }
   .main-navigation__link { padding: var(--sp-3); }
+  .session-status { padding: var(--sp-2) var(--sp-3); }
   .page-content { min-height: auto; padding-top: var(--sp-5); }
 }
 
