@@ -149,7 +149,15 @@ code, kbd, samp { font-family: var(--font-mono); }
 
 .connection-actions { margin-top: var(--sp-5); }
 .connection-result { margin-top: var(--sp-4); }
-.auth-form { display: grid; gap: var(--sp-4); margin-top: var(--sp-5); }
+.auth-card {
+  max-width: var(--field-max);
+  padding: var(--sp-5);
+}
+
+.auth-card .eyebrow { margin-bottom: var(--sp-2); }
+.auth-card h1 { font-size: var(--fs-display-md); }
+.auth-card > p:not(.eyebrow) { margin-top: var(--sp-3); }
+.auth-form { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
 .form-result { margin-top: var(--sp-4); }
 .auth-switch { margin-top: var(--sp-5); color: var(--text-muted); }
 
