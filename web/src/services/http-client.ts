@@ -88,6 +88,7 @@ export async function request<T = unknown>({
   try {
     response = await fetch(buildUrl(path), {
       method,
+      credentials: 'include',
       headers: {
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...headers,
