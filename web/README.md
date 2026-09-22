@@ -27,11 +27,42 @@ No hay suite de tests web ni herramienta de galería instalada.
 ## Estado de las rutas
 
 `/` redirige a `/lotes`. `/lotes` y `/lotes/:id` son demostraciones estáticas;
-`/registro` y `/login` anuncian formularios futuros. `/conexion` consulta únicamente
+`/registro` y `/login` integran K008. `/conexion` consulta únicamente
 `/health`; las rutas desconocidas muestran la pantalla 404. Recargas directas
 requieren fallback SPA del servidor en producción.
 
-La base visual está implementada; autenticación y publicación siguen pendientes.
-K009/K011 deben reutilizar UI y derivar sus tipos desde [OpenAPI S02](../docs/api/README.md),
+La base visual y K009 están implementadas; la publicación K011 sigue pendiente.
+K011 debe reutilizar UI y derivar sus tipos desde [OpenAPI S02](../docs/api/README.md),
 sin convertir demos externas en reglas de negocio. La selección del material y
 la evidencia local están en [integración del design system](../docs/frontend-design-system.md).
+
+## Identidad K008 (K009)
+
+La web consulta `GET /auth/session` al cargar, conserva el `csrfToken` solo en
+memoria y envía `X-CSRF-Token` en los comandos. `fetch` usa `credentials: include`:
+la cookie opaca no se lee ni se guarda en la aplicación. Registro no inicia sesión;
+login actualiza la sesión y rota CSRF; logout mantiene el estado si el servidor no
+confirma el cierre. Errores de credenciales, validación, red, permisos y respuestas
+inesperadas se presentan por separado.
+
+El modo controlado se habilita únicamente en desarrollo con
+`VITE_AUTH_MOCK_SCENARIO` (`success`, `validation`, `credentials`, `network`,
+`forbidden` o `logout-failure`) y opcionalmente `VITE_AUTH_MOCK_DELAY_MS`. Nunca
+se activa como reserva cuando falla la API real y Vite no expone estas variables en
+una compilación de producción.
+
+K008 requiere cookies `Secure` y un `Origin` HTTPS exacto. La API no expone CORS
+para consumo cruzado: usa la misma origin mediante el proxy `/api` de Vite o del
+servidor de producción. Para desarrollo HTTPS, genera un certificado efímero como
+indica [K008](../docs/k008-identidad.md), inicia la API con
+`RESCATE_ALLOWED_ORIGINS=https://localhost:5173`, y ejecuta:
+
+```bash
+cd web
+DEV_TLS_CERT_FILE=/tmp/rescate-local-tls/cert.pem \
+DEV_TLS_KEY_FILE=/tmp/rescate-local-tls/key.pem \
+API_PROXY_TARGET=http://localhost:3000 npm run dev
+```
+
+Abre `https://localhost:5173` tras confiar explícitamente en el certificado. No
+usar HTTP para acreditar sesión real: el navegador descartará las cookies Secure.
