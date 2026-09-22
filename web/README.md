@@ -51,6 +51,9 @@ El modo controlado se habilita únicamente en desarrollo con
 se activa como reserva cuando falla la API real y Vite no expone estas variables en
 una compilación de producción.
 
+Si no existe `web/.env`, la web usa igualmente `/api` como base predeterminada.
+Así la consulta inicial llega al proxy de Vite y no al fallback HTML de la SPA.
+
 K008 requiere cookies `Secure` y un `Origin` HTTPS exacto. La API no expone CORS
 para consumo cruzado: usa la misma origin mediante el proxy `/api` de Vite o del
 servidor de producción. Para desarrollo HTTPS, genera un certificado efímero como

@@ -4,6 +4,16 @@ Fecha de implementación: 2026-09-22. K008 y [OpenAPI](api/openapi.yaml) son la
 fuente de verdad: `GET /auth/session` entrega estado y CSRF; registro no inicia
 sesión; login rota sesión/CSRF y logout debe confirmar `204` antes de limpiar estado.
 
+## Corrección posterior: bootstrap de sesión
+
+El 2026-09-22 se confirmó que, sin `web/.env`, el cliente construía
+`GET /auth/session` en vez de `GET /api/auth/session`. Vite devolvía entonces el
+HTML del fallback SPA con estado 200 y el parser de `SessionResponse` lo rechazaba.
+No era una sesión ausente: K008 representa esa condición como JSON con
+`session: null` y `csrfToken`. El cliente ahora usa `/api` como valor base por
+defecto y comprueba `Content-Type: application/json` para respuestas parseadas.
+El aviso de fallo de sesión se mueve fuera de la navegación y permite reintentar.
+
 ## Implementado
 
 - Formularios accesibles de registro y acceso en `/registro` y `/login`, con
