@@ -38,16 +38,52 @@ web y `RESCATE_ALLOWED_ORIGINS=https://localhost:5173`. Se habilita HTTPS local
 con `DEV_TLS_CERT_FILE` y `DEV_TLS_KEY_FILE`, documentado en [web/README](../web/README.md).
 No se usa CORS con credenciales ni se lee la cookie HttpOnly.
 
-## Evidencia de esta ejecución
+## Diagnóstico e integración real (2026-09-22)
 
-| Criterio | Estado | Evidencia |
+Al inicio no había listeners en 3000, 5173 ni 5432, `.env` estaba ausente y Docker
+no estaba instalado. Por eso el Vite HTTP de 5173 no podía reenviar `/auth/session`
+a `127.0.0.1:3000` y mostraba `ECONNREFUSED`. Es una dependencia de entorno, no una
+sesión ausente. Además, sin una base explícita el cliente pedía `/auth/session`, que
+Vite resolvía mediante el fallback SPA (HTML 200); el cambio de base predeterminada
+a `/api` evita esa respuesta falsa.
+
+Para aislar la comprobación se levantaron PostgreSQL 16.10 temporal en el puerto
+55432, una API con migraciones en 3001 y Vite HTTPS en 5174. La origin exacta
+permitida fue `https://localhost:5174`; Vite reenvió `/api` a la API HTTP local.
+No se usó una base de desarrollo, ni se mostraron contraseñas, cookies o tokens.
+
+| Solicitud del navegador (URL efectiva) | Estado y Content-Type | Estructura comprobada |
 | --- | --- | --- |
-| Tipos, lint y build web | Cumplido | `npm run typecheck`, `npm run lint`, `npm run build` aprobados el 2026-09-22. |
-| Flujos controlados y carga | Implementado; verificación manual pendiente | El escenario se selecciona por `VITE_AUTH_MOCK_SCENARIO` y demora configurable. Vite inició en `127.0.0.1:4177`; no había Chromium/Playwright instalado para automatizar la inspección. |
-| Registro, login, recarga, logout con K008 real | Pendiente | No había API local en `localhost:3000` y Docker no está instalado en este entorno. |
-| Error de red y permiso con API real | Pendiente | Requiere API HTTPS, base migrada y cuenta de prueba autorizada. |
-| Recorridos visuales a 360 y 1366 px | Pendiente | No se declara acreditado: el entorno no disponía de navegador automatizable. |
+| `GET https://localhost:5174/api/auth/session` sin sesión | 200, `application/json` | `session`, `csrfToken`; `session: null` |
+| `GET https://localhost:5174/api/health` | 200, `application/json` | `status` |
+| `POST https://localhost:5174/api/auth/register` | 201, `application/json` | `user`; la recarga posterior mantuvo `session: null` |
+| `POST https://localhost:5174/api/auth/login` con clave incorrecta | 401, `application/json` | `error.code: UNAUTHENTICATED` |
+| `POST https://localhost:5174/api/auth/login` válida | 200, `application/json` | `session`, `csrfToken` |
+| `POST https://localhost:5174/api/auth/register` con CSRF inválido | 403, `application/json` | `error.code: FORBIDDEN` |
+| `POST https://localhost:5174/api/auth/logout` | 204, sin cuerpo | Sin JSON; la UI solo limpió estado tras esa confirmación |
 
-La falta de API/navegador no se sustituye por la simulación. Antes de aceptar K009,
-seguir los recorridos de integración y viewport indicados en la tarjeta con datos
-de prueba autorizados.
+Esto coincide con OpenAPI: visitante no es error (200 con `session: null`),
+credenciales incorrectas son 401 `UNAUTHENTICATED`, y CSRF/origin/permisos son 403
+`FORBIDDEN`. El flujo funcional K008 adicional comprobó con PostgreSQL real que una
+membresía ausente o retirada devuelve 403 al operar/consultar un lote y que una
+dependencia caída devuelve 503 `SERVICE_UNAVAILABLE`; K009 no tiene aún una pantalla
+de lotes que emita esa solicitud.
+
+## Verificación de K009
+
+| Criterio | Resultado | Evidencia |
+| --- | --- | --- |
+| Base, proxy y bootstrap CSRF | Cumplido | `http-client.ts` usa `/api` por defecto; la prueba real comprobó sesión anónima JSON, cookie HttpOnly/Secure y CSRF en memoria. |
+| Registro sin sesión automática | Cumplido | Playwright: 201, mensaje de éxito y recarga con `session: null`. |
+| Login, recarga y logout reales | Cumplido | Playwright: 200, sesión recuperada tras recargar y logout 204 antes de limpiar UI. |
+| Credenciales, CSRF/permisos, red y servidor | Cumplido según ámbito | 401 y 403 reales; `db:test:auth` comprobó membership 403 y 503. Escenarios controlados de validación, credenciales, rechazo y red comprobaron los mensajes y tonos de la UI. |
+| Feedback semántico | Cumplido | Un error global de registro (409/403/red incluido) siempre usa `Alert` danger con `role=alert`; el éxito usa `role=status`. |
+| Layout 360×800 y 1366×768 | Cumplido | Chromium a 100 % verificó `scrollWidth <= innerWidth`, scroll normal y foco de correo, contraseña, envío y enlace. Capturas temporales revisadas en ambos viewports. No hubo acceso al tamaño real de la ventana de la persona. |
+| Checks | Cumplido | Web: typecheck, lint y build. API: typecheck, tests, build, OpenAPI y DTO; `test:web:auth` y `db:test:auth` con PostgreSQL temporal. |
+
+La prueba reproducible de UI real es
+[`api/scripts/test-web-auth.mjs`](../api/scripts/test-web-auth.mjs): requiere Vite
+HTTPS, API y una base de prueba ya iniciados, y se ejecuta con
+`WEB_URL=https://localhost:5174 npm --prefix api run test:web:auth`. Chromium se
+ejecuta con certificado local aceptado solo para esta prueba. No acredita CI remoto
+ni despliegue de producción.

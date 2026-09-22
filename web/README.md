@@ -9,7 +9,9 @@ Desde `web/`: `npm ci`, `npm run dev`. Para conectar la comprobación técnica c
 la API local, configurar `VITE_API_BASE_URL=/api`; el proxy usa
 `API_PROXY_TARGET` o `http://localhost:3000`. Ver [entorno local](../docs/desarrollo-local.md).
 Checks: `npm run typecheck`, `npm run lint`, `npm run build`.
-No hay suite de tests web ni herramienta de galería instalada.
+No hay suite ni dependencias de tests dentro de `web/`: la comprobación end-to-end
+de autenticación usa el Playwright ya instalado en `api/`, contra servicios reales
+que la persona inicia explícitamente (`npm --prefix api run test:web:auth`).
 
 ## Mapa del código
 

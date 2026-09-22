@@ -25,7 +25,8 @@
     "api:types": "node scripts/generate-http-types.mjs",
     "api:types:check": "node scripts/generate-http-types.mjs --check",
     "db:test:auth": "npm run build && node --import tsx --env-file-if-exists=.env scripts/test-auth.mjs",
-    "db:test:auth:compose": "node scripts/test-auth-compose.mjs"
+    "db:test:auth:compose": "node scripts/test-auth-compose.mjs",
+    "test:web:auth": "node scripts/test-web-auth.mjs"
   },
   "keywords": [],
   "author": "",
