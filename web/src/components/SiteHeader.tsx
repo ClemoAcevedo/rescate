@@ -2,17 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Button } from './ui/Button'
 import { RescateLogo } from './RescateLogo'
-
-const navigationItems = [
-  { to: '/lotes', label: 'Explorar lotes' },
-  { to: '/registro', label: 'Registro' },
-  { to: '/login', label: 'Iniciar sesión' },
-]
+import { useAuth } from '../auth/AuthProvider'
 
 export function SiteHeader() {
   const menuButton = useRef<HTMLButtonElement>(null)
   const navigation = useRef<HTMLElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { status, session, error, logout } = useAuth()
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -33,6 +29,9 @@ export function SiteHeader() {
   }, [isMenuOpen])
 
   const closeMenu = () => setIsMenuOpen(false)
+  const navigationItems = session
+    ? [{ to: '/lotes', label: 'Explorar lotes' }]
+    : [{ to: '/lotes', label: 'Explorar lotes' }, { to: '/registro', label: 'Registro' }, { to: '/login', label: 'Iniciar sesión' }]
 
   return (
     <header className="site-header">
@@ -75,6 +74,10 @@ export function SiteHeader() {
             {label}
           </NavLink>
         ))}
+        {status === 'checking' && <span className="session-status" aria-live="polite">Comprobando sesión…</span>}
+        {session && <span className="session-status">Sesión: {session.user.email}</span>}
+        {session && <Button variant="ghost" loading={status === 'signing-out'} onClick={() => { void logout() }}>Cerrar sesión</Button>}
+        {error && <span className="session-status session-status--error" role="status">{error}</span>}
       </nav>
     </header>
   )
