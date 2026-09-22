@@ -8,13 +8,13 @@ export function AppLayout() {
   return (
     <div className="app-shell">
       <SiteHeader />
-      {status === 'error' && error && (
+      {error && (
         <div className="session-notice" role="region" aria-label="Estado de la sesión">
           <Alert tone="danger" role="alert">
             <p>{error}</p>
-            <button className="session-notice__retry" type="button" onClick={() => { void refreshSession() }}>
+            {status === 'error' && <button className="session-notice__retry" type="button" onClick={() => { void refreshSession() }}>
               Reintentar comprobación
-            </button>
+            </button>}
           </Alert>
         </div>
       )}

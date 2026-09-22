@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (requestError) {
       if (requestGeneration !== generation.current) return
       setError(messageFor(requestError, 'logout')); setStatus(session ? 'authenticated' : 'anonymous')
-      throw requestError
+      // El aviso global presenta el fallo; el botón permite volver a cerrar sesión.
     }
   }
 
