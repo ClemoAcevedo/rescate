@@ -96,19 +96,33 @@ code, kbd, samp { font-family: var(--font-mono); }
   font-size: var(--fs-meta);
   overflow-wrap: anywhere;
 }
-.session-status--error { color: var(--text-danger); }
+.session-notice {
+  width: min(calc(100% - 2 * var(--layout-gutter)), var(--layout-max));
+  margin: var(--sp-4) auto 0;
+}
+.session-notice p { margin: 0; }
+.session-notice__retry {
+  min-height: var(--control-h);
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: var(--border-width) solid currentColor;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
 
 .page-content {
   display: grid;
-  place-items: center;
-  min-height: calc(100vh - var(--header-h));
-  padding: var(--sp-8) var(--layout-gutter) var(--sp-16);
+  place-items: start center;
+  min-height: 0;
+  padding: var(--sp-6) var(--layout-gutter) var(--sp-10);
   overflow-wrap: anywhere;
 }
 
 .content-card {
   width: min(100%, var(--content-max));
-  padding: clamp(var(--sp-6), 7vw, var(--sp-20));
+  padding: clamp(var(--sp-5), 4vw, var(--sp-10));
 }
 
 .eyebrow {
@@ -133,11 +147,11 @@ code, kbd, samp { font-family: var(--font-mono); }
   font-weight: var(--fw-bold);
 }
 
-.connection-actions { margin-top: var(--sp-6); }
-.connection-result { margin-top: var(--sp-5); }
-.auth-form { display: grid; gap: var(--sp-5); margin-top: var(--sp-6); }
-.form-result { margin-top: var(--sp-5); }
-.auth-switch { margin-top: var(--sp-6); color: var(--text-muted); }
+.connection-actions { margin-top: var(--sp-5); }
+.connection-result { margin-top: var(--sp-4); }
+.auth-form { display: grid; gap: var(--sp-4); margin-top: var(--sp-5); }
+.form-result { margin-top: var(--sp-4); }
+.auth-switch { margin-top: var(--sp-5); color: var(--text-muted); }
 
 /* Breakpoint de navegación existente. Las variables CSS no sirven en media queries. */
 @media (max-width: 48rem) {
@@ -164,7 +178,7 @@ code, kbd, samp { font-family: var(--font-mono); }
   .main-navigation--open { display: flex; }
   .main-navigation__link { padding: var(--sp-3); }
   .session-status { padding: var(--sp-2) var(--sp-3); }
-  .page-content { min-height: auto; padding-top: var(--sp-5); }
+  .page-content { padding-top: var(--sp-5); }
 }
 
 @media (prefers-reduced-motion: reduce) {

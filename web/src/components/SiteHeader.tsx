@@ -8,7 +8,7 @@ export function SiteHeader() {
   const menuButton = useRef<HTMLButtonElement>(null)
   const navigation = useRef<HTMLElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const { status, session, error, logout } = useAuth()
+  const { status, session, logout } = useAuth()
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -77,7 +77,6 @@ export function SiteHeader() {
         {status === 'checking' && <span className="session-status" aria-live="polite">Comprobando sesión…</span>}
         {session && <span className="session-status">Sesión: {session.user.email}</span>}
         {session && <Button variant="ghost" loading={status === 'signing-out'} onClick={() => { void logout() }}>Cerrar sesión</Button>}
-        {error && <span className="session-status session-status--error" role="status">{error}</span>}
       </nav>
     </header>
   )
