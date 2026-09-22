@@ -27,11 +27,17 @@ export class ConnectionError extends Error {
 export class UnexpectedResponseError extends Error {
   readonly kind = 'unexpected-response'
   readonly body: unknown
+  readonly url: string
+  readonly status: number
+  readonly contentType: string | null
 
-  constructor(message: string, body: unknown) {
+  constructor(message: string, body: unknown, response?: Response) {
     super(message)
     this.name = 'UnexpectedResponseError'
     this.body = body
+    this.url = response?.url ?? ''
+    this.status = response?.status ?? 0
+    this.contentType = response?.headers.get('content-type') ?? null
   }
 }
 
@@ -48,11 +54,9 @@ export interface HttpRequest<T> {
 }
 
 function buildUrl(path: string): string {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
-
-  if (!baseUrl) {
-    return path
-  }
+  // El proxy documentado vive bajo /api. Evita que, sin .env local, una ruta de
+  // API caiga en el fallback HTML de Vite y se interprete como respuesta JSON.
+  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '/api'
 
   return `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
 }
@@ -88,6 +92,7 @@ export async function request<T = unknown>({
   try {
     response = await fetch(buildUrl(path), {
       method,
+      credentials: 'include',
       headers: {
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...headers,
@@ -104,7 +109,7 @@ export async function request<T = unknown>({
   try {
     responseBody = await readResponseBody(response)
   } catch (error) {
-    throw new UnexpectedResponseError('No fue posible leer la respuesta de la API.', error)
+    throw new UnexpectedResponseError('No fue posible leer la respuesta de la API.', error, response)
   }
 
   if (!response.ok) {
@@ -115,10 +120,14 @@ export async function request<T = unknown>({
     return undefined
   }
 
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new UnexpectedResponseError('La API respondió contenido no JSON donde el contrato exige JSON.', responseBody, response)
+  }
+
   try {
     return parse(responseBody)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'La respuesta no tiene el formato esperado.'
-    throw new UnexpectedResponseError(message, responseBody)
+    throw new UnexpectedResponseError(message, responseBody, response)
   }
 }
