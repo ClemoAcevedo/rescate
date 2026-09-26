@@ -143,6 +143,13 @@ El contrato, las decisiones y las pruebas están en
 
 ## Documentación
 
+### Datos y pruebas integradas K012
+
+`npm --prefix api run db:seed:demo` carga usuarios, establecimientos y lotes
+ficticios en la base local configurada. `npm --prefix api run db:test:auth:compose`
+comprueba la carga, autenticación, publicación y aislamiento desde una base vacía.
+Configuración, cuentas y renovación de fechas en [la guía K012](docs/k012-pruebas-integradas.md).
+
 ### Migraciones PostgreSQL (K002)
 
 Usamos `node-pg-migrate` con SQL en `api/migrations/` y mantenemos `pg`.

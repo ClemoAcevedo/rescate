@@ -17,6 +17,8 @@ import { createLoginSecurityRepository } from '../dist/infrastructure/postgres/l
 import { createSessionCredentials } from '../dist/infrastructure/crypto/session-credentials.js'
 import { createPasswordHasher, createDummyCredential } from '../dist/infrastructure/crypto/passwords.js'
 import { assertContract } from '../test/support/openapi.ts'
+import { seedDemoData } from './seed-demo.mjs'
+import { demoAccounts, establishments, lots, DEMO_PASSWORD, createLotInput } from '../fixtures/demo-data.mjs'
 
 const connectionString = process.env.DATABASE_URL
 assert.ok(connectionString, 'Se requiere base dedicada')
@@ -72,12 +74,66 @@ function client() {
     },
   }
 }
+async function snapshot() {
+  const result = {}
+  for (const table of ['users', 'user_credentials', 'establishments', 'memberships', 'lots', 'sessions']) {
+    result[table] = (await db.query(`SELECT row_to_json(t) data FROM ${table} t ORDER BY row_to_json(t)::text`)).rows
+  }
+  return result
+}
 try {
   await db.connect()
   assert.match((await db.query('SELECT current_database() AS name')).rows[0].name, /^rescate_k008_test_[a-z0-9_]+$/)
   const tables = await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")
   assert.equal(tables.rowCount, 0, 'Solo una base nueva y vacía')
   execFileSync(process.execPath, ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', 'up'], { stdio: 'inherit' })
+  for (const url of ['postgresql://example.test/rescate', 'postgresql://localhost/postgres',
+    'postgresql://localhost/rescate?host=example.test', 'https://localhost/rescate']) {
+    await assert.rejects(seedDemoData(url))
+  }
+  const nodeEnvironment = process.env.NODE_ENV
+  try {
+    process.env.NODE_ENV = 'production'
+    await assert.rejects(seedDemoData(connectionString), /solo local/)
+  } finally {
+    if (nodeEnvironment === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = nodeEnvironment
+  }
+  const empty = await snapshot()
+  await db.query(`CREATE FUNCTION reject_seed_credential() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'Fallo de prueba semilla'; END $$;
+    CREATE TRIGGER reject_seed_credential BEFORE INSERT ON user_credentials
+    FOR EACH ROW EXECUTE FUNCTION reject_seed_credential()`)
+  await assert.rejects(seedDemoData(connectionString), /Fallo de prueba semilla/)
+  assert.deepEqual(await snapshot(), empty)
+  await db.query('DROP TRIGGER reject_seed_credential ON user_credentials; DROP FUNCTION reject_seed_credential()')
+  assert.deepEqual(await seedDemoData(connectionString), { accountsCreated: true, lotsCreated: 4, lotsRefreshed: 0 })
+  const seeded = await snapshot()
+  for (const [table, count] of Object.entries({ users: 3, user_credentials: 3, establishments: 2, memberships: 2, lots: 4, sessions: 0 })) {
+    assert.equal(seeded[table].length, count)
+  }
+  assert.equal(new Set(seeded.user_credentials.map(row => row.data.password_salt)).size, 3)
+  for (const fixture of lots) {
+    const row = (await db.query(`SELECT l.*, e.public_id establishment_public_id FROM lots l
+      JOIN establishments e ON e.id=l.establishment_id WHERE l.public_id=$1`, [fixture.id])).rows[0]
+    assert.equal(row.establishment_public_id, fixture.establishmentId)
+    assert.equal(row.status, fixture.status)
+    assert.equal(row.version, fixture.status === 'draft' ? 1 : 2)
+    assert.equal(row.published_at === null, fixture.status === 'draft')
+    assert.ok(row.pickup_ends_at > new Date(Date.now() + 6 * 86400000))
+  }
+  assert.deepEqual(await seedDemoData(connectionString), { accountsCreated: false, lotsCreated: 0, lotsRefreshed: 0 })
+  assert.deepEqual(await snapshot(), seeded)
+  await db.query('UPDATE lots SET quantity=7,version=version+1 WHERE public_id=$1', [lots[0].id])
+  await db.query('DELETE FROM lots WHERE public_id=$1', [lots[1].id])
+  const edited = await snapshot()
+  assert.deepEqual(await seedDemoData(connectionString), { accountsCreated: false, lotsCreated: 1, lotsRefreshed: 0 })
+  const restored = await snapshot()
+  assert.deepEqual(restored.users, edited.users)
+  assert.deepEqual(restored.user_credentials, edited.user_credentials)
+  assert.deepEqual(restored.lots.filter(row => row.data.public_id !== lots[1].id), edited.lots)
+  ok('K012: semilla desde base vacía, rollback, IDs/credenciales reales y repetición sin sobrescribir ediciones')
+
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath,
     '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' })
   cert = await readFile(certPath)
@@ -100,7 +156,8 @@ try {
   assert.equal(registered.status, 201); assert.equal(registered.body.user.email, 'ana@example.com')
   assert.match(registered.body.user.id, /^[0-9a-f-]{36}$/)
   assert.equal(ana.jar.has(secretName), false)
-  assert.equal((await db.query('SELECT * FROM memberships')).rowCount, 0)
+  assert.equal((await db.query(`SELECT m.* FROM memberships m JOIN users u ON u.id=m.user_id
+    WHERE u.public_id=$1`, [registered.body.user.id])).rowCount, 0)
   assert.equal((await db.query('SELECT * FROM sessions')).rowCount, 0)
   assert.equal((await ana.call('POST', '/auth/register', { email: 'ANA@example.com', password })).status, 409)
   ok('bootstrap, origen/CSRF, DTO y registro canónico sin sesión ni membership; respuestas OpenAPI')
@@ -237,6 +294,77 @@ try {
   assert.equal(logoutStatus, 204); assert.equal((await context.cookies()).length, 0)
   await context.close()
   ok('Chromium HTTPS real: navegador conserva/envía cookies Secure+HttpOnly, sesión y logout sin cookie accesible a JS')
+  const actors = new Map()
+  for (const account of demoAccounts) {
+    const actor = client()
+    await actor.call('GET', '/auth/session')
+    const login = await actor.call('POST', '/auth/login', { email: account.email, password: DEMO_PASSWORD })
+    assert.equal(login.status, 200)
+    assert.equal(login.body.session.user.id, account.id)
+    assert.deepEqual(login.body.session.operableEstablishments, establishments
+      .filter(e => e.id === account.establishmentId).map(e => ({ id: e.id, name: e.name })))
+    actors.set(account.establishmentId, actor)
+  }
+  const beforeDenials = (await snapshot()).lots
+  for (const [establishmentId, actor] of actors) {
+    for (const establishment of establishments) {
+      const own = establishmentId === establishment.id
+      const foreignLot = lots.find(l => l.establishmentId === establishment.id && l.status === 'draft')
+      assert.equal((await actor.call('GET', `/lots/${foreignLot.id}`)).status, own ? 200 : 403)
+      if (own) continue
+      assert.equal((await actor.call('POST', `/establishments/${establishment.id}/lots`, createLotInput(establishment))).status, 403)
+      assert.equal((await actor.call('PATCH', `/lots/${foreignLot.id}`, { version: 1, quantity: 99 })).status, 403)
+      assert.equal((await actor.call('POST', `/lots/${foreignLot.id}/publish`, { version: 1 })).status, 403)
+    }
+  }
+  assert.deepEqual((await snapshot()).lots, beforeDenials)
+  for (const establishment of establishments) {
+    const actor = actors.get(establishment.id)
+    const created = await actor.call('POST', `/establishments/${establishment.id}/lots`, createLotInput(establishment))
+    assert.equal(created.status, 201)
+    const published = await actor.call('POST', `/lots/${created.body.id}/publish`, { version: created.body.version })
+    assert.equal(published.status, 200)
+    assert.equal(published.body.status, 'published')
+    const stored = (await db.query('SELECT status,version FROM lots WHERE public_id=$1', [created.body.id])).rows[0]
+    assert.deepEqual(stored, { status: 'published', version: 2 })
+  }
+  ok('K012: login de tres cuentas, publicación por ambos operadores y aislamiento bidireccional/visitante')
+
+  const operator = demoAccounts.find(account => account.establishmentId)
+  const operatorLot = lots.find(lot => lot.establishmentId === operator.establishmentId)
+  const membership = (await db.query(`DELETE FROM memberships
+    WHERE user_id=(SELECT id FROM users WHERE public_id=$1) RETURNING user_id,establishment_id`, [operator.id])).rows[0]
+  assert.equal((await actors.get(operator.establishmentId).call('GET', `/lots/${operatorLot.id}`)).status, 403)
+  const revoked = await snapshot()
+  await assert.rejects(seedDemoData(connectionString), /Permisos de la semilla modificados/)
+  assert.deepEqual(await snapshot(), revoked)
+  await db.query('INSERT INTO memberships(user_id,establishment_id) VALUES ($1,$2)', [membership.user_id, membership.establishment_id])
+  await db.query(`UPDATE lots SET pickup_starts_at=pickup_starts_at-interval '8 days',
+    pickup_ends_at=pickup_ends_at-interval '8 days' WHERE public_id=ANY($1::uuid[])`, [lots.map(l => l.id)])
+  const expired = await snapshot()
+  await seedDemoData(connectionString)
+  assert.deepEqual(await snapshot(), expired)
+  assert.deepEqual(await seedDemoData(connectionString, { refreshExpiredLots: true }),
+    { accountsCreated: false, lotsCreated: 0, lotsRefreshed: 4 })
+  const refreshed = await snapshot()
+  for (const table of Object.keys(expired).filter(table => table !== 'lots')) assert.deepEqual(refreshed[table], expired[table])
+  for (const { data: previous } of expired.lots) {
+    const current = refreshed.lots.find(row => row.data.public_id === previous.public_id).data
+    if (!lots.some(l => l.id === previous.public_id)) {
+      assert.deepEqual(current, previous)
+      continue
+    }
+    assert.equal(current.version, previous.version + 1)
+    assert.ok(new Date(current.pickup_ends_at) > new Date(Date.now() + 6 * 86400000))
+    assert.ok(new Date(current.pickup_starts_at) > new Date())
+    assert.deepEqual({ ...current, version: previous.version, updated_at: previous.updated_at,
+      pickup_starts_at: previous.pickup_starts_at, pickup_ends_at: previous.pickup_ends_at }, previous)
+  }
+  assert.deepEqual(await seedDemoData(connectionString, { refreshExpiredLots: true }),
+    { accountsCreated: false, lotsCreated: 0, lotsRefreshed: 0 })
+  assert.deepEqual(await snapshot(), refreshed)
+  ok('K012: permisos revocados se conservan; renovación explícita afecta solo fechas/versiones de fixtures vencidos')
+
   const databaseName = (await db.query('SELECT current_database() name')).rows[0].name
   // PostgreSQL exige ALTER ALLOW_CONNECTIONS desde otra base; no se modifican
   // tablas de postgres ni de desarrollo, solo se cierra la base dedicada validada.
@@ -254,7 +382,7 @@ try {
   }
   assert.equal((await independent.call('GET', '/auth/session')).body.session, null)
   ok('pérdida de conexiones y base indisponible: API sigue viva, responde 503 y se recupera sin reiniciar')
-  console.log(`PASS K008 funcional: ${count} grupos; respuestas del cliente HTTPS comprobadas contra OpenAPI.`)
+  console.log(`PASS identidad y publicación: ${count} grupos; respuestas del cliente HTTPS comprobadas contra OpenAPI.`)
 } finally {
   await browser?.close(); await stop(); await db.end(); await rm(dir, { recursive: true, force: true })
 }
