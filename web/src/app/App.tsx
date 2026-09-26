@@ -3,6 +3,7 @@ import { AppLayout } from '../components/AppLayout'
 import { ConnectionPage } from '../pages/ConnectionPage'
 import { LoginPage } from '../pages/LoginPage'
 import { LotDetailPage } from '../pages/LotDetailPage'
+import { LotEditorPage } from '../pages/LotEditorPage'
 import { LotsPage } from '../pages/LotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { RegisterPage } from '../pages/RegisterPage'
@@ -20,6 +21,8 @@ function App() {
         <Route index element={<RootRedirect />} />
         <Route path="lotes" element={<LotsPage />} />
         <Route path="lotes/:id" element={<LotDetailPage />} />
+        <Route path="operador/lotes/nuevo" element={<LotEditorPage />} />
+        <Route path="operador/lotes/:lotId" element={<LotEditorPage />} />
         <Route path="registro" element={<RegisterPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="conexion" element={<ConnectionPage />} />

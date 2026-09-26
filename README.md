@@ -242,5 +242,6 @@ K002/K003 aportan migraciones y modelo; K005 es un prototipo aislado de fotos.
 OpenAPI S02 rige las ocho operaciones implementadas de identidad y lotes.
 
 La base de `development` incluye el design system compartido. K010 implementa
-publicación en backend con autenticación K008; las pantallas integradas K009/K011 siguen pendientes. El
+publicación en backend con autenticación K008; K009 integra registro/sesión en la web y
+[K011](docs/k011-formulario-lotes.md) el formulario de borrador y publicación del operador. El
 [índice documental](docs/README.md) separa referencias vigentes de evidencia histórica.
