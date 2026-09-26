@@ -27,7 +27,8 @@
     "db:test:auth": "npm run build && node --import tsx --env-file-if-exists=.env scripts/test-auth.mjs",
     "db:test:auth:compose": "node scripts/test-auth-compose.mjs",
     "test:web:auth": "node scripts/test-web-auth.mjs",
-    "test:web:logout": "node scripts/test-web-logout.mjs"
+    "test:web:logout": "node scripts/test-web-logout.mjs",
+    "test:web:lots": "node --env-file-if-exists=.env scripts/test-web-lots.mjs"
   },
   "keywords": [],
   "author": "",

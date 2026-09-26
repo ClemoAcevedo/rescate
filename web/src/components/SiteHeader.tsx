@@ -29,8 +29,12 @@ export function SiteHeader() {
   }, [isMenuOpen])
 
   const closeMenu = () => setIsMenuOpen(false)
+  // El enlace orienta la navegación; la API vuelve a comprobar la membresía en cada operación.
+  const operatorItems = session && session.operableEstablishments.length > 0
+    ? [{ to: '/operador/lotes/nuevo', label: 'Publicar lote' }]
+    : []
   const navigationItems = session
-    ? [{ to: '/lotes', label: 'Explorar lotes' }]
+    ? [{ to: '/lotes', label: 'Explorar lotes' }, ...operatorItems]
     : [{ to: '/lotes', label: 'Explorar lotes' }, { to: '/registro', label: 'Registro' }, { to: '/login', label: 'Iniciar sesión' }]
 
   return (

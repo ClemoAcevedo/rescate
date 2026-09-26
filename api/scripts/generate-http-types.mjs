@@ -14,7 +14,14 @@ const output = await compile({
   bannerComment: '/* Generado desde docs/api/openapi.yaml. No editar; npm run api:types. */',
   style: { semi: false, singleQuote: false },
 })
-const target = new URL('../src/http/openapi.ts', import.meta.url)
-if (process.argv.includes('--check')) {
-  if (await readFile(target, 'utf8') !== output) throw new Error('Tipos HTTP desactualizados: ejecuta npm run api:types')
-} else await writeFile(target, output)
+// La web compila por separado (su propio build y Dockerfile), por eso recibe una copia idéntica.
+const targets = [
+  new URL('../src/http/openapi.ts', import.meta.url),
+  new URL('../../web/src/services/openapi.ts', import.meta.url),
+]
+for (const target of targets) {
+  if (process.argv.includes('--check')) {
+    const current = await readFile(target, 'utf8').catch(() => undefined)
+    if (current !== output) throw new Error(`Tipos HTTP desactualizados en ${target.pathname}: ejecuta npm run api:types`)
+  } else await writeFile(target, output)
+}

@@ -161,6 +161,45 @@ code, kbd, samp { font-family: var(--font-mono); }
 .form-result { margin-top: var(--sp-4); }
 .auth-switch { margin-top: var(--sp-5); color: var(--text-muted); }
 
+/* Formulario de lote del operador (K011). */
+.lot-card .eyebrow { margin-bottom: var(--sp-2); }
+.lot-card h1 { font-size: var(--fs-display-md); }
+.lot-card > p:not(.eyebrow) { margin-top: var(--sp-3); }
+.lot-card__title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.lot-form { display: grid; gap: var(--sp-5); margin-top: var(--sp-5); }
+.lot-form__group {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.lot-form__group legend {
+  margin-bottom: var(--sp-2);
+  padding: 0;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--fs-title-lg);
+  font-weight: var(--fw-bold);
+}
+.lot-form__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.lot-photos { display: grid; gap: var(--sp-2); padding: var(--sp-4); }
+.lot-photos__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.lot-photos h2 { font-size: var(--fs-title-lg); }
+.lot-photos p { margin: 0; color: var(--text-muted); }
+.lot-location { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.lot-location__status { flex: 1 1 16rem; margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
+.lot-location__status--error { color: var(--text-danger); }
+.lot-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.lot-actions__hint { margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
+.form-result p { margin: 0; }
+.form-result .lot-actions, .lot-result__action { margin-top: var(--sp-3); }
+.lot-summary { display: grid; gap: var(--sp-3); margin: var(--sp-5) 0; }
+.lot-summary__row { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: var(--sp-3); }
+.lot-summary dt { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.lot-summary dd { margin: 0; white-space: pre-line; }
+
 /* Breakpoint de navegación existente. Las variables CSS no sirven en media queries. */
 @media (max-width: 48rem) {
   .site-header {
@@ -187,6 +226,8 @@ code, kbd, samp { font-family: var(--font-mono); }
   .main-navigation__link { padding: var(--sp-3); }
   .session-status { padding: var(--sp-2) var(--sp-3); }
   .page-content { padding-top: var(--sp-5); }
+  .lot-form__row, .lot-summary__row { grid-template-columns: minmax(0, 1fr); }
+  .lot-summary__row { gap: var(--sp-1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
