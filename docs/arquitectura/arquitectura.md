@@ -74,13 +74,13 @@ HTTPS de producción ni un despliegue público ya disponible.
 
 | Componente | Evidencia real y alcance |
 | --- | --- |
-| Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../k009-evidencia.md) integra registro y sesión; [K011](../k011-formulario-lotes.md) el borrador y la publicación de lotes del operador. |
+| Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../evidencia/k009.md) integra registro y sesión; [lotes](../lotes.md) el borrador y la publicación de lotes del operador. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
 | API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth y cuatro de lotes. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
 | Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; commitments sigue sin flujo implementado. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS. No hay consultas espaciales en la API. |
 | Worker | [worker.ts](../../api/src/worker.ts) registra inicio, mantiene vivo el proceso y maneja señales. No consulta la base, no hace polling ni ejecuta trabajos. Comparte paquete e imagen con API, pero es otro proceso. |
-| Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../k005-evidencia.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
+| Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../evidencia/k005.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
 | CI | [ci.yml](../../.github/workflows/ci.yml) configura tres jobs: web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y Compose (configuración, imágenes, arranque, web/API/proxy, PostGIS, migraciones y publicación concurrente K010, worker). No prueba login, no ejecuta el smoke remoto B2 ni despliega producción. |
 
 **Conexiones todavía ausentes:** API HTTP → B2,
@@ -99,7 +99,7 @@ la sesión K009 y el formulario de lotes K011. Los dos archivos de tipos prelimi
 [types/api.ts](../../web/src/types/api.ts), aún existen y no son un contrato
 definitivo ni modelos de persistencia. Se marcan como antecedentes históricos;
 K011 introduce tipos web generados desde OpenAPI; la sustitución de los tipos
-manuales K009 y K004 queda como deuda registrada en [K011](../k011-formulario-lotes.md).
+manuales K009 y K004 queda como deuda en #98.
 
 ## B. Arquitectura objetivo incremental para S02
 
@@ -296,10 +296,8 @@ sustituirán/consolidarán los dos conjuntos preliminares de web; no se editará
 tipos generados a mano. La generación de tipos tampoco sustituye validación de
 datos en ejecución. La herramienta, ubicación y checks se decidirán entonces.
 
-[contrato-api.md](../contrato-api.md) se conserva como **antecedente/propuesta
-K004**, sustituido como referencia HTTP por OpenAPI S02. Su incertidumbre
-histórica sobre cookies no anula H p. 21; las decisiones resueltas están en
-la guía del contrato.
+La propuesta K004 fue reemplazada por OpenAPI S02; las decisiones resueltas
+están en la guía del contrato.
 
 ## Cómo demostrar esta arquitectura en E2
 
@@ -338,9 +336,9 @@ Ejemplo de trazabilidad que ya puede mostrarse:
 | Evidencia | Código/documento real | Qué demuestra y qué falta |
 | --- | --- | --- |
 | Web → API | ConnectionPage, proxy, app.ts y [health.test.ts](../../api/test/health.test.ts) | Recorrido de salud; no negocio ni acceso HTTP a base. |
-| Persistencia inicial | [Modelo K003](../modelo-inicial.md), migraciones y [evidencia K003](../k003-evidencia.md) | Restricciones e historial probados previamente; no publicación/reserva implementadas. |
-| Fotos | CLI y [evidencia K005](../k005-evidencia.md) | Prototipo privado aislado; no carga de fotos de un lote. |
-| Entorno y CI | Compose, workflow y [evidencia K006](../verificacion-k006.md) | Configuración y resultados históricos con sus límites; no certificación de un nuevo run remoto. |
+| Persistencia inicial | [Modelo K003](../modelo-inicial.md), migraciones y [evidencia K003](../evidencia/k003.md) | Restricciones e historial probados previamente; no publicación/reserva implementadas. |
+| Fotos | CLI y [evidencia K005](../evidencia/k005.md) | Prototipo privado aislado; no carga de fotos de un lote. |
+| Entorno y CI | Compose, workflow y [evidencia K006](../evidencia/k006.md) | Configuración y resultados históricos con sus límites; no certificación de un nuevo run remoto. |
 
 E1 (informe p. 5; anexos D p. 6 y H p. 19) contempla para E2 búsqueda/reserva y
 evidencia más amplia. Esta guía arquitectónica no reduce ese compromiso ni lo
@@ -394,4 +392,4 @@ No hay llamadas externas bajo bloqueo ni políticas de permisos escondidas en SQ
 `Authenticate → Actor` usa sesión persistente K008; no hay actor por cabecera
 en runtime. Origin y CSRF protegen los comandos HTTP sin introducir cookies
 en Application. Ver [implementación y evidencia K008](../k008-identidad.md).
-[Pruebas y límites](../k010-evidencia.md) distinguen ejecución local de CI remoto.
+[Pruebas y límites](../evidencia/k010.md) distinguen ejecución local de CI remoto.

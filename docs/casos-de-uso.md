@@ -9,17 +9,17 @@ estado que usa están en [modelo-inicial.md](modelo-inicial.md#modelo-conceptual
 
 Los identificadores RF se conservan cuando están identificados en los documentos
 vigentes: RF02 (lotes), RF03 (descubrimiento), RF04 (compromiso), RF05
-(cancelación), RF06/RF10 (retiro y panel) y RF07/RF08 (FIFO y vencimientos). Se
-usan el [informe E1](entregas/e1/informe-e1.pdf), pp. 1–3 y 5, los
-[anexos E1](entregas/e1/anexos-e1.pdf), A pp. 1–2, B p. 4, C p. 5, F p. 8,
-H pp. 20–21 e I pp. 24–27, y [ADR 0002](adr/0002-ofertas-parciales.md).
+(cancelación), RF06/RF10 (retiro y panel), RF07/RF08 (FIFO y vencimientos) y
+RF11 (incidencias). Se usan el [informe E1](entregas/e1/informe-e1.pdf), pp. 1–3
+y 5, los [anexos E1](entregas/e1/anexos-e1.pdf), A pp. 1–3, B p. 4, C p. 5,
+E p. 7, F p. 8, H pp. 20–21 e I pp. 24–27, y [ADR 0002](adr/0002-ofertas-parciales.md).
 
-E1 y la documentación actual mencionan incidencias, pero las fuentes textuales
-revisables no permiten asignarlas con certeza a un número RF. Por eso los casos
-de incidencia mantienen `RF pendiente de identificar` hasta resolver D-01; no se
-crea un identificador RF ficticio. K010 implementa sólo la parte de creación,
-consulta de operador, edición y publicación de lotes; K005 es un prototipo de
-objetos aislado. Las operaciones restantes son objetivo de dominio.
+Las incidencias corresponden a RF11 (anexos A p. 3, «RF11 · Incidencias») y su
+alcance está en el anexo I p. 26: cualquier problema descubierto sobre un lote,
+antes o después de entregar. Esto resuelve D-01 y D-03 de
+[K013](k013-trazabilidad.md#revisión-de-d-01-a-d-03). K010 implementa sólo la
+parte de creación, consulta de operador, edición y publicación de lotes; K005 es
+un prototipo de objetos aislado. Las operaciones restantes son objetivo de dominio.
 
 ## CU-RF02-01 — Publicar lote con fotos
 
@@ -59,12 +59,16 @@ será asignable después si además tiene `F > 0`; publicar no crea compromisos.
 que sea visible para quien rescata, sin exponer claves de almacenamiento ni datos
 de otros compromisos.
 
-**Actores y permisos.** Persona que explora según la regla de visibilidad de RF03;
-el requisito de sesión todavía debe confirmarse para este recorrido. El operador
-consulta además sus propios lotes mediante la operación K010 ya delimitada.
+**Actores y permisos.** Cualquier persona, también sin sesión: «el visitante
+explora sin sesión» (anexos A p. 1). El operador consulta además sus propios
+lotes, incluidos borradores, mediante la operación de [lotes](lotes.md).
 
-**Precondiciones.** El lote está Publicado, no Retirado/Vencido para el propósito
-que se consulte y la persona cumple la política de visibilidad que corresponda.
+**Precondiciones.** El lote está Publicado y no Retirado ni Vencido.
+
+**Búsqueda (A p. 1, G p. 11).** Lista paginada filtrable por ubicación, categoría
+y ventana de retiro. La zona puede elegirse a mano y la distancia es geográfica y
+aproximada, no un tiempo de viaje. Negar la geolocalización no impide explorar.
+El detalle muestra pack, cantidad, lugar y plazo antes de solicitar (G p. 12).
 
 **Flujo principal.**
 
@@ -74,9 +78,9 @@ que se consulte y la persona cumple la política de visibilidad que corresponda.
 4. Muestra disponibilidad como condición derivada, nunca como sinónimo de `Q`.
 
 **Alternativos y errores.** Lote no visible, retirado o inexistente no revela
-información adicional. Una foto no lista se omite o bloquea la respuesta según la
-decisión pendiente de K014. Esta consulta no reserva packs ni concede permiso de
-operador.
+información adicional. Solo se muestran fotos listas; si falta o falla, la web
+muestra una imagen de reemplazo (I p. 25, G p. 11). Abrir un lote no reserva
+packs: el servidor vuelve a comprobar la disponibilidad al solicitar.
 
 **Postcondiciones.** No cambia lote, inventario, fotos ni membresías.
 
@@ -90,29 +94,36 @@ ofrecida y confirmada.
 operador del establecimiento consulta los necesarios para preparar el retiro; no
 puede crear una solicitud en nombre de otro usuario sin una regla expresa.
 
-**Precondiciones.** Usuario autenticado, lote publicado/vigente, cantidad entera
-positiva de packs indivisibles y cumplimiento de la regla RF04 de compromiso
-activo por usuario/lote. Antes de habilitar una nueva solicitud con una reserva
-activa previa debe resolverse la compatibilidad señalada en el modelo.
+**Precondiciones.** Usuario autenticado, lote publicado antes de su cierre,
+cantidad entera positiva de packs indivisibles y ningún otro compromiso activo
+del usuario sobre ese lote: «se admite un compromiso activo por usuario y lote»
+(A p. 1). La nueva solicitud que permite ADR 0002 tras aceptar una oferta parcial
+queda sujeta a esta regla. El máximo es la disponibilidad asignable, sin un tope
+fijo por persona.
 
 **Flujo principal.**
 
 1. El usuario solicita una cantidad del lote.
 2. El sistema relee lote, disponibilidad y restricciones de compromiso en una
    unidad atómica.
-3. Registra el compromiso en espera con cantidad solicitada y posición FIFO, o lo
-   confirma únicamente a través de una oferta válida.
-4. Al consultar, el sistema muestra a cada actor sólo el compromiso al que tiene
+3. **Reserva directa** (B p. 4): si hay `F` suficiente, nadie espera antes
+   (prioridad atendida) y el lote no ha cerrado, confirma la reserva y mueve la
+   cantidad `F → R`.
+4. Si no alcanza, la persona puede entrar voluntariamente a la espera (A p. 2):
+   se registra la cantidad solicitada y una posición FIFO, y la confirmación solo
+   llega mediante una oferta (CU-RF07-01).
+5. Al consultar, el sistema muestra a cada actor sólo el compromiso al que tiene
    acceso y las cantidades que le correspondan.
 
 **Alternativos y errores.** Lote no vigente, cantidad inválida, usuario sin sesión
-o compromiso activo incompatible no cambian inventario. Una solicitud no convierte
-por sí sola `F` en `R`. La aceptación de una oferta se trata en CU-RF07-01 y el
-reingreso después de rechazo/vencimiento requiere una nueva acción y posición.
+o compromiso activo existente no cambian inventario. Ante dos solicitudes por el
+último pack solo una se confirma. Repetir la operación con la misma clave devuelve
+el compromiso existente sin crear otro (A p. 1, H p. 21). El reingreso después de
+rechazo o vencimiento de una oferta requiere una nueva acción y posición.
 
-**Postcondiciones.** Existe solicitud En espera o, tras aceptar una oferta,
-reserva Confirmada por exactamente la cantidad aceptada. K003 sólo representa el
-segundo caso; el caso completo no está implementado.
+**Postcondiciones.** Existe una reserva Confirmada directa, una solicitud En
+espera o, tras aceptar una oferta, una reserva Confirmada por exactamente la
+cantidad aceptada. K003 solo persiste reservas confirmadas.
 
 ## CU-RF07-01 — Ofertar y resolver compromiso FIFO
 
@@ -198,46 +209,84 @@ rechaza. El código no se muestra en URL, historial ni logs.
 **Postcondiciones.** Una Entrega registrada y reserva Entregada, o ningún cambio.
 La posterior apertura de una incidencia no invierte estos hechos.
 
-## CU-INC-01 — Reportar incidencia posterior a la entrega
+## CU-RF11-01 — Reportar incidencia de un lote
 
-**Objetivo.** Registrar un problema posterior contra una entrega acreditada y
-permitir su consulta contextual.
+**Objetivo.** Registrar un problema descubierto sobre un lote, antes o después de
+entregar (vencimiento del alimento, contenido incorrecto u otra situación), para
+que el establecimiento lo revise.
 
-**Actores y permisos.** El reportante debe tener acceso a la entrega; E1 no
-permite fijar todavía si sólo puede reportar quien rescató, si interviene el
-operador ni si existe soporte externo.
+**Actores y permisos.** Cualquier usuario puede reportar sobre objetos a los que
+tenga acceso (anexo I p. 26): quien tiene o tuvo un compromiso con el lote, o un
+operador miembro de su establecimiento.
 
-**Precondiciones.** Entrega existente y acreditada; reportante autorizado. No se
-establece ventana máxima de reporte.
+**Precondiciones.** Lote existente y reportante con acceso. No se exige entrega
+previa ni lote abierto; E1 no fija una ventana máxima de reporte.
 
-**Flujo principal.** El reportante identifica la entrega, describe la incidencia y
-el sistema crea el registro en estado Reportada, asociado a entrega, compromiso y
-reportante. Las partes autorizadas pueden consultar el caso y su historial.
+**Flujo principal.** El reportante describe el problema (motivo de hasta 2000
+caracteres, anexo H p. 20) y el sistema registra la incidencia asociada al lote,
+con autor y fecha, pendiente de revisión.
 
-**Alternativos y errores.** Entrega inexistente o ajena, actor sin permiso o datos
-inválidos no crean una incidencia. Abrirla no cancela la reserva, no reduce `E` y
-no altera disponibilidad de forma automática.
+**Alternativos y errores.** Lote inexistente o sin acceso, o datos inválidos, no
+crean la incidencia. El reporte no cancela compromisos, no cierra el lote ni envía
+una alerta general de forma automática.
 
-**Postcondiciones.** Incidencia Reportada; entrega permanece acreditada.
+**Postcondiciones.** Incidencia registrada y pendiente de revisión; lote,
+compromisos y entregas sin cambios.
 
-## CU-INC-02 — Resolver incidencia posterior
+## CU-RF11-02 — Publicar incidencia y avisar a los vinculados
 
-**Objetivo.** Registrar la atención y desenlace de una incidencia sin inventar
-consecuencias comerciales.
+**Objetivo.** Comunicar una incidencia revisada a todas las personas vinculadas
+al lote, con motivo e instrucciones.
 
-**Actores y permisos.** Rol resolutor pendiente de D-03. No se atribuye la
-facultad a todo operador, a un administrador ni a soporte sin fuente expresa.
+**Actores y permisos.** Un operador miembro del establecimiento del lote o
+administración (anexo I p. 26; anexo E p. 7). Publicar es una decisión explícita.
 
-**Precondiciones.** Incidencia existente, acceso autorizado y estado Reportada o
-En atención.
+**Precondiciones.** Incidencia existente sobre un lote del establecimiento.
 
-**Flujo principal.** El resolutor toma atención, deja las acciones o resultado
-necesarios y marca la incidencia Resuelta. El sistema conserva el vínculo con la
-entrega y el historial de atención.
+**Flujo principal.** El operador fija motivo e instrucciones y publica. Bajo
+bloqueo del lote y en una transacción se persisten incidencia, versión, evento y
+destinatarios: todas las personas con compromisos históricos del lote (en espera,
+con oferta, con reserva activa, canceladas, vencidas o retiradas) y sus operadores
+autorizados, deduplicados por persona. Si el lote sigue abierto, un compromiso
+creado después se incorpora a los avisos vigentes bajo el mismo bloqueo. El
+worker genera los avisos en la bandeja por tandas recuperables.
 
-**Alternativos y errores.** Incidencia ya resuelta, actor sin permiso o resultado
-inválido no cambian el caso. No se borra la entrega ni se crea automáticamente un
-reembolso, sanción, ajuste de inventario o nueva reserva.
+**Alternativos y errores.** Actor sin membresía o incidencia de otro
+establecimiento se rechazan sin exponer datos. Una restricción única por
+incidencia, versión y usuario impide avisos duplicados, incluso con reintentos o
+con una reserva concurrente. Estar desconectado no elimina el aviso ni implica
+haberlo leído.
 
-**Postcondiciones.** Incidencia Resuelta; la entrega sigue acreditada. Las reglas
-para reabrir, rechazar o escalar un caso se mantienen pendientes.
+**Postcondiciones.** Incidencia abierta con una versión publicada; cada
+destinatario tiene exactamente un aviso por versión. El texto distingue si la
+persona recibió packs o solo tuvo un compromiso, y no revela identidades de otros.
+
+## CU-RF11-03 — Dar seguimiento, resolver o cerrar el lote por incidencia
+
+**Objetivo.** Registrar la evolución de una incidencia publicada y, si se decide,
+cerrar el lote sin alterar entregas previas.
+
+**Actores y permisos.** Operador miembro del establecimiento del lote o
+administración. Cerrar el lote es una decisión explícita y separada de publicar.
+
+**Precondiciones.** Incidencia publicada en estado abierta o en seguimiento.
+
+**Flujo principal.** Una actualización relevante pasa la incidencia a en
+seguimiento; la resolución la deja resuelta. Cada una publica una nueva versión
+con aviso a los destinatarios históricos y actuales. El panel distingue avisos
+pendientes, generados y leídos.
+
+**Cierre por incidencia.** Si se decide cerrar el lote, el mismo protocolo, bajo
+bloqueo, cancela los compromisos pendientes, invalida sus códigos y mueve `F`, `O`
+y `R` a `X`. Los packs entregados `E` permanecen entregados y se conserva quién
+retiró, cuánto y cuándo. Cierre, cancelación y confirmación de retiro compiten
+bajo el mismo bloqueo: si la entrega gana se conserva; si gana el cierre, el retiro
+se rechaza.
+
+**Alternativos y errores.** Actor sin permiso o incidencia ya resuelta no cambian
+el caso. Resolver no reabre el lote ni rehabilita códigos. Leer un aviso no
+demuestra haber seguido las instrucciones.
+
+**Postcondiciones.** Incidencia en seguimiento o resuelta con su historial de
+versiones; lote abierto o cerrado según la decisión explícita. E1 no define
+reembolsos, sanciones ni reapertura, por lo que no se modelan.

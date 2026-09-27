@@ -13,7 +13,7 @@ OpenAPI define transporte, seguridad, requests, responses y errores. Las
 [migraciones](../../api/migrations) definen persistencia; Domain y la documentación
 conservan las reglas de negocio. Este archivo no genera SQL ni diseña repositories.
 Los PDF E1 son históricos; los ADR prevalecen solo donde modifican explícitamente
-sus reglas. [K004](../contrato-api.md) queda como antecedente, no contrato paralelo.
+sus reglas.
 
 ## Leer, validar y actualizar
 
@@ -63,7 +63,7 @@ detecta desincronización en CI. YAML, generador y Ajv son dependencias de desar
 no middleware ni un framework de runtime. Los tipos no validan entradas por sí solos.
 Las pruebas PostgreSQL verifican autorización, versión, rollback y concurrencia.
 K008 prueba sesión, Origin/CSRF, cookies, reinicio y navegador HTTPS con PostgreSQL.
-K011 conecta la web con las cuatro operaciones de lotes ([evidencia](../k011-formulario-lotes.md)).
+K011 conecta la web con las cuatro operaciones de lotes ([lotes](../lotes.md)).
 
 ## Operaciones, seguridad y trazabilidad
 
@@ -371,8 +371,7 @@ Los dos catálogos TypeScript de web siguen siendo **antecedentes sin consumidor
 de negocio**, no tipos derivados ni fuentes de verdad. Se marcan como históricos;
 no se actualizan a mano para copiar el YAML. `api:types` genera la misma salida
 para API y web (`web/src/services/openapi.ts`); K011 la consume para lotes. Los tipos
-manuales de identidad K009 y los catálogos K004 siguen como deuda registrada en
-[K011](../k011-formulario-lotes.md#deuda-técnica-registrada).
+manuales de identidad K009 y los catálogos K004 siguen como deuda en #98.
 No se exporta un cliente ficticio.
 Los tipos internos de Application/Domain seguirán siendo propios y no modelos SQL.
 
@@ -392,7 +391,7 @@ worker y estadísticas. ADR 0001 y ADR 0002 se conservan sin modificaciones.
 
 ## Verificación histórica de adopción del contrato (2026-09-21)
 
-Registro previo a K010; ver [evidencia K010](../k010-evidencia.md) para la
+Registro previo a K010; ver [evidencia K010](../evidencia/k010.md) para la
 reconciliación y pruebas nuevas. No describe el estado actual de implementación.
 
 | Comprobación ejecutada | Resultado observado |

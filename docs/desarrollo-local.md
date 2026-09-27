@@ -2,10 +2,10 @@
 
 Guía vigente para el árbol de trabajo K008/K010 (2026-09-21).
 Compose levanta web, API, PostgreSQL/PostGIS y un worker inactivo. La API añade
-[operaciones de lotes](k010-publicacion-lotes.md); requiere migraciones aplicadas.
+[operaciones de lotes](lotes.md); requiere migraciones aplicadas.
 K008 integra identidad/sesiones; reservas sigue pendiente. K005 es una CLI aislada.
 Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
-[K006](verificacion-k006.md).
+[K006](evidencia/k006.md).
 
 ## Inicio desde un clon
 
@@ -166,7 +166,7 @@ ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 
 ## Evidencia y aceptación en el PR
 
-Consulta [el registro de verificación K006](verificacion-k006.md), con resultados
+Consulta [el registro de verificación K006](evidencia/k006.md), con resultados
 locales, limitaciones y la prueba controlada de fallo/restauración.
 
 Después de abrir el PR, comprobar que aparecen los tres jobs y que pasan. La
