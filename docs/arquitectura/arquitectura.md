@@ -74,7 +74,7 @@ HTTPS de producción ni un despliegue público ya disponible.
 
 | Componente | Evidencia real y alcance |
 | --- | --- |
-| Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. Login, registro y lotes no consumen operaciones de negocio. |
+| Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../k009-evidencia.md) integra registro y sesión; [K011](../k011-formulario-lotes.md) el borrador y la publicación de lotes del operador. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
 | API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth y cuatro de lotes. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
 | Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; commitments sigue sin flujo implementado. |
@@ -93,13 +93,13 @@ La estructura real añade `http/`, `application/lots/`, `domain/`,
 `infrastructure/postgres/` y `composition.ts` para K010; conserva `app.ts`,
 `index.ts`, `worker.ts` y `prototypes/photos/`. Web tiene `app/`, `components/`, `pages/`, `services/` y
 `types/`, además de `styles/` y primitives en `components/ui/` tras la integración
-visual compartida. La [guía de frontend](../../web/README.md) describe esa base;
-no incorpora auth ni publicación. Los dos archivos de tipos preliminares,
+visual compartida. La [guía de frontend](../../web/README.md) describe esa base,
+la sesión K009 y el formulario de lotes K011. Los dos archivos de tipos preliminares,
 [services/api-types.ts](../../web/src/services/api-types.ts) y
 [types/api.ts](../../web/src/types/api.ts), aún existen y no son un contrato
 definitivo ni modelos de persistencia. Se marcan como antecedentes históricos;
-su sustitución por tipos derivados
-corresponde a la integración K009/K011.
+K011 introduce tipos web generados desde OpenAPI; la sustitución de los tipos
+manuales K009 y K004 queda como deuda registrada en [K011](../k011-formulario-lotes.md).
 
 ## B. Arquitectura objetivo incremental para S02
 
@@ -323,7 +323,7 @@ de la instrucción de este PR; no se atribuye a una pauta del profesor no revisa
    S02. Mostrar autorización, atomicidad y traducción de error donde corresponda.
    K010 demuestra HTTP de lotes con repositorio en memoria y, por separado,
    Application/Infrastructure con PostgreSQL real; K008 agrega navegador HTTPS autenticado.
-   Las pantallas integradas K009/K011 siguen pendientes.
+   K011 agrega el recorrido web → HTTP de lotes en Chromium con PostgreSQL real.
 6. **Pruebas y operación:** asociar reglas puras con sus pruebas, casos de uso con
    sus escenarios y adaptadores con integración real. Adjuntar comandos,
    entorno, commit y resultado observado; distinguir pruebas nuevas de registros

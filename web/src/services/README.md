@@ -8,6 +8,9 @@ Esta carpeta contiene tipos preliminares y utilidades de comunicación con la AP
 - El [antecedente K004](../../../docs/contrato-api.md) conserva las propuestas y decisiones pendientes; no es un contrato definitivo.
 - [OpenAPI S02](../../../docs/api/openapi.yaml) es la fuente de verdad HTTP.
   Su [guía](../../../docs/api/README.md) documenta validación, sesión, CSRF y decisiones.
-  K009/K011 derivarán los tipos desde él y sustituirán/consolidarán los catálogos
-  preliminares de esta carpeta y `../types/api.ts`, sin fuentes manuales paralelas.
-  Todavía no se implementan generación ni consumidores de negocio.
+- `openapi.ts` se genera desde el YAML con `npm --prefix api run api:types`
+  (misma salida que la API; `api:types:check` verifica ambas en CI). No editar a mano.
+- `lots-service.ts` (K011) usa esos tipos y valida `LotResponse` en runtime.
+  `identity-service.ts` (K009) aún declara sus tipos a mano: deuda registrada en
+  [K011](../../../docs/k011-formulario-lotes.md#deuda-técnica-registrada), al igual que
+  los catálogos preliminares de esta carpeta y `../types/api.ts`.
