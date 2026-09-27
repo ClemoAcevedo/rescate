@@ -72,6 +72,10 @@ porque no existe una operación para habilitar operadores.
 DATABASE_URL=postgres://… WEB_URL=https://localhost:5174 npm --prefix api run test:web:lots
 ```
 
+Con el servicio `db` de Compose iniciado, `npm --prefix api run test:web:compose` crea
+una base `rescate_web_test_*` migrada, levanta API y Vite HTTPS con certificado efímero
+y ejecuta `test:web:auth` y `test:web:lots`. CI lo ejecuta en el job de Docker Compose.
+
 | Comprobación | Resultado |
 | --- | --- |
 | Visitante y cuenta sin membresía | Sin formulario; enlace de login con retorno y explicación de habilitación. |
