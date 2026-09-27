@@ -7,7 +7,7 @@ La fuente funcional base son el [informe E1](entregas/e1/informe-e1.pdf) y los
 es una decisión posterior y vigente, pero modifica sólo oferta parcial y salida de
 la cola. [OpenAPI S02](api/README.md) prevalece para el transporte de K008–K011;
 no define por sí solo el dominio ni los RF posteriores. El
-[modelo inicial](modelo-inicial.md) y [K010](k010-publicacion-lotes.md) distinguen
+[modelo inicial](modelo-inicial.md) y [lotes](lotes.md) distinguen
 lo persistido/implementado de este objetivo; [K005](k005-fotos.md) acredita sólo
 un prototipo de almacenamiento de objetos.
 

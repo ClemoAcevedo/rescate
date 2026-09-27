@@ -208,7 +208,7 @@ El certificado ignorado por Chromium es solo el de esa prueba aislada.
 | [Seguridad](../api/test/auth-security.test.ts) | Firma CSRF, expiración/vínculo/clave, límites de tráfico y configuración cerrada. |
 | [Infrastructure PostgreSQL](../api/scripts/test-identity.mjs) | Atomicidad, rollback, duplicado concurrente, lock/relectura y persistencia de hechos. |
 | [Funcional PostgreSQL/HTTPS](../api/scripts/test-auth.mjs) | Contrato auth, sesión tras reinicio real, permisos K010 actuales, rotación/logout, bloqueo persistente, expiración, concurrencia de cinco fallos, navegador HTTPS e indisponibilidad/recuperación de PostgreSQL. |
-| [Datos semilla K012](k012-pruebas-integradas.md) | El mismo recorrido funcional comprueba carga repetible, publicación por dos operadores, aislamiento y renovación explícita de fixtures vencidos. |
+| [Datos de demostración](lotes.md#datos-de-demostración) | El mismo recorrido funcional comprueba carga repetible, publicación por dos operadores, aislamiento y renovación explícita de fixtures vencidos. |
 | [Migración](../api/scripts/test-identity-schema.mjs) | Precondición segura de users vacío, constraints, Unicode; historial y down mediante test-migrations. |
 
 La prueba de concurrencia funcional usa un verificador controlado para fijar el

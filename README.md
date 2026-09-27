@@ -121,7 +121,7 @@ Una ejecución correcta responde:
 }
 ```
 
-### Publicación de lotes (K010)
+### Lotes
 
 La API expone el borrador y la publicación de lotes según OpenAPI, con versión
 optimista, inmutabilidad tras publicar y autorización por establecimiento.
@@ -139,16 +139,15 @@ desarrollo ya no autentica. K008 expone `POST /auth/register`, `POST /auth/login
 `GET /auth/session` y `POST /auth/logout`; registro no asigna permisos ni inicia sesión.
 
 El contrato, las decisiones y las pruebas están en
-[docs/k010-publicacion-lotes.md](docs/k010-publicacion-lotes.md).
+[docs/lotes.md](docs/lotes.md).
 
 ## Documentación
 
-### Datos y pruebas integradas K012
+### Datos de demostración
 
-`npm --prefix api run db:seed:demo` carga usuarios, establecimientos y lotes
-ficticios en la base local configurada. `npm --prefix api run db:test:auth:compose`
-comprueba la carga, autenticación, publicación y aislamiento desde una base vacía.
-Configuración, cuentas y renovación de fechas en [la guía K012](docs/k012-pruebas-integradas.md).
+`npm --prefix api run db:seed:demo` carga cuentas, establecimientos y lotes
+ficticios en la base local configurada. Cuentas y renovación de fechas en
+[docs/lotes.md](docs/lotes.md#datos-de-demostración).
 
 ### Migraciones PostgreSQL (K002)
 
@@ -243,12 +242,13 @@ K003
 
 ## Estado actual
 
-En el árbol de trabajo actual, la web tiene navegación, pantallas de demostración y
-comprobación de salud. La API expone `/health`, identidad K008 y lotes K010; el worker está inactivo.
-K002/K003 aportan migraciones y modelo; K005 es un prototipo aislado de fotos.
-OpenAPI S02 rige las ocho operaciones implementadas de identidad y lotes.
+Este es el único resumen de estado del repositorio; se actualiza en el mismo PR que
+lo cambia.
 
-La base de `development` incluye el design system compartido. K010 implementa
-publicación en backend con autenticación K008; K009 integra registro/sesión en la web y
-[K011](docs/k011-formulario-lotes.md) el formulario de borrador y publicación del operador. El
-[índice documental](docs/README.md) separa referencias vigentes de evidencia histórica.
+- **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011).
+  Las pantallas de exploración de lotes son demostraciones.
+- **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
+  (K010), según OpenAPI S02.
+- **Worker:** inactivo. **Fotos:** prototipo aislado (K005).
+
+El [índice de documentación](docs/README.md) lleva a cada área.

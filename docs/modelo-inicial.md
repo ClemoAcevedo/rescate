@@ -23,7 +23,7 @@ activa permanecen registradas allí como riesgo futuro del modelo.
 
 **Estado posterior K010:** este documento conserva el modelo inicial K003.
 Las migraciones aditivas K010 incorporan `lots.public_id`, `version`, `updated_at`
-y `establishments.public_id`. El [documento K010](k010-publicacion-lotes.md)
+y `establishments.public_id`. El [documento de lotes](lotes.md)
 describe publicación, inmutabilidad, autorización y PATCH parcial implementados;
 K008 añade `users.public_id`, correo canónico y las tablas `user_credentials`,
 `sessions`, `login_security_state` y `login_failures`; mantiene memberships sin roles
@@ -437,6 +437,6 @@ ofertas, vencimientos, chat, avisos, incidencias, auditoría y retención.
 K005 y tarjetas de fotos: objetos privados, referencias, metadatos, procesamiento,
 miniaturas y EXIF. Ninguna de esas capacidades se declara implementada por K003.
 
-La [evidencia y reproducción](k003-evidencia.md) registra ejecuciones reales,
+La [evidencia y reproducción](evidencia/k003.md) registra ejecuciones reales,
 limitaciones y propuesta de PR. La revisión de otro integrante y la integración
 siguen siendo necesarias para cerrar formalmente la tarjeta según E1 p. 5.

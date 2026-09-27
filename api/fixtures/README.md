@@ -6,7 +6,7 @@
 Cada establecimiento tiene un borrador y un lote publicado; el visitante no tiene lotes propios.
 Incluye una contraseña pública de prueba y declaraciones de lote con fechas
 relativas. La semilla usa el adaptador scrypt de la API; no guarda contraseñas
-en texto en PostgreSQL. [Guía de carga y pruebas K012](../../docs/k012-pruebas-integradas.md).
+en texto en PostgreSQL. [Datos de demostración](../../docs/lotes.md#datos-de-demostración).
 
 ## K005
 
