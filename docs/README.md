@@ -32,6 +32,8 @@ de CI remoto ni un despliegue.
 
 - [Identidad y sesiones K008](k008-identidad.md): implementación, decisiones, operación HTTPS y evidencia.
 - [Publicación de lotes K010](k010-publicacion-lotes.md): implementación y límites de integración.
+- [Datos y pruebas integradas K012](k012-pruebas-integradas.md): carga local,
+  autenticación y publicación por API con aislamiento entre establecimientos.
 - [Formulario de lote K011](k011-formulario-lotes.md): web del operador, decisiones frente a OpenAPI y evidencia.
 
 ## Decisiones (ADR)

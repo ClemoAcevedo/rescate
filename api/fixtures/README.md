@@ -1,4 +1,14 @@
-# Fixture K005
+# Fixtures
+
+## K012
+
+`demo-data.mjs` define tres cuentas, dos establecimientos y cuatro lotes ficticios con IDs estables.
+Cada establecimiento tiene un borrador y un lote publicado; el visitante no tiene lotes propios.
+Incluye una contraseña pública de prueba y declaraciones de lote con fechas
+relativas. La semilla usa el adaptador scrypt de la API; no guarda contraseñas
+en texto en PostgreSQL. [Guía de carga y pruebas K012](../../docs/k012-pruebas-integradas.md).
+
+## K005
 
 `k005.png` es un PNG RGB de 2 × 2 píxeles (rojo, verde, azul y blanco),
 creado programáticamente para esta prueba. No contiene fotografías, datos personales
