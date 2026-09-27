@@ -74,7 +74,7 @@ DATABASE_URL=postgres://… WEB_URL=https://localhost:5174 npm --prefix api run 
 
 Con el servicio `db` de Compose iniciado, `npm --prefix api run test:web:compose` crea
 una base `rescate_web_test_*` migrada, levanta API y Vite HTTPS con certificado efímero
-y ejecuta `test:web:auth` y `test:web:lots`. CI lo ejecuta en el job de Docker Compose.
+y ejecuta `test:web:auth`, `test:web:logout` y `test:web:lots`. CI lo ejecuta en el job de Docker Compose.
 
 | Comprobación | Resultado |
 | --- | --- |

@@ -1,4 +1,4 @@
-// K009/K011: recorridos de navegador contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
+// K009/K011: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
 // Usa una base dedicada nueva; no migra ni altera la base de desarrollo.
 import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -64,7 +64,7 @@ try {
   }
   if (!up) throw new Error('API o Vite no respondieron')
 
-  for (const script of ['test:web:auth', 'test:web:lots']) {
+  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots']) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }
   console.log(`Base de prueba conservada: ${database}. No se alteró la base de desarrollo.`)

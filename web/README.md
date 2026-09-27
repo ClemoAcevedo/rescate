@@ -13,8 +13,8 @@ No hay suite ni dependencias de tests dentro de `web/`: la comprobación end-to-
 de autenticación usa el Playwright ya instalado en `api/`, contra servicios reales
 que la persona inicia explícitamente (`npm --prefix api run test:web:auth`).
 Con el servicio `db` de Compose iniciado, `npm --prefix api run test:web:compose`
-levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth` y
-`test:web:lots`; CI lo corre en el job de Docker Compose.
+levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth`,
+`test:web:logout` y `test:web:lots`; CI lo corre en el job de Docker Compose.
 
 ## Mapa del código
 
