@@ -18,8 +18,8 @@ prioridad residual ni reingreso automático. Volver a solicitar exige una nueva
 solicitud explícita y una nueva posición FIFO. Las precisiones
 de cantidades de abajo corresponden a esa decisión posterior; no cambian el
 esquema, migración, pruebas ni alcance de K003. La representación de solicitudes
-posteriores sobre el mismo lote y su compatibilidad con una reserva confirmada
-activa permanecen registradas allí como riesgo futuro del modelo.
+posteriores sobre el mismo lote queda acotada por anexos A p. 1: un solo
+compromiso activo por usuario y lote.
 
 **Estado posterior K010:** este documento conserva el modelo inicial K003.
 Las migraciones aditivas K010 incorporan `lots.public_id`, `version`, `updated_at`
@@ -140,9 +140,9 @@ congela contenido ni verifica fotos. El índice UNIQUE parcial
 ofertas, la misma migración deberá ampliar el predicado a esos estados activos;
 no sustituirlo por UNIQUE permanente que impida nuevos compromisos históricos.
 ADR 0002 no elimina esta restricción: cerrar la solicitud en cola al aceptar
-parcialmente no termina la reserva confirmada. Antes de admitir una nueva
-solicitud simultánea del mismo usuario/lote debe resolverse esa compatibilidad;
-no se presupone reingreso inmediato ni se cambia el índice de K003.
+parcialmente no termina la reserva confirmada. Como E1 admite un solo compromiso
+activo por usuario y lote (A p. 1), una nueva solicitud del mismo usuario espera a
+que su reserva termine; el índice parcial de K003 se amplía a los estados activos.
 
 ## Modelo conceptual E2 (K013)
 
@@ -281,7 +281,7 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | — | Crear borrador | Usuario con membresía del establecimiento | Declaración completa válida. | Borrador. | K010 asigna versión inicial; todavía no hay disponibilidad. |
 | Borrador | Publicar | Operador miembro | Versión vigente, declaración válida y fin de ventana posterior al instante bloqueado. | Publicado. | Fecha de publicación; declaración y conjunto de fotos quedan fijos. Cero fotos es válido. |
-| Publicado | Retirar para corregir | Operador del establecimiento | RF02 exige crear otro lote en vez de editar; el tratamiento de compromisos activos debe definirse. | Retirado (conceptual). | Deja de ser asignable. No se infiere liberación ni cancelación de reservas. |
+| Publicado | Retirar para corregir | Operador del establecimiento, con motivo (G p. 15) | RF02 exige crear otro lote en vez de editar. | Retirado (conceptual). | Deja de ser asignable. Todo `F`, `O` y `R` pendiente pasa a `X` y los retiros `E` se conservan (B p. 4); cancela ofertas y reservas pendientes e invalida sus códigos. |
 | Publicado | Final de ventana | Reloj/regla compartida por API y worker | Llega el cierre de retiro. | Vencido (conceptual). | Deja de admitir ofertas/aceptaciones; qué ocurre con reservas u ofertas activas se rige por sus transiciones, no por un borrado. |
 
 Un lote publicado está **asignable** sólo si su ventana sigue vigente y tiene
@@ -295,8 +295,10 @@ declarar.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> En_espera: usuario solicita packs
+  [*] --> Confirmada: reserva directa con F suficiente y sin espera previa
+  [*] --> En_espera: entra voluntariamente a la espera
   En_espera --> Ofertada: cabeza FIFO y cantidad retenida
+  En_espera --> Salida_de_espera: sale voluntariamente
   Ofertada --> Confirmada: acepta oferta vigente
   Ofertada --> Rechazada: rechaza
   Ofertada --> Oferta_vencida: vence sin respuesta
@@ -304,6 +306,7 @@ stateDiagram-v2
   Confirmada --> Reserva_vencida: vence retiro aplicable
   Confirmada --> Entregada: retiro acreditado
   Rechazada --> [*]
+  Salida_de_espera --> [*]
   Oferta_vencida --> [*]
   Cancelada --> [*]
   Reserva_vencida --> [*]
@@ -312,13 +315,15 @@ stateDiagram-v2
 
 | Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
 | --- | --- | --- | --- | --- | --- |
-| — | Solicitar | Usuario que rescata | Lote publicado/vigente y reglas RF04 de compromiso activo. | En espera. | Registra cantidad solicitada y posición FIFO; no mueve packs a `R`. La convivencia con una reserva activa del mismo usuario/lote sigue pendiente. |
+| — | Reservar directamente | Usuario que rescata | Lote publicado antes del cierre, `F` suficiente, nadie espera antes y sin otro compromiso activo en el lote (A p. 1, B p. 4). | Confirmada. | Mueve la cantidad `F → R` bajo bloqueo del lote. |
+| — | Entrar en espera | Usuario que rescata | Lote publicado antes del cierre, sin otro compromiso activo en el lote; la cantidad no alcanza o hay personas esperando. | En espera. | Registra cantidad solicitada y posición FIFO; no mueve packs. |
+| En espera | Salir de la espera | Usuario solicitante | Solicitud aún sin oferta. | Salida de espera. | Pierde la posición; volver exige una nueva solicitud. |
 | En espera | Ofrecer | Asignador del sistema/flujo del establecimiento | Es la primera solicitud elegible FIFO; lote vigente; cantidad libre comprobada bajo bloqueo. | Ofertada. | Mueve sólo cantidad ofrecida `F → O`. Puede ser menor que la solicitada por ADR 0002. |
 | Ofertada | Aceptar | Usuario solicitante | Oferta vigente y estado releído bajo bloqueo. | Confirmada. | Mueve sólo la cantidad aceptada `O → R`; cierra la solicitud sin saldo ni prioridad residual. |
 | Ofertada | Rechazar | Usuario solicitante | Oferta vigente. | Rechazada. | Libera sólo lo retenido; vuelve a `F` si el lote sigue vigente o pasa a `X` si no. No crea solicitud nueva. |
 | Ofertada | Vencer sin respuesta | Regla temporal compartida | Se alcanzó su vencimiento sin aceptación. | Oferta vencida. | Mismo cierre y liberación que rechazo; no hay prórroga por desconexión ni reingreso automático. |
-| Confirmada | Cancelar | Usuario solicitante, bajo RF05 | Condiciones de cancelación aplicables. | Cancelada. | La reserva deja de estar activa. La regla exacta de devolución `R → F/X` y el límite temporal deben comprobarse al implementar RF05. |
-| Confirmada | Vencer retiro | Regla temporal compartida | Se alcanza la condición de vencimiento de la reserva. | Reserva vencida. | No se acredita una entrega; efectos sobre `R` se mantienen como regla pendiente si E1 no los concreta para ese caso. |
+| Confirmada | Cancelar | Usuario solicitante, bajo RF05 | Antes del cierre del lote. | Cancelada. | Invalida el código. `R → F` si el lote sigue vigente; si no, `R → X` (B p. 4). |
+| Confirmada | Vencer retiro | Regla temporal compartida | Se alcanza la condición de vencimiento de la reserva. | Reserva vencida. | No se acredita una entrega. `R → F` si el lote sigue vigente; si no, `R → X` (B p. 4). |
 | Confirmada | Acreditar retiro | Operador autorizado, tras validación que corresponda | Reserva vigente y no entregada. | Entregada. | Registra entrega; la cantidad acreditada pasa `R → E`. |
 
 Los reintentos de aceptar, rechazar o procesar un vencimiento no deben duplicar una

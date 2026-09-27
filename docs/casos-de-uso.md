@@ -59,12 +59,16 @@ será asignable después si además tiene `F > 0`; publicar no crea compromisos.
 que sea visible para quien rescata, sin exponer claves de almacenamiento ni datos
 de otros compromisos.
 
-**Actores y permisos.** Persona que explora según la regla de visibilidad de RF03;
-el requisito de sesión todavía debe confirmarse para este recorrido. El operador
-consulta además sus propios lotes mediante la operación K010 ya delimitada.
+**Actores y permisos.** Cualquier persona, también sin sesión: «el visitante
+explora sin sesión» (anexos A p. 1). El operador consulta además sus propios
+lotes, incluidos borradores, mediante la operación de [lotes](lotes.md).
 
-**Precondiciones.** El lote está Publicado, no Retirado/Vencido para el propósito
-que se consulte y la persona cumple la política de visibilidad que corresponda.
+**Precondiciones.** El lote está Publicado y no Retirado ni Vencido.
+
+**Búsqueda (A p. 1, G p. 11).** Lista paginada filtrable por ubicación, categoría
+y ventana de retiro. La zona puede elegirse a mano y la distancia es geográfica y
+aproximada, no un tiempo de viaje. Negar la geolocalización no impide explorar.
+El detalle muestra pack, cantidad, lugar y plazo antes de solicitar (G p. 12).
 
 **Flujo principal.**
 
@@ -74,9 +78,9 @@ que se consulte y la persona cumple la política de visibilidad que corresponda.
 4. Muestra disponibilidad como condición derivada, nunca como sinónimo de `Q`.
 
 **Alternativos y errores.** Lote no visible, retirado o inexistente no revela
-información adicional. Una foto no lista se omite o bloquea la respuesta según la
-decisión pendiente de K014. Esta consulta no reserva packs ni concede permiso de
-operador.
+información adicional. Solo se muestran fotos listas; si falta o falla, la web
+muestra una imagen de reemplazo (I p. 25, G p. 11). Abrir un lote no reserva
+packs: el servidor vuelve a comprobar la disponibilidad al solicitar.
 
 **Postcondiciones.** No cambia lote, inventario, fotos ni membresías.
 
@@ -90,29 +94,36 @@ ofrecida y confirmada.
 operador del establecimiento consulta los necesarios para preparar el retiro; no
 puede crear una solicitud en nombre de otro usuario sin una regla expresa.
 
-**Precondiciones.** Usuario autenticado, lote publicado/vigente, cantidad entera
-positiva de packs indivisibles y cumplimiento de la regla RF04 de compromiso
-activo por usuario/lote. Antes de habilitar una nueva solicitud con una reserva
-activa previa debe resolverse la compatibilidad señalada en el modelo.
+**Precondiciones.** Usuario autenticado, lote publicado antes de su cierre,
+cantidad entera positiva de packs indivisibles y ningún otro compromiso activo
+del usuario sobre ese lote: «se admite un compromiso activo por usuario y lote»
+(A p. 1). La nueva solicitud que permite ADR 0002 tras aceptar una oferta parcial
+queda sujeta a esta regla. El máximo es la disponibilidad asignable, sin un tope
+fijo por persona.
 
 **Flujo principal.**
 
 1. El usuario solicita una cantidad del lote.
 2. El sistema relee lote, disponibilidad y restricciones de compromiso en una
    unidad atómica.
-3. Registra el compromiso en espera con cantidad solicitada y posición FIFO, o lo
-   confirma únicamente a través de una oferta válida.
-4. Al consultar, el sistema muestra a cada actor sólo el compromiso al que tiene
+3. **Reserva directa** (B p. 4): si hay `F` suficiente, nadie espera antes
+   (prioridad atendida) y el lote no ha cerrado, confirma la reserva y mueve la
+   cantidad `F → R`.
+4. Si no alcanza, la persona puede entrar voluntariamente a la espera (A p. 2):
+   se registra la cantidad solicitada y una posición FIFO, y la confirmación solo
+   llega mediante una oferta (CU-RF07-01).
+5. Al consultar, el sistema muestra a cada actor sólo el compromiso al que tiene
    acceso y las cantidades que le correspondan.
 
 **Alternativos y errores.** Lote no vigente, cantidad inválida, usuario sin sesión
-o compromiso activo incompatible no cambian inventario. Una solicitud no convierte
-por sí sola `F` en `R`. La aceptación de una oferta se trata en CU-RF07-01 y el
-reingreso después de rechazo/vencimiento requiere una nueva acción y posición.
+o compromiso activo existente no cambian inventario. Ante dos solicitudes por el
+último pack solo una se confirma. Repetir la operación con la misma clave devuelve
+el compromiso existente sin crear otro (A p. 1, H p. 21). El reingreso después de
+rechazo o vencimiento de una oferta requiere una nueva acción y posición.
 
-**Postcondiciones.** Existe solicitud En espera o, tras aceptar una oferta,
-reserva Confirmada por exactamente la cantidad aceptada. K003 sólo representa el
-segundo caso; el caso completo no está implementado.
+**Postcondiciones.** Existe una reserva Confirmada directa, una solicitud En
+espera o, tras aceptar una oferta, una reserva Confirmada por exactamente la
+cantidad aceptada. K003 solo persiste reservas confirmadas.
 
 ## CU-RF07-01 — Ofertar y resolver compromiso FIFO
 
