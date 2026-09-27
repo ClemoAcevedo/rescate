@@ -63,7 +63,7 @@ detecta desincronización en CI. YAML, generador y Ajv son dependencias de desar
 no middleware ni un framework de runtime. Los tipos no validan entradas por sí solos.
 Las pruebas PostgreSQL verifican autorización, versión, rollback y concurrencia.
 K008 prueba sesión, Origin/CSRF, cookies, reinicio y navegador HTTPS con PostgreSQL.
-K009/K011 todavía deben conectar las pantallas de negocio.
+K011 conecta la web con las cuatro operaciones de lotes ([evidencia](../k011-formulario-lotes.md)).
 
 ## Operaciones, seguridad y trazabilidad
 
@@ -369,9 +369,10 @@ CI incorpora ese comando; su ejecución remota no se acredita en esta etapa.
 
 Los dos catálogos TypeScript de web siguen siendo **antecedentes sin consumidores
 de negocio**, no tipos derivados ni fuentes de verdad. Se marcan como históricos;
-no se actualizan a mano para copiar el YAML. K009/K011 deberán introducir generación
-desde OpenAPI y reemplazar/consolidar esos archivos al conectar consumidores. La
-integración de tipos web queda pendiente; API ya genera sus DTO desde el YAML.
+no se actualizan a mano para copiar el YAML. `api:types` genera la misma salida
+para API y web (`web/src/services/openapi.ts`); K011 la consume para lotes. Los tipos
+manuales de identidad K009 y los catálogos K004 siguen como deuda registrada en
+[K011](../k011-formulario-lotes.md#deuda-técnica-registrada).
 No se exporta un cliente ficticio.
 Los tipos internos de Application/Domain seguirán siendo propios y no modelos SQL.
 

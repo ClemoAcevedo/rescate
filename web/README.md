@@ -24,18 +24,22 @@ que la persona inicia explícitamente (`npm --prefix api run test:web:auth`).
 | `components/AppLayout`, `SiteHeader`, `RescateLogo` | Shell, navegación y marca de la aplicación |
 | `pages/` | Pantallas; decisiones y composición de producto |
 | [services](src/services/README.md) | Cliente HTTP y límites del contrato |
+| `services/openapi.ts` | Tipos HTTP generados desde OpenAPI; no editar a mano |
+| `lots/`, `components/lots/` | Formulario de lote K011: conversiones al contrato y componentes |
 | `types/api.ts`, `services/api-types.ts` | Antecedentes K004; no contrato S02 |
 
 ## Estado de las rutas
 
 `/` redirige a `/lotes`. `/lotes` y `/lotes/:id` son demostraciones estáticas;
-`/registro` y `/login` integran K008. `/conexion` consulta únicamente
+`/registro` y `/login` integran K008. `/operador/lotes/nuevo` y
+`/operador/lotes/:lotId` integran el borrador y la publicación de K010 (K011). `/conexion` consulta únicamente
 `/health`; las rutas desconocidas muestran la pantalla 404. Recargas directas
 requieren fallback SPA del servidor en producción.
 
-La base visual y K009 están implementadas; la publicación K011 sigue pendiente.
-K011 debe reutilizar UI y derivar sus tipos desde [OpenAPI S02](../docs/api/README.md),
-sin convertir demos externas en reglas de negocio. La selección del material y
+La base visual, K009 y K011 están implementadas. K011 reutiliza UI y usa tipos
+generados desde [OpenAPI S02](../docs/api/README.md) en `services/openapi.ts`
+(`npm --prefix api run api:types`; no editar a mano). Decisiones y evidencia en
+[K011](../docs/k011-formulario-lotes.md). La selección del material y
 la evidencia local están en [integración del design system](../docs/frontend-design-system.md).
 
 ## Identidad K008 (K009)

@@ -13,6 +13,10 @@ sin dependencias nuevas. [Decisiones y verificación](../../../../docs/frontend-
   nativas. Por defecto `type="button"`; el envío debe declarar `type="submit"`.
 - `Input`, `Textarea`, `Select` en `FormControls.tsx`: controles nativos con props,
   eventos y refs de React 19. El select recibe `option`/`optgroup` como hijos.
+- `Combobox`: selección con filtro por texto (patrón ARIA combobox/listbox), sin
+  distinguir mayúsculas ni tildes, con flechas, Enter, Escape y clic. Filtra opciones
+  ya cargadas en el navegador (no hace peticiones), muestra hasta `limit` (50) y envía
+  el valor en un input oculto con `name`. Recibe las props de `FormField`.
 - `FormField`: label obligatorio, ayuda/error e ID único; enlaza el control mediante
   las props del render prop. El error sustituye la ayuda; no valida datos.
 - `Card`: contenedor div/section/article, tono default/sunken. No es clicable;
