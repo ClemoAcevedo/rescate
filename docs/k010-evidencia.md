@@ -68,6 +68,12 @@ habilitación explícita y falla con NODE_ENV=production. K012 deberá verificar
 recorrido autenticado completo con navegador/HTTPS y seguridad. No se afirma que
 CI remoto haya pasado ni que K010 complete E2.
 
+> **Estado posterior (2026-09-27).** Estos pendientes ya se cubrieron: K008 (#92)
+> integra sesión, cookies y Origin/CSRF, y la cabecera de actor ya no autentica
+> en runtime. K012 (#95) recorre login y publicación por HTTPS. CI ejecuta
+> `db:test:lots:compose` y `db:test:auth:compose`. Lo de arriba se conserva
+> como registro de la ejecución del 2026-09-21.
+
 ## Registro original de Felipe — histórico, previo a OpenAPI
 
 El registro siguiente se conserva íntegro: sus rutas, códigos, número de tests y
