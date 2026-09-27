@@ -46,9 +46,11 @@ Inicia la API y Vite con la [configuración HTTPS existente](../web/README.md).
 La API debe usar la misma `DATABASE_URL` donde cargaste los datos. Mantén
 `VITE_AUTH_MOCK_SCENARIO` desactivado y entra con una cuenta de la tabla.
 
-El formulario K011 está pendiente y el listado web contiene demostraciones.
-Los lotes persistidos se consultan mediante `GET /api/lots/{id}` con sesión de
-su operador; la [API K010](k010-publicacion-lotes.md) permite crear y publicar.
+Con una cuenta de operador, el [formulario K011](k011-formulario-lotes.md) crea,
+edita y publica lotes en `/operador/lotes/nuevo`. Los lotes semilla se abren en
+`/operador/lotes/{id}` con los ID de [demo-data.mjs](../api/fixtures/demo-data.mjs); aún no existe un listado de lotes
+(#96) y el listado web público contiene demostraciones. La [API K010](k010-publicacion-lotes.md)
+también permite crear, consultar y publicar directamente.
 
 ## Comprobar desde una base vacía
 
