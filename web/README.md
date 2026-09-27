@@ -41,8 +41,8 @@ requieren fallback SPA del servidor en producción.
 
 La base visual, K009 y K011 están implementadas. K011 reutiliza UI y usa tipos
 generados desde [OpenAPI S02](../docs/api/README.md) en `services/openapi.ts`
-(`npm --prefix api run api:types`; no editar a mano). Decisiones y evidencia en
-[K011](../docs/k011-formulario-lotes.md). La selección del material y
+(`npm --prefix api run api:types`; no editar a mano). Decisiones del formulario de lotes en
+[docs/lotes.md](../docs/lotes.md). La selección del material y
 la evidencia local están en [integración del design system](../docs/frontend-design-system.md).
 
 ## Identidad K008 (K009)

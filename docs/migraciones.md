@@ -5,7 +5,7 @@ La [decisión y comparación](adr/0001-gestor-de-migraciones.md) explica las alt
 K002 creó `public.migration_tool_test`, que se conserva sin modificaciones.
 K003 añade las cinco entidades del [modelo inicial](modelo-inicial.md).
 K010 añade identidad pública/versión de lotes y una migración posterior de IDs
-públicos de establecimientos; ver [K010](k010-publicacion-lotes.md).
+públicos de establecimientos; ver [lotes](lotes.md).
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003
@@ -35,7 +35,7 @@ El job Compose existente ejecuta la misma suite en CI. No hay migración automá
 al arrancar la API. Para migrar una base normal siguen vigentes `db:migrate` y
 `db:rollback`; este último revierte una migración: actualmente retira el ID
 público de establecimientos. Retroceder hasta K003 elimina sus tablas y datos. No usarlo en una base con datos que deban conservarse.
-Ver [resultados K003](k003-evidencia.md). La sección de aceptación K002 de abajo
+Ver [resultados K003](evidencia/k003.md). La sección de aceptación K002 de abajo
 describe la versión histórica del script, reemplazada por esta prueba integrada.
 
 ## Preparación

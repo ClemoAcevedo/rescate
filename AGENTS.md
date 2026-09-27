@@ -5,15 +5,12 @@
 Antes de implementar backend, revisar la [arquitectura](docs/arquitectura/arquitectura.md),
 [ADR 0003](docs/adr/0003-arquitectura-incremental-s02.md), el
 [modelo inicial](docs/modelo-inicial.md) y los ADR aplicables.
-Separar siempre estado implementado de objetivo. El backend expone `/health` y
-las cuatro operaciones de identidad K008 y las cuatro de lotes K010 bajo OpenAPI.
-K008 integra sesiones PostgreSQL, cookies, Origin/CSRF y Authenticate → Actor;
-K010 comprueba membership actual. No existe actor por cabecera en runtime. El worker está inactivo y K005 es un prototipo aislado.
+Separar siempre estado implementado de objetivo. El estado actual está en la
+sección «Estado actual» del [README](README.md#estado-actual).
 
 Aplicar estas reglas al código nuevo de S02 de manera incremental. Crear archivos
 y carpetas cuando tengan una responsabilidad real. No mover código existente solo
 para ajustarlo al árbol propuesto ni añadir frameworks o abstracciones sin necesidad.
-Actualizar esta descripción cuando cambie la implementación.
 
 ## Límites del backend
 
@@ -40,8 +37,7 @@ Actualizar esta descripción cuando cambie la implementación.
 
 [OpenAPI S02](docs/api/openapi.yaml) es la fuente de verdad HTTP versionada;
 [su guía](docs/api/README.md) documenta decisiones y validación. K008/K010 incorporan
-handlers y tipos HTTP generados (`npm --prefix api run api:types`); no mantener catálogos manuales paralelos. [K004](docs/contrato-api.md)
-y los tipos existentes quedan como antecedentes.
+handlers y tipos HTTP generados (`npm --prefix api run api:types`); no mantener catálogos manuales paralelos.
 OpenAPI no define el esquema SQL ni sustituye las reglas de Domain/documentación.
 
 Mantener node-pg-migrate y SQL según [ADR 0001](docs/adr/0001-gestor-de-migraciones.md).
@@ -58,6 +54,29 @@ y reutilizar los [tokens](web/src/styles/tokens.css). Evitar componentes equival
 duplicados y colores/espaciados arbitrarios cuando exista un token. Adaptar el
 material externo al stack local; no copiarlo directamente. Los componentes UI no
 definen contratos HTTP: sigue prevaleciendo OpenAPI S02.
+
+## Documentación
+
+La documentación se organiza por área del sistema, no por tarjeta. El
+[índice](docs/README.md) lista un documento por área.
+
+- **Actualizar, no crear.** Cada PR actualiza el documento del área que cambia
+  (por ejemplo [lotes](docs/lotes.md)). No crear un documento por tarjeta. Crear un
+  documento solo para un área nueva y agregarlo al índice.
+- **Presente, sin fotos del estado.** Describir cómo funciona el sistema hoy. No
+  escribir fechas, commits, ramas ni frases como «pendiente de merge» o «en el
+  árbol de trabajo». El resumen de estado vive solo en el README y se actualiza en
+  el PR que lo cambia.
+- **Cada cosa en su lugar.** La evidencia de ejecución va en la descripción del PR
+  y en CI, no en `docs/`. Una decisión con alternativas descartadas va en un ADR.
+  Un pendiente o deuda técnica va en un issue, y el documento lo enlaza (#NN).
+- **Breve y directo.** Explicar lo que el código no dice: reglas, decisiones y
+  cómo probar. No repetir OpenAPI, el esquema SQL ni el código. Afirmar lo que es;
+  evitar descargos como «no se afirma» o «no se acredita».
+- **Borrar lo reemplazado.** Si un documento o sección queda obsoleto, eliminarlo;
+  el historial de git lo conserva. No mantener antecedentes en paralelo.
+- **Contrastar con la fuente.** Antes de declarar un requisito como no definido,
+  buscarlo en los PDF de E1 (no son buscables como texto; extraer el texto primero).
 
 ## Revisión y evidencia
 

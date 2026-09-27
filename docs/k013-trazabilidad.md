@@ -7,7 +7,7 @@ La fuente funcional base son el [informe E1](entregas/e1/informe-e1.pdf) y los
 es una decisión posterior y vigente, pero modifica sólo oferta parcial y salida de
 la cola. [OpenAPI S02](api/README.md) prevalece para el transporte de K008–K011;
 no define por sí solo el dominio ni los RF posteriores. El
-[modelo inicial](modelo-inicial.md) y [K010](k010-publicacion-lotes.md) distinguen
+[modelo inicial](modelo-inicial.md) y [lotes](lotes.md) distinguen
 lo persistido/implementado de este objetivo; [K005](k005-fotos.md) acredita sólo
 un prototipo de almacenamiento de objetos.
 
@@ -23,9 +23,9 @@ el código como sustituto de los requisitos E1.
 | RF01 — cuentas y establecimientos | Anexos A p. 1, B p. 4 y H p. 21. Una persona puede operar establecimientos mediante membresía; registro no implica pertenencia. | Usuario, Establecimiento, Membresía; operador = usuario miembro. | Autorización contextual, no por ID público. | Transversal a todos; CU-RF02-01. | K008 implementa registro, login, sesión y logout; K010 comprueba membresía actual. La gestión de membresías sigue pendiente. |
 | RF02 — publicación | Anexos A p. 1, B p. 4, C p. 5 y H p. 20; K010 concreta transporte. | Lote, Establecimiento, operador miembro. | Borrador → Publicado; versión, ventana válida e inmutabilidad posterior. | CU-RF02-01. | Implementado sólo para declaración sin fotos asociadas. |
 | Fotos de lote | Anexo I p. 25: opcionales, hasta tres, acceso autorizado y fijas al publicar. | Foto de lote pertenece a un lote; operador gestiona antes de publicar; consulta según visibilidad. | Sólo fotos listas pueden ser visibles; cero fotos permite publicación. | CU-RF02-01, CU-RF03-01. | K005 es prototipo aislado; asociación, validación y contrato pendientes. |
-| RF03 — descubrimiento | RF03 citado por OpenAPI S02 y modelo; K010 no es detalle público. | Lote publicado y persona que explora; política de sesión pendiente. | Consulta no altera `Q` ni disponibilidad. | CU-RF03-01. | Pendiente. |
-| RF04 — compromiso | Anexos A p. 1, B p. 4 y F p. 8; ADR 0002 precisa cantidades. | Compromiso: usuario, lote, solicitud/oferta/reserva. | Cantidades solicitada, ofrecida y confirmada distintas; packs enteros/indivisibles; una reserva activa por usuario/lote requiere compatibilidad al reingresar. | CU-RF04-01. | Sólo `commitments.confirmed` persistido; sin flujo completo. |
-| RF05 — cancelación | Anexos A p. 1 y ADR 0002 para el efecto sobre cantidad aceptada. | Reserva confirmada y usuario titular. | Confirmada → Cancelada sin duplicar liberación; destino de `R` condicionado a reglas de RF05. | CU-RF05-01. | Pendiente. |
+| RF03 — descubrimiento | Anexos A p. 1 y G pp. 11–12: el visitante explora sin sesión; lista paginada por ubicación, categoría y ventana. | Lote publicado y cualquier persona, con o sin sesión. | Consulta no altera `Q` ni disponibilidad; solo fotos listas. | CU-RF03-01. | Pendiente; K015/K016. |
+| RF04 — compromiso | Anexos A p. 1, B p. 4 y F p. 8; ADR 0002 precisa cantidades. | Compromiso: usuario, lote, solicitud/oferta/reserva. | Reserva directa `F → R` o espera voluntaria; cantidades solicitada, ofrecida y confirmada distintas; packs indivisibles; un compromiso activo por usuario y lote; misma clave no crea otra reserva. | CU-RF04-01. | Sólo `commitments.confirmed` persistido; K015 implementa la reserva inicial. |
+| RF05 — cancelación | Anexos A p. 1 y ADR 0002 para el efecto sobre cantidad aceptada. | Reserva confirmada y usuario titular. | Confirmada → Cancelada sin duplicar liberación; `R → F` con lote vigente, si no `R → X` (B p. 4). | CU-RF05-01. | Pendiente. |
 | RF06/RF10 — retiro y panel | Informe E1 p. 5; ADR 0002 confirma acreditar packs realmente retirados, no demanda descartada. | Reserva, Entrega, usuario titular y operador miembro. | Confirmada → Entregada; registro de entrega y `R → E`. | CU-RF06-01. | Pendiente. |
 | Código de retiro | Anexos E1 A p. 2 y G pp. 13 y 16: titular consulta código; operador autorizado lo revisa y confirma entrega completa; código aleatorio de ocho caracteres y cinco fallos/operador/15 min. | Código como credencial asociada a reserva confirmada; espera sin código. | Vigente → Usado al acreditar; revisar no consume; un reintento no crea otra entrega. | CU-RF06-01. | Requisito definido, implementación pendiente. |
 | RF07 — FIFO y oferta | Anexos A p. 2/B p. 4 y ADR 0002. | Solicitud, Oferta, Reserva; asignador y usuario solicitante. | Cabeza FIFO; `F → O → R`; parcial sólo a la cabeza; cerrar sin prioridad residual. | CU-RF07-01. | Pendiente. |
@@ -41,7 +41,7 @@ el código como sustituto de los requisitos E1.
 | Publicar con fotos, reservar y acreditar | CU-RF02-01 fija la declaración/fotos; CU-RF04-01 y CU-RF07-01 separan solicitud, oferta y reserva; CU-RF06-01 crea una entrega única `R → E`. | La carga/validación de fotos y la implementación del código están pendientes; publicar con cero fotos continúa válido. |
 | Código inválido, fuera de ventana o usado | El modelo no altera reserva, entrega ni inventario por un código que no valide; uno usado nunca crea segunda entrega. | El código se consume al acreditar; no se define rotación ni vencimiento independiente de la reserva. |
 | Reportar, publicar y resolver incidencia | CU-RF11-01 registra el reporte sin efectos; CU-RF11-02 fija destinatarios bajo bloqueo; CU-RF11-03 versiona la resolución y, si se decide, cierra el lote conservando entregas. | La idempotencia de incidencias sigue en D-08. |
-| Operación sin permiso | Membresía contextual protege gestión de lote, acreditación y acceso operativo; usuario sólo actúa sobre sus compromisos/entregas. | K008 integra sesión y Actor con K010. Siguen pendientes los flujos de compromisos/entregas, la política de descubrimiento y la administración/revocación de membresías. |
+| Operación sin permiso | Membresía contextual protege gestión de lote, acreditación y acceso operativo; usuario sólo actúa sobre sus compromisos/entregas. | K008 integra sesión y Actor con K010. Siguen pendientes los flujos de compromisos/entregas y la administración/revocación de membresías. |
 
 No se detectó una contradicción documental entre el modelo, estados y casos de uso
 para las reglas confirmadas. Las ambigüedades no se resolvieron por inferencia: se
@@ -103,21 +103,22 @@ administración como rol sigue sin gestión propia, igual que las membresías.
 
 ## Decisiones pendientes
 
-| ID | Pregunta concreta | Fuente de la duda | Elementos afectados | Rol que debe resolver |
-| --- | --- | --- | --- | --- |
-| D-04 | ¿Puede un usuario crear una solicitud nueva sobre un lote cuando aún tiene una reserva confirmada activa? | K003 protege una reserva activa por usuario/lote; ADR 0002 exige reingreso explícito pero deja esta compatibilidad como riesgo futuro. | Compromiso, RF04, FIFO, índice activo. | Producto y dominio. |
-| D-05 | Cuando existe una foto de lote no lista/no autorizada, ¿se bloquea la publicación completa o se omite sólo esa foto? | Anexo I p. 25 exige fotos opcionales y fijas; OpenAPI/K010 sólo exige cero fotos válido. | Foto de lote, publicación, consulta, K014. | Producto y seguridad. |
-| D-06 | Al retirar un lote o al vencer/cancelar una reserva, ¿qué transiciones exactas aplican a `R`, ofertas activas y solicitudes en espera? | RF02 exige retirar para corregir; ADR 0002 define oferta parcial pero remite el recorrido de reserva a reglas existentes no materializadas. | Lote, compromiso, inventario, CU-RF05-01. | Producto y dominio. |
-| D-07 | ¿RF03 permite descubrimiento sin sesión y qué información/fotos puede ver cada actor? | OpenAPI aclara que su GET actual es sólo de operador y no implementa descubrimiento RF03. | Consulta de lote, fotos, autorización, CU-RF03-01. | Producto y seguridad. |
-| D-08 | ¿Qué clave de idempotencia, retención de resultado y respuesta de reintento se aplican a asignación, acreditación e incidencias? | Anexos H p. 20 exige claves para asignación/incidencias; no fija su representación en el dominio ni el contrato HTTP. | Oferta, entrega, incidencia y concurrencia. | Dominio y arquitectura. |
+D-04, D-06 y D-07 se resolvieron con E1:
 
-## Corrección posterior (2026-09-27)
+- **D-04** (nueva solicitud con reserva activa): no. «Se admite un compromiso activo
+  por usuario y lote» (A p. 1); la nueva solicitud de ADR 0002 espera a que la reserva termine.
+- **D-06** (transiciones al retirar, cancelar o vencer): «Cerrar o retirar lote: todo
+  F, O y R pendiente pasa a X. Los retiros E permanecen»; cancelar o vencer devuelve a
+  `F` solo con el lote vigente, y si no pasa a `X` (B p. 4).
+- **D-07** (descubrimiento sin sesión): sí. «El visitante explora sin sesión» (A p. 1),
+  con búsqueda por ubicación, categoría y ventana (G pp. 11–12).
 
-La revisión de la semana encontró que el anexo I p. 26 y el anexo A p. 3 de E1
-definen RF11. Se resolvieron D-01 y D-03 y se reemplazó la «incidencia posterior
-ligada a una entrega» por la incidencia de lote en
-[modelo-inicial.md](modelo-inicial.md), [casos-de-uso.md](casos-de-uso.md) y esta
-matriz. Las tarjetas K043–K046 ya seguían a E1; el resto de K013 no cambia.
+Siguen abiertas, acotadas por E1, en issues:
+
+| ID | Pregunta | Issue | Se decide en |
+| --- | --- | --- | --- |
+| D-05 | ¿Publicar con una foto que aún no está lista se rechaza o la omite? | #102 | K014 |
+| D-08 | Representación HTTP y persistencia de las claves de idempotencia | #103 | K015 |
 
 ## Verificación documental
 

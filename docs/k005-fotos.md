@@ -4,7 +4,7 @@ Estado: **prototipo local y smoke remoto real en Backblaze B2 verificados**.
 Validación remota completada el 2026-09-20; incluye carga, acceso privado y borrado
 de la versión con comprobación de ausencia posterior.
 Investigación documental: 2026-09-20. Las capacidades publicadas no equivalen a pruebas
-ejecutadas por el equipo. Evidencia concreta en [k005-evidencia.md](k005-evidencia.md).
+ejecutadas por el equipo. Evidencia concreta en [evidencia/k005.md](evidencia/k005.md).
 
 ## Inspección y alcance
 
