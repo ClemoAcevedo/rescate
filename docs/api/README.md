@@ -1,13 +1,12 @@
 # Contrato HTTP de S02
 
-[openapi.yaml](openapi.yaml) es la **fuente de verdad HTTP** para K008–K011:
+[openapi.yaml](openapi.yaml) es la **fuente de verdad HTTP** para identidad,
+lotes del operador, descubrimiento y reserva directa:
 OpenAPI **3.1.0**, versión inicial del contrato **0.1.0**, un solo archivo.
-Se prepara después de [ADR 0003](../adr/0003-arquitectura-incremental-s02.md) y
-antes de implementar esas tarjetas. K010 ahora implementa las cuatro operaciones
-de lotes con PostgreSQL, además de [`GET /health`](../../api/src/app.ts).
-K008 implementa identidad, sesiones, Origin/CSRF y conexión real con Actor/K010.
-[La guía K008](../k008-identidad.md) reúne operación, decisiones y evidencia nueva.
-Se actualiza la descripción de estado del YAML; no cambian rutas ni schemas.
+K010 implementa las cuatro operaciones del operador con PostgreSQL, además de
+[`GET /health`](../../api/src/app.ts). K008 implementa identidad, sesiones y
+Origin/CSRF. La búsqueda pública y reserva directa están descritas en
+[lotes](../lotes.md).
 
 OpenAPI define transporte, seguridad, requests, responses y errores. Las
 [migraciones](../../api/migrations) definen persistencia; Domain y la documentación
@@ -410,3 +409,12 @@ La primera prueba de salud falló dentro del sandbox; al permitir el puerto loca
 pasó, también después de `npm ci`. No se ejecutó GitHub Actions remoto ni se repitió
 Compose/migraciones/B2, cuyo código y configuración operativa no cambian aquí.
 La evidencia estructural no demuestra autorización, transacciones ni CSRF ejecutados.
+## Descubrimiento público y reserva
+
+`GET /public/lots` admite filtros y paginación sin sesión.
+`GET /public/lots/{lotId}` devuelve el detalle publicado y vigente, incluido stock
+libre derivado y `photoUrl` nullable. `POST /public/lots/{lotId}/reservations`
+requiere sesión, Origin y CSRF; confirma directamente bajo bloqueo del lote. Su
+`idempotencyKey` UUID identifica una intención y una repetición devuelve 200 sin
+crear otra reserva. Los errores 409 requieren consultar de nuevo el lote antes de
+cambiar la cantidad. El contrato completo está en [OpenAPI](openapi.yaml).

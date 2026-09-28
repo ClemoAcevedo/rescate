@@ -138,6 +138,11 @@ comandos exigen además Origin permitido y CSRF firmado. La cabecera de actor de
 desarrollo ya no autentica. K008 expone `POST /auth/register`, `POST /auth/login`,
 `GET /auth/session` y `POST /auth/logout`; registro no asigna permisos ni inicia sesión.
 
+La búsqueda pública `GET /public/lots` y el detalle `GET /public/lots/:lotId`
+permiten explorar sin sesión. Una persona autenticada puede reservar packs con
+`POST /public/lots/:lotId/reservations`; la API relee el stock bajo bloqueo y
+acepta una clave de idempotencia para reintentos.
+
 El contrato, las decisiones y las pruebas están en
 [docs/lotes.md](docs/lotes.md).
 
@@ -245,10 +250,10 @@ K003
 Este es el único resumen de estado del repositorio; se actualiza en el mismo PR que
 lo cambia.
 
-- **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011).
-  Las pantallas de exploración de lotes son demostraciones.
-- **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
-  (K010), según OpenAPI S02.
+- **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011);
+  búsqueda, detalle y reserva directa de packs (K016).
+- **API:** `/health`, identidad y sesiones (K008), borrador/publicación de lotes
+  (K010), búsqueda pública y reserva directa, según OpenAPI S02.
 - **Worker:** inactivo. **Fotos:** prototipo aislado (K005).
 
 El [índice de documentación](docs/README.md) lleva a cada área.

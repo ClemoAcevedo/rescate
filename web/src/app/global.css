@@ -200,6 +200,34 @@ code, kbd, samp { font-family: var(--font-mono); }
 .lot-summary dt { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
 .lot-summary dd { margin: 0; white-space: pre-line; }
 
+/* Exploración de lotes. */
+.explore-page { width: min(100%, var(--layout-max)); margin: 0 auto; }
+.explore-header { margin-bottom: var(--sp-6); }
+.explore-header .eyebrow { margin-bottom: var(--sp-2); }
+.explore-header p:last-child { margin: var(--sp-3) 0 0; color: var(--text-muted); }
+.explore-filters { display: grid; gap: var(--sp-4); padding: var(--sp-5); margin-bottom: var(--sp-6); }
+.explore-filters__form { display: grid; gap: var(--sp-4); }
+.explore-filters__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.explore-filters__actions, .explore-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.explore-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--sp-4); }
+.explore-lot { display: grid; gap: var(--sp-3); padding: var(--sp-4); }
+.explore-lot h2 { font-size: var(--fs-title-lg); }
+.explore-lot p { margin: 0; }
+.explore-lot__meta { color: var(--text-muted); font-size: var(--fs-meta); }
+.explore-lot__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.explore-pagination { justify-content: center; margin-top: var(--sp-6); }
+.lot-photo { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-md); object-fit: cover; }
+.lot-photo--replacement { display: grid; place-content: center; justify-items: center; gap: var(--sp-2); background: var(--surface-brand-soft); color: var(--text-brand); text-align: center; font-size: var(--fs-meta); }
+.lot-photo--replacement svg { width: 7rem; max-width: 60%; }
+.public-lot { width: min(100%, var(--content-max)); }
+.public-lot__card { padding: clamp(var(--sp-5), 4vw, var(--sp-10)); }
+.public-lot__card > .lot-photo { margin: var(--sp-5) 0; }
+.public-lot__facts { display: grid; grid-template-columns: minmax(0, 10rem) minmax(0, 1fr); gap: var(--sp-2) var(--sp-4); margin: var(--sp-5) 0; }
+.public-lot__facts dt { color: var(--text-muted); font-size: var(--fs-meta); }
+.public-lot__facts dd { margin: 0; }
+.reserve-form { display: grid; gap: var(--sp-3); padding-top: var(--sp-5); border-top: var(--border-width) solid var(--border-subtle); }
+.reserve-form h2 { font-size: var(--fs-title-lg); }
+
 /* Breakpoint de navegación existente. Las variables CSS no sirven en media queries. */
 @media (max-width: 48rem) {
   .site-header {
@@ -228,6 +256,8 @@ code, kbd, samp { font-family: var(--font-mono); }
   .page-content { padding-top: var(--sp-5); }
   .lot-form__row, .lot-summary__row { grid-template-columns: minmax(0, 1fr); }
   .lot-summary__row { gap: var(--sp-1); }
+  .explore-filters__fields, .public-lot__facts { grid-template-columns: minmax(0, 1fr); }
+  .public-lot__facts { gap: var(--sp-1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

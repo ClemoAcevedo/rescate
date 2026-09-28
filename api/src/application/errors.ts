@@ -7,6 +7,7 @@ export type ApplicationErrorCode =
   | "lot_not_found"
   | "establishment_not_found"
   | "version_conflict"
+  | "reservation_conflict"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -29,6 +30,9 @@ export const lotNotFound = (): ApplicationError =>
 
 export const versionConflict = (): ApplicationError =>
   new ApplicationError("version_conflict", "El lote cambió desde su última lectura.")
+
+export const reservationConflict = (): ApplicationError =>
+  new ApplicationError("reservation_conflict", "La reserva no puede confirmarse con el estado actual.")
 
 export const establishmentNotFound = (): ApplicationError =>
   new ApplicationError("establishment_not_found", "El establecimiento no existe.")

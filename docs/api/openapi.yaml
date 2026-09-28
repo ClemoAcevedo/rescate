@@ -1,9 +1,9 @@
-# Contrato S02; endpoints todavía no implementados. Ver README.md.
+# Contrato S02; estado implementado en README.md.
 openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP para K008–K011. Implementadas las cuatro operaciones auth K008 y las cuatro de lotes K010, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador, búsqueda pública y reserva directa, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -15,7 +15,102 @@ tags:
   -
     name: "Lots"
     description: "RF02: borrador completo, edición optimista y publicación por operador autorizado."
+  -
+    name: "Discovery"
+    description: "RF03/RF04: exploración pública y reserva directa."
 paths:
+  "/public/lots":
+    get:
+      operationId: "searchPublicLots"
+      summary: "Buscar lotes publicados y vigentes"
+      tags: ["Discovery"]
+      security: []
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - name: latitude
+          in: query
+          schema: { type: number, minimum: -90, maximum: 90 }
+        - name: longitude
+          in: query
+          schema: { type: number, minimum: -180, maximum: 180 }
+        - name: radiusKm
+          in: query
+          schema: { type: number, exclusiveMinimum: 0, maximum: 100 }
+        - name: pickupBefore
+          in: query
+          description: "Instante RFC 3339; conserva lotes cuya ventana comienza antes o en ese instante."
+          schema: { $ref: "#/components/schemas/Instant" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de hasta 12 lotes, incluso sin sesión. Distancia aproximada en kilómetros solo si se enviaron coordenadas."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicLotPage" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/public/lots/{lotId}":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    get:
+      operationId: "getPublicLot"
+      summary: "Consultar detalle de un lote visible"
+      tags: ["Discovery"]
+      security: []
+      responses:
+        "200":
+          description: "Detalle público vigente; disponibilidad calculada al leer, sujeta a cambio antes de reservar."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicLot" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/public/lots/{lotId}/reservations":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "reservePublicLot"
+      summary: "Reservar packs disponibles"
+      description: "Reserva directa atómica. Requiere sesión, Origin y CSRF. La clave de idempotencia evita duplicados al reintentar una respuesta incierta. 409 si faltan packs o ya hay reserva activa del mismo usuario y lote."
+      tags: ["Discovery"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReserveLotRequest" }
+      responses:
+        "201":
+          description: "Reserva confirmada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationResponse" }
+        "200":
+          description: "Respuesta de un reintento con la misma clave."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationResponse" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   "/auth/register":
     post:
       operationId: "register"
@@ -739,6 +834,50 @@ components:
               code: "SERVICE_UNAVAILABLE"
               message: "El servicio no está disponible temporalmente."
   schemas:
+    PublicLot:
+      type: object
+      additionalProperties: false
+      required: [id, description, category, quantity, availableQuantity, conditions, address, latitude, longitude, timeZone, pickupStartsAt, pickupEndsAt, photoUrl, distanceKm]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+        category: { $ref: "#/components/schemas/Category" }
+        quantity: { $ref: "#/components/schemas/Quantity" }
+        availableQuantity: { type: integer, minimum: 0, description: "Packs libres al instante de la lectura; puede cambiar." }
+        conditions: { $ref: "#/components/schemas/Conditions" }
+        address: { $ref: "#/components/schemas/Address" }
+        latitude: { $ref: "#/components/schemas/Latitude" }
+        longitude: { $ref: "#/components/schemas/Longitude" }
+        timeZone: { $ref: "#/components/schemas/TimeZone" }
+        pickupStartsAt: { $ref: "#/components/schemas/Instant" }
+        pickupEndsAt: { $ref: "#/components/schemas/Instant" }
+        photoUrl: { type: [string, "null"], format: uri, description: "Foto visible si existe; null muestra reemplazo local." }
+        distanceKm: { type: [number, "null"], minimum: 0, description: "Distancia geográfica aproximada al punto enviado." }
+    PublicLotPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PublicLot" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+    ReserveLotRequest:
+      type: object
+      additionalProperties: false
+      required: [quantity, idempotencyKey]
+      properties:
+        quantity: { type: integer, minimum: 1 }
+        idempotencyKey: { type: string, format: uuid, description: "UUID generado por el cliente para una intención de reserva." }
+    ReservationResponse:
+      type: object
+      additionalProperties: false
+      required: [id, lotId, quantity, status, createdAt]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        lotId: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1 }
+        status: { type: string, const: confirmed }
+        createdAt: { $ref: "#/components/schemas/Instant" }
     PublicId:
       type: "string"
       description: "Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización."

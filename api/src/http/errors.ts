@@ -19,6 +19,7 @@ const errors = {
   lot_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   establishment_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   version_conflict: [409, "CONFLICT", "El lote cambió. Vuelve a consultarlo antes de reintentar."],
+  reservation_conflict: [409, "CONFLICT", "No hay packs suficientes o ya existe una reserva activa. Consulta el lote antes de continuar."],
 } as const
 const conflicts = new Set(["lot_already_published", "published_lot_is_immutable"])
 const fields: Record<string, string> = {

@@ -32,18 +32,40 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
 | PATCH | `/lots/:lotId` | 200, versión incrementada |
 | POST | `/lots/:lotId/publish` | 200, publicado |
 
-Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. No
-hay listado de lotes (#96).
+Las rutas son relativas a la base de la API; el proxy de la web quita `/api`.
+PATCH recibe `version` y al menos un campo. Omitir un campo lo conserva;
+`conditions: null` lo borra. Application combina el patch con la declaración
+leída bajo bloqueo y Domain valida el resultado completo. Publicar recibe solo
+`{ "version": N }`. Se rechazan propiedades desconocidas, cambios de
+establecimiento y campos del servidor. Las fechas son RFC 3339 con zona explícita;
+las respuestas usan UTC.
 
-- PATCH recibe `version` y al menos un campo. Omitir un campo lo conserva;
-  `conditions: null` lo borra. Application combina el patch con la declaración
-  leída bajo bloqueo y Domain valida el resultado completo.
-- Publicar recibe solo `{ "version": N }`.
-- Se rechazan propiedades desconocidas, cambio de establecimiento y campos del
-  servidor. Las fechas son RFC 3339 con zona explícita; las respuestas usan UTC.
-- Las respuestas exponen solo `LotResponse`, con `Cache-Control: no-store`. Los
-  errores siguen `{error:{code,message,details?}}`, con `details.issues[].path`
-  como JSON Pointer. Los códigos por operación están en OpenAPI.
+## Exploración y reserva directa
+
+La lista y el detalle públicos muestran lotes publicados cuyo retiro no ha
+terminado. El listado acepta categoría, punto WGS84 y radio (hasta 100 km),
+inicio de retiro anterior a un instante y páginas de 12 resultados. Sin punto
+se ordena por publicación reciente; con punto, por distancia geográfica
+aproximada. La zona se escribe a mano o se completa con permiso del navegador;
+denegarlo no limita la búsqueda.
+
+La disponibilidad es cantidad declarada menos reservas confirmadas. Un lote
+agotado sigue visible con «Sin stock»; abrir el detalle no reserva packs. La foto
+visible es opcional: mientras no hay fotos integradas, la API devuelve `photoUrl`
+null y la web muestra una imagen de reemplazo.
+
+La reserva directa requiere sesión y CSRF. El caso de uso bloquea el lote,
+relee las reservas, comprueba disponibilidad y un único compromiso activo por
+persona/lote y confirma la cantidad solicitada en la misma transacción. Una clave
+UUID por intención permite reintentar una respuesta incierta sin duplicar. Si
+falta stock, responde 409 y la web vuelve a consultar el detalle. La espera FIFO,
+ofertas y entregas siguen las reglas de [ADR 0002](adr/0002-ofertas-parciales.md)
+cuando se implementen; esta operación solo confirma si hay stock suficiente.
+
+Las respuestas del operador exponen `LotResponse`. Todas las respuestas llevan
+`Cache-Control: no-store`; los errores siguen `{error:{code,message,details?}}`,
+con `details.issues[].path` como JSON Pointer. Los códigos por operación están en
+OpenAPI.
 
 ## Backend
 
@@ -126,8 +148,10 @@ npm --prefix api run db:seed:demo -- --refresh-expired-lots
 
 ## Pruebas
 
-Todas corren en CI. Los comandos `*:compose` necesitan el servicio `db` de Compose
-y crean una base aislada que conservan para inspección.
+Las pruebas corren en CI. Los comandos `*:compose` necesitan el servicio `db` de
+Compose y crean una base aislada que conservan para inspección. Los comandos de
+descubrimiento reciben `DATABASE_URL` de una base aislada y migrada; el recorrido
+web requiere además Vite HTTPS y la API con esa misma base.
 
 | Comando | Qué comprueba |
 | --- | --- |
@@ -135,10 +159,13 @@ y crean una base aislada que conservan para inspección.
 | `npm --prefix api run db:test:lots:compose` | PostgreSQL real: IDs, permisos, conflictos concurrentes, edición contra publicación y rollback. |
 | `npm --prefix api run db:test:auth:compose` | Sesión real hasta lotes por HTTPS; datos semilla, publicación por dos operadores y rechazo entre establecimientos y del visitante. |
 | `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS y la API: formulario completo, conflicto, doble clic, 422, 404 y layout sin scroll horizontal. |
+| `npm --prefix api run db:test:discovery` | Sobre una base K016 migrada: búsqueda anónima, login, reserva, reintento, agotamiento y competencia por el último pack. |
+| `npm --prefix api run test:web:discovery` | Con Vite HTTPS, API y la misma base: exploración, geolocalización denegada, filtros manuales, detalle, login y reserva real. |
 
 ## Limitaciones
 
-- No hay listado de lotes; un borrador solo se recupera con su URL (#96).
+- El listado público no muestra borradores; un borrador solo se recupera con su URL
+  de operador (#96).
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
 - Sin fotos hasta K014/K017.

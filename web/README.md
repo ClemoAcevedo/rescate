@@ -33,7 +33,8 @@ levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth`,
 
 ## Estado de las rutas
 
-`/` redirige a `/lotes`. `/lotes` y `/lotes/:id` son demostraciones estáticas;
+`/` redirige a `/lotes`. `/lotes` busca lotes publicados sin sesión, y
+`/lotes/:id` muestra detalle y permite reservar packs tras iniciar sesión;
 `/registro` y `/login` integran K008. `/operador/lotes/nuevo` y
 `/operador/lotes/:lotId` integran el borrador y la publicación de K010 (K011). `/conexion` consulta únicamente
 `/health`; las rutas desconocidas muestran la pantalla 404. Recargas directas
@@ -44,6 +45,13 @@ generados desde [OpenAPI S02](../docs/api/README.md) en `services/openapi.ts`
 (`npm --prefix api run api:types`; no editar a mano). Decisiones del formulario de lotes en
 [docs/lotes.md](../docs/lotes.md). La selección del material y
 la evidencia local están en [integración del design system](../docs/frontend-design-system.md).
+
+La exploración usa `GET /public/lots` con filtros de categoría, zona por
+coordenadas, radio y ventana. La ubicación del navegador es opcional; los campos
+manuales y la búsqueda sin zona funcionan si se deniega el permiso. El detalle
+usa `GET /public/lots/:lotId`; la reserva envía CSRF e idempotencia a
+`POST /public/lots/:lotId/reservations`. La imagen de reemplazo se muestra cuando
+no hay fotografía o falla su carga.
 
 ## Identidad K008 (K009)
 
