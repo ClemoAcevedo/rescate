@@ -12,7 +12,9 @@ const migrations = [
   '1789999138556_lots-publication-fields',
   '1790000000000_establishment-public-ids',
   '1790000000001_identity-sessions',
+  '1790620000000_public-reservations',
 ]
+const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
   'Revisar explícitamente la prueba antes de incluir nuevas migraciones y su rollback')
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 })
@@ -185,20 +187,30 @@ try {
   const previousHistory = await history()
   assert.deepEqual(previousHistory.map(row => row.name), migrations.slice(0, 4))
   await applyIdentityWithPendingInsert(client)
-  assert.deepEqual((await history()).map(row => row.name), migrations)
+  assert.deepEqual((await history()).map(row => row.name), identityMigrations)
   assert.deepEqual((await history()).slice(0, 4), previousHistory)
   ok('desde cero y upgrade K010 vacío: K008 aplicada sin cambiar el historial previo')
   await verifyIdentitySchema(client)
   ok('K008: correo Unicode, unicidad, credenciales, sesiones y estado de login verificados en PostgreSQL')
   await client.query('INSERT INTO public.migration_tool_test(id) VALUES (1)')
   await verifyModel()
-  const applied = await history()
   const before = await snapshot()
-  const data = await query('SELECT * FROM commitments ORDER BY id')
+  const data = await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id')
+  // K016 se aplica sobre compromisos ya existentes: los IDs opacos se rellenan
+  // sin perder cantidades, estado ni relaciones.
+  run('up')
+  const applied = await history()
+  assert.deepEqual(applied.map(row => row.name), migrations)
+  const reservationColumns = await query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='commitments'
+      AND column_name IN ('public_id', 'idempotency_key') ORDER BY column_name`)
+  assert.deepEqual(reservationColumns.map(row => row.column_name), ['idempotency_key', 'public_id'])
+  assert.equal((await query('SELECT count(*)::int AS count FROM commitments WHERE public_id IS NULL'))[0].count, 0)
+  ok('K016 agrega IDs de reserva e idempotencia sin perder compromisos existentes')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), before)
-  assert.deepEqual(await query('SELECT * FROM commitments ORDER BY id'), data)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
   assert.equal(migrations.filter(name => !applied.some(row => row.name === name)).length, 0)
   ok('segunda ejecución: 0 pendientes; historial, OID de tablas y datos intactos')
 
@@ -206,10 +218,17 @@ try {
   const usersBeforeDown = await query('SELECT id, email, created_at FROM users ORDER BY id')
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   run('down', '1')
+  assert.deepEqual((await history()).map(row => row.name), identityMigrations)
+  assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='commitments'
+      AND column_name IN ('public_id', 'idempotency_key')`), [])
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  ok('rollback K016 retira solo sus columnas y conserva compromisos')
+  run('down', '1')
   assert.deepEqual(await history(), applied.slice(0, 4))
   assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeDown)
   assert.deepEqual(await query('SELECT * FROM memberships ORDER BY id'), membershipsBeforeDown)
-  assert.deepEqual(await query('SELECT * FROM commitments ORDER BY id'), data)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
   assert.deepEqual((await snapshot()).map(row => row.relname), [...tables, 'migration_tool_test', 'pgmigrations'].sort())
   assert.deepEqual(await query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='public_id'"), [])
   assert.equal((await query("SELECT to_regprocedure('public.canonicalize_email(text)') AS function"))[0].function, null)
@@ -222,7 +241,7 @@ try {
   assert.deepEqual(await history(), applied.slice(0, 4))
   assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeDown)
   assert.deepEqual(await query('SELECT * FROM memberships ORDER BY id'), membershipsBeforeDown)
-  assert.deepEqual(await query('SELECT * FROM commitments ORDER BY id'), data)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
   ok('down K008 conserva cuentas y relaciones; reaplicar con usuarios aborta sin transformar ni borrar datos')
 
   // Se mantiene el ciclo histórico de rollback K010/K003 sobre esta base
