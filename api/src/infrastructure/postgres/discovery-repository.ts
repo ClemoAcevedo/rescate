@@ -32,11 +32,13 @@ function toReservation(row: ReservationRow): Reservation {
   return { id: row.id, lotId: row.lot_id, userId: row.user_id, quantity: row.quantity,
     createdAt: row.created_at, idempotencyKey: row.idempotency_key }
 }
-async function readLot(client: PoolClient, lotId: string, now: Date): Promise<PublicLot | null> {
+// Sin instante no se filtra por ventana: la reserva la comprueba Application con su reloj.
+async function readLot(db: Pool | PoolClient, lotId: string, now: Date | null): Promise<PublicLot | null> {
   if (!uuid.test(lotId)) return null
-  const { rows } = await client.query<LotRow>(
+  const { rows } = await db.query<LotRow>(
     `SELECT ${publicColumns} FROM public.lots l
-     WHERE l.public_id = $1 AND l.status = 'published' AND l.pickup_ends_at > $2`,
+     WHERE l.public_id = $1 AND l.status = 'published'
+       AND ($2::timestamptz IS NULL OR l.pickup_ends_at > $2)`,
     [lotId, now, null, null],
   )
   return rows[0] ? toLot(rows[0]) : null
@@ -58,14 +60,8 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
       )
       return { items: rows.slice(0, 12).map(toLot), hasNextPage: rows.length > 12 }
     },
-    async get(lotId, now) {
-      if (!uuid.test(lotId)) return null
-      const { rows } = await pool.query<LotRow>(
-        `SELECT ${publicColumns} FROM public.lots l
-         WHERE l.public_id = $1 AND l.status = 'published' AND l.pickup_ends_at > $2`,
-        [lotId, now, null, null],
-      )
-      return rows[0] ? toLot(rows[0]) : null
+    get(lotId, now) {
+      return readLot(pool, lotId, now)
     },
     async withReservationTransaction(userId, lotId, key, operate) {
       return withTransaction(pool, async (client) => {
@@ -87,7 +83,7 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
             'SELECT id::text FROM public.lots WHERE public_id = $1 FOR UPDATE', [lotId],
           )
           if (locked.rows[0]) {
-            lot = await readLot(client, lotId, new Date())
+            lot = await readLot(client, lotId, null)
             const found = await client.query<{ active: boolean }>(
               `SELECT EXISTS (SELECT 1 FROM public.commitments
                WHERE user_id = $1 AND lot_id = $2 AND status = 'confirmed') AS active`,

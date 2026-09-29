@@ -25,6 +25,10 @@ try {
       if (path === '/api/auth/session') {
         return route.fulfill({ json: { session: active ? session : null, csrfToken: 'controlled' } })
       }
+      // /lotes consulta la búsqueda pública; una página vacía aísla el recorrido de logout.
+      if (path === '/api/public/lots') {
+        return route.fulfill({ json: { items: [], page: 1, hasNextPage: false } })
+      }
       if (path === '/api/auth/logout') {
         attempts += 1
         if (attempts === 1) {
