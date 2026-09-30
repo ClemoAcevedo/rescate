@@ -113,12 +113,12 @@ D-04, D-06 y D-07 se resolvieron con E1:
 - **D-07** (descubrimiento sin sesión): sí. «El visitante explora sin sesión» (A p. 1),
   con búsqueda por ubicación, categoría y ventana (G pp. 11–12).
 
-Siguen abiertas, acotadas por E1, en issues:
+Seguimiento de decisiones técnicas:
 
 | ID | Pregunta | Issue | Se decide en |
 | --- | --- | --- | --- |
 | D-05 | ¿Publicar con una foto que aún no está lista se rechaza o la omite? | #102 | K014 |
-| D-08 | Representación HTTP y persistencia de las claves de idempotencia | #103 | K015 |
+| D-08 | Representación HTTP y persistencia de las claves de idempotencia | [#103](https://github.com/ClemoAcevedo/rescate/issues/103) | Resuelta para reserva directa en [ADR 0004](adr/0004-reserva-directa-idempotente.md) |
 
 ## Verificación documental
 

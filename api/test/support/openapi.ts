@@ -11,7 +11,10 @@ addFormats(ajv)
 ajv.addSchema({ $id: "rescate", components: contract.components })
 const validators = new Map<string, ReturnType<typeof ajv.compile>>()
 export function assertContract(method: string, path: string, response: Response, body: unknown): void {
-  const route = path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
+  path = path.split("?")[0]!
+  const route = path === "/public/lots" ? path
+    : path.startsWith("/public/lots/") ? (path.endsWith("/reservations") ? "/public/lots/{lotId}/reservations" : "/public/lots/{lotId}")
+    : path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
     : path.endsWith("/publish") ? "/lots/{lotId}/publish" : "/lots/{lotId}"
   const operation = contract.paths[route][method.toLowerCase()]
   let spec = operation.responses[String(response.status)]

@@ -14,7 +14,8 @@ export async function applyIdentityWithPendingInsert(client) {
   let transactionOpen = true
   try {
     await client.query("INSERT INTO users(email) VALUES ('uncommitted-k008@example.invalid')")
-    child = spawn(process.execPath, ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', 'up'], {
+    // Aplicar solo K008: las migraciones posteriores tienen sus propias pruebas.
+    child = spawn(process.execPath, ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', 'up', '1'], {
       env: { ...process.env, PGAPPNAME: 'k008-migration-lock-test' }, stdio: ['ignore', 'pipe', 'pipe'],
     })
     let output = ''

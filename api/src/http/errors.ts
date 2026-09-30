@@ -4,6 +4,7 @@ import { TrafficLimitError, TrafficCapacityError } from "./rate-limits.js"
 import type { Response } from "express"
 import { ApplicationError } from "../application/errors.js"
 import { LotRuleError } from "../domain/lots.js"
+import { ReservationRuleError } from "../domain/reservations.js"
 import type { HttpSchemas } from "./openapi.js"
 
 type ErrorBody = HttpSchemas["ErrorResponse"]
@@ -19,6 +20,7 @@ const errors = {
   lot_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   establishment_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   version_conflict: [409, "CONFLICT", "El lote cambió. Vuelve a consultarlo antes de reintentar."],
+  idempotency_conflict: [409, "CONFLICT", "La clave ya se usó con otro lote o cantidad."],
 } as const
 const conflicts = new Set(["lot_already_published", "published_lot_is_immutable"])
 const fields: Record<string, string> = {
@@ -42,6 +44,11 @@ export function handleError(error: unknown, response: Response, log: (error: unk
     sendError(response, 429, "RATE_LIMITED", "Intenta nuevamente después del tiempo indicado.")
   } else if (error instanceof PasswordHashingCapacityError || error instanceof TrafficCapacityError) {
     sendError(response, 503, "SERVICE_UNAVAILABLE", "El servicio no está disponible temporalmente.")
+  } else if (error instanceof ReservationRuleError) {
+    if (error.reason === 'invalid_quantity') sendError(response, 422, 'VALIDATION_ERROR', 'Revisa la cantidad.',
+      [{ path: '/quantity', message: 'Se requiere un entero entre 1 y 2147483647.' }])
+    else sendError(response, 409, 'CONFLICT', error.reason === 'active_commitment'
+      ? 'Ya tienes una reserva activa de este lote.' : 'El lote cerró o no tiene packs suficientes.')
   } else if (error instanceof ApplicationError) {
     const [status, code, message] = errors[error.code]
     sendError(response, status, code, message)

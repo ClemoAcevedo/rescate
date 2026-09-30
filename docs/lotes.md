@@ -1,4 +1,4 @@
-# Lotes (RF02)
+# Lotes, búsqueda y reserva directa (RF02–RF04)
 
 Un operador crea un borrador de lote para un establecimiento del que es miembro,
 lo edita y lo publica. Lo publicado no cambia. El contrato HTTP está en
@@ -19,7 +19,7 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
   fotos permite publicar.
 - **Inmutabilidad.** Un lote publicado no se edita ni se republica (409):
   cantidad, contenido, lugar y plazo quedan fijos.
-- **Autorización.** Cada operación comprueba la membership actual sobre el
+- **Autorización del operador.** Cada operación de borrador/publicación comprueba la membership actual sobre el
   establecimiento del lote. La lista de establecimientos de la sesión solo orienta
   la navegación; los UUID públicos no conceden permisos.
 
@@ -32,8 +32,7 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
 | PATCH | `/lots/:lotId` | 200, versión incrementada |
 | POST | `/lots/:lotId/publish` | 200, publicado |
 
-Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. No
-hay listado de lotes (#96).
+Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. El listado del operador sigue pendiente (#96); la búsqueda pública usa rutas separadas.
 
 - PATCH recibe `version` y al menos un campo. Omitir un campo lo conserva;
   `conditions: null` lo borra. Application combina el patch con la declaración
@@ -95,6 +94,51 @@ Código principal: [lots-service.ts](../web/src/services/lots-service.ts),
 [lot-form.ts](../web/src/lots/lot-form.ts), [lot-time.ts](../web/src/lots/lot-time.ts)
 y [LotEditorPage.tsx](../web/src/pages/LotEditorPage.tsx).
 
+## Búsqueda y reserva directa
+
+`/lotes` consulta la API sin sesión. Permite categoría, ubicación manual o del
+navegador, radio y comienzo de la ventana de retiro. PostGIS usa `geography` WGS84:
+`ST_DWithin` filtra el radio con índice GiST y `ST_Distance` ordena por distancia
+geográfica, no tiempo de viaje. Cada página tiene hasta 12 lotes. Sin coordenadas
+se ordena por publicación; fecha e ID desempatan. La disponibilidad puede cambiar
+entre páginas y se vuelve a leer al reservar. El detalle excluye borradores y
+lotes cerrados; los lotes sin stock muestran cero disponibles.
+
+La persona inicia sesión para reservar. El actor procede de K008, nunca del cuerpo.
+Application coordina la transacción mediante `withReservationTransaction`:
+
+1. Serializa la clave por actor y lee un resultado previo.
+2. Si no existe, bloquea el lote con `FOR UPDATE` y relee disponibilidad y compromiso activo.
+3. Domain exige packs enteros positivos, stock suficiente, ausencia de otro
+   compromiso activo del mismo usuario/lote y un instante anterior al cierre.
+4. Inserta reserva y clave juntas. HTTP responde solo después del commit.
+
+La espera por cada bloqueo tiene un límite de 2 s. Si se supera, la transacción
+revierte y responde 503; el mismo intento se puede repetir sin consumir su clave.
+
+Se puede reservar antes del inicio del retiro. La cantidad publicada no cambia;
+la disponibilidad es `Q - SUM(commitments.quantity)` para reservas confirmadas.
+K015 no crea cola, ofertas, cancelaciones, códigos ni retiros. Al añadir esos
+estados, S04 debe ampliar este cálculo y atender prioridad FIFO bajo el mismo
+bloqueo; se conserva ADR 0002.
+
+La clave UUID viaja en `idempotencyKey`. Un resultado confirmado reproduce el
+mismo 201 y cuerpo con la misma clave y parámetros, incluso tras cerrar el lote.
+Cambiar lote o cantidad con esa clave da 409. Un error no consume la clave.
+[ADR 0004](adr/0004-reserva-directa-idempotente.md) explica la persistencia.
+
+El navegador espera hasta 10 s por intento y reintenta fallos inciertos hasta tres
+veces a 1, 2 y 4 s, conservando clave y cantidad. Mientras envía o queda un resultado
+incierto, bloquea el cambio de cantidad. No convierte un timeout en una reserva
+fallida ni inicia otra intención en silencio. Esto incluye un 5xx del proxy aunque
+su cuerpo no sea JSON. Tras confirmar, vuelve a consultar la disponibilidad para
+incluir reservas de otras personas.
+
+Recorrido: [router](../api/src/http/discovery-router.ts) →
+[Application](../api/src/application/discovery/use-cases.ts) →
+[reglas](../api/src/domain/reservations.ts) /
+[PostgreSQL](../api/src/infrastructure/postgres/discovery-repository.ts).
+
 ## Datos de demostración
 
 Con PostgreSQL de [Compose](desarrollo-local.md) y `DATABASE_URL` en `api/.env`
@@ -109,7 +153,7 @@ npm --prefix api run db:seed:demo
 | --- | --- | --- |
 | `operador.norte@example.test` | Almacén Norte ficticio | Un borrador y uno publicado |
 | `operador.sur@example.test` | Almacén Sur ficticio | Un borrador y uno publicado |
-| `visitante@example.test` | Ninguno | Sin acceso a lotes |
+| `visitante@example.test` | Ninguno | Explora y reserva publicados; no opera borradores |
 
 Contraseña de prueba: `Rescate-K012-solo-pruebas!`. Los ID están en
 [demo-data.mjs](../api/fixtures/demo-data.mjs); los lotes se abren en
@@ -134,11 +178,12 @@ y crean una base aislada que conservan para inspección.
 | `npm --prefix api test` | Reglas, requests HTTP, permisos, PATCH parcial, versión, inmutabilidad y errores; Ajv valida las respuestas contra OpenAPI. |
 | `npm --prefix api run db:test:lots:compose` | PostgreSQL real: IDs, permisos, conflictos concurrentes, edición contra publicación y rollback. |
 | `npm --prefix api run db:test:auth:compose` | Sesión real hasta lotes por HTTPS; datos semilla, publicación por dos operadores y rechazo entre establecimientos y del visitante. |
-| `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS y la API: formulario completo, conflicto, doble clic, 422, 404 y layout sin scroll horizontal. |
+| `npm --prefix api run db:test:discovery:compose` | Búsqueda PostGIS, filtros/páginas, último pack concurrente, reintentos, claves por actor, rollback y cierre tras esperar bloqueo. |
+| `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS y la API: formularios, búsqueda sin geolocalización, reserva real, respuesta perdida tras commit y layout sin scroll horizontal. |
 
 ## Limitaciones
 
-- No hay listado de lotes; un borrador solo se recupera con su URL (#96).
+- No hay listado de lotes del operador; un borrador solo se recupera con su URL (#96).
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
 - Sin fotos hasta K014/K017.

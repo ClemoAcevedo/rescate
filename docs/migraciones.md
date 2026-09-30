@@ -1,4 +1,4 @@
-# Migraciones PostgreSQL — K002/K003/K010
+# Migraciones PostgreSQL
 
 Gestor: node-pg-migrate 9.0.0; controlador: pg 8.23.0.
 La [decisión y comparación](adr/0001-gestor-de-migraciones.md) explica las alternativas.
@@ -6,6 +6,10 @@ K002 creó `public.migration_tool_test`, que se conserva sin modificaciones.
 K003 añade las cinco entidades del [modelo inicial](modelo-inicial.md).
 K010 añade identidad pública/versión de lotes y una migración posterior de IDs
 públicos de establecimientos; ver [lotes](lotes.md).
+K015 añade identidad pública y clave de reserva, más PostGIS e índice geográfico
+GiST sobre coordenadas existentes. La migración espacial instala PostGIS si falta;
+su rollback retira solo el índice, conserva la extensión compartida. El rol de
+migración debe poder instalarla o un administrador debe provisionarla antes.
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003
@@ -33,8 +37,9 @@ No ejecutar primero `db:migrate` sobre esa base de prueba: debe empezar vacía.
 
 El job Compose existente ejecuta la misma suite en CI. No hay migración automática
 al arrancar la API. Para migrar una base normal siguen vigentes `db:migrate` y
-`db:rollback`; este último revierte una migración: actualmente retira el ID
-público de establecimientos. Retroceder hasta K003 elimina sus tablas y datos. No usarlo en una base con datos que deban conservarse.
+`db:rollback`; este último revierte una migración: actualmente retira el índice geográfico. Revertir la migración anterior
+elimina los ID públicos y claves de reserva; no hacerlo sobre reservas que deban
+conservar su identidad o idempotencia. Retroceder hasta K003 elimina sus tablas y datos. No usarlo en una base con datos que deban conservarse.
 Ver [resultados K003](evidencia/k003.md). La sección de aceptación K002 de abajo
 describe la versión histórica del script, reemplazada por esta prueba integrada.
 

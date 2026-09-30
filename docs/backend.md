@@ -10,7 +10,8 @@ las decisiones y procedimientos completos.
 ensambla Pool, repositorio, casos de uso y HTTP. La salud no consulta PostgreSQL
 ni B2. [K008](k008-identidad.md) incorpora las cuatro operaciones auth, scrypt,
 sesiones persistentes, cookies, origen/CSRF y Actor real. No hay actor temporal
-en runtime ni reservas.
+en runtime. K015 añade búsqueda PostGIS y reserva directa bajo bloqueo;
+[ADR 0004](adr/0004-reserva-directa-idempotente.md) define sus reintentos.
 El [worker](../api/src/worker.ts) sigue inactivo y [K005](k005-fotos.md) es una CLI aislada.
 
 ## Documentación vigente por tarea

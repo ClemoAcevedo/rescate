@@ -30,7 +30,10 @@
     "test:web:logout": "node scripts/test-web-logout.mjs",
     "db:seed:demo": "npm run build && node --env-file-if-exists=.env scripts/seed-demo.mjs",
     "test:web:lots": "node --env-file-if-exists=.env scripts/test-web-lots.mjs",
-    "test:web:compose": "npm run build && node scripts/test-web-compose.mjs"
+    "db:test:discovery": "npm run build && node --import tsx scripts/test-discovery.mjs",
+    "test:web:discovery": "node --env-file-if-exists=.env scripts/test-web-discovery.mjs",
+    "test:web:compose": "npm run build && node scripts/test-web-compose.mjs",
+    "db:test:discovery:compose": "node scripts/test-discovery-compose.mjs"
   },
   "keywords": [],
   "author": "",
