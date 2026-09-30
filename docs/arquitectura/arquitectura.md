@@ -69,7 +69,10 @@ Vite sirve la web y reenvía `/api` eliminando ese prefijo. El diagrama muestra 
 recorrido de la consulta iniciada desde el navegador, no cuatro servidores:
 React se ejecuta en el navegador. En host el destino predeterminado es
 `http://localhost:3000`; Compose configura `http://api:3000`. No describe un proxy
-HTTPS de producción ni un despliegue público ya disponible.
+HTTPS de producción. Vercel sirve la web compilada y reenvía `/api` al dominio
+HTTPS de la API en Railway; PostgreSQL/PostGIS usa la red privada y el worker
+tiene un proceso independiente. [Despliegue](../despliegue.md) describe los
+servicios, las migraciones previas y el pipeline de producción.
 
 | Componente | Evidencia real y alcance |
 | --- | --- |
@@ -80,7 +83,7 @@ HTTPS de producción ni un despliegue público ya disponible.
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
 | Worker | [worker.ts](../../api/src/worker.ts) registra inicio, mantiene vivo el proceso y maneja señales. No consulta la base, no hace polling ni ejecuta trabajos. Comparte paquete e imagen con API, pero es otro proceso. |
 | Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../evidencia/k005.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
-| CI | [ci.yml](../../.github/workflows/ci.yml) configura tres jobs: web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y Compose (configuración, imágenes, arranque, web/API/proxy, PostGIS, migraciones y publicación concurrente K010, worker). Incluye login, publicación y reserva desde Chromium HTTPS. No ejecuta el smoke remoto B2 ni despliega producción. |
+| CI/CD | [ci.yml](../../.github/workflows/ci.yml) valida el origen development de los PR a main y ejecuta web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y después Compose (imágenes, web/API/proxy, PostGIS, migraciones, publicación concurrente y worker). Incluye login, publicación y reserva desde Chromium HTTPS. [deploy.yml](../../.github/workflows/deploy.yml) publica API, worker y web tras CI exitoso de main; verifica el sitio por HTTPS antes de crear el tag/release. |
 
 **Conexiones todavía ausentes:** API HTTP → B2,
 worker → base/casos de uso. Compose no

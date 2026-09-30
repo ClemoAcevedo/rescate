@@ -151,7 +151,8 @@ npm --prefix api run build
 ```
 
 `.github/workflows/ci.yml` se activa en todos los PR y en pushes a `main` y
-`development`. Tiene tres jobs independientes:
+`development`. Valida el origen `development` de los PR a `main`, ejecuta web y
+API en paralelo y después Compose:
 
 - `web`: instalación con lockfile, TypeScript, lint y build en pasos separados.
   Actualmente no existen tests web; no se oculta esa ausencia con `--if-present`.
@@ -178,3 +179,6 @@ job API y restaura el test inmediatamente. Conserva enlaces a ambas ejecuciones
 
 La configuración de checks obligatorios en protección de ramas requiere acceso
 al repositorio en GitHub y no forma parte de los archivos del workflow.
+
+La producción usa el [workflow Railway/Vercel](despliegue.md) después de que este
+CI termine correctamente sobre `main`.

@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
+COPY migrations ./migrations
 RUN npm run build
 USER node
 EXPOSE 3000
