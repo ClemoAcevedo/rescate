@@ -1,0 +1,19 @@
+# Configuración del validador, no un fragmento del contrato.
+extends:
+  - minimal
+rules:
+  struct: error
+  no-unresolved-refs: error
+  no-invalid-media-type-examples:
+    severity: error
+    # El schema ya cierra objetos con additionalProperties: false.
+    # No inyectar restricciones adicionales dentro de if/then/else.
+    allowAdditionalProperties: true
+  no-invalid-schema-examples: error
+  no-invalid-parameter-examples: error
+  no-required-schema-properties-undefined: error
+  no-schema-type-mismatch: error
+  operation-operationId: error
+  operation-operationId-unique: error
+  path-parameters-defined: error
+  security-defined: error

@@ -1,0 +1,188 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI K006]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# Una nueva versión espera: cancelar a mitad del deploy puede dejar servicios mezclados.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  api:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.id == github.event.repository.id
+    name: Railway / migrations and API
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    outputs:
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+      SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.63.1
+      - name: Validate deployment configuration
+        run: |
+          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_PROJECT_ID"
+          test -n "$RAILWAY_ENVIRONMENT_ID"
+          test -n "$SERVICE_ID"
+      - name: Deploy and wait for this API deployment
+        id: deploy
+        run: node api/scripts/deploy-railway.mjs "$SERVICE_ID"
+
+  worker:
+    name: Railway / worker
+    needs: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    outputs:
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+      SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.63.1
+      - name: Deploy and wait for this worker deployment
+        id: deploy
+        run: node api/scripts/deploy-railway.mjs "$SERVICE_ID"
+
+  web:
+    name: Vercel / web
+    needs: worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      API_PROXY_TARGET: ${{ vars.API_PROXY_TARGET }}
+      VITE_API_BASE_URL: /api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Install Vercel CLI
+        run: npm install --global vercel@61.1.0
+      - name: Validate deployment configuration
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+          test -n "$API_PROXY_TARGET"
+      - name: Pull production settings
+        run: vercel pull --yes --environment=production --cwd web --token "$VERCEL_TOKEN"
+      - name: Build production web
+        run: vercel build --prod --cwd web --token "$VERCEL_TOKEN"
+      - name: Deploy production web
+        id: deploy
+        run: |
+          vercel deploy --prebuilt --prod --json --cwd web --token "$VERCEL_TOKEN" --meta "githubCommitSha=$DEPLOY_SHA" > deployment.json
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readFileSync, appendFileSync } from 'node:fs'
+          const result = JSON.parse(readFileSync('deployment.json', 'utf8'))
+          assert.equal(result.status, 'ok')
+          assert.equal(result.deployment.readyState, 'READY')
+          const url = new URL(result.deployment.url)
+          assert.equal(url.protocol, 'https:')
+          appendFileSync(process.env.GITHUB_OUTPUT, `url=${url.href}\n`)
+          NODE
+
+  verify:
+    name: Public HTTPS / web, API and PostGIS
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      WEB_URL: ${{ vars.WEB_URL }}
+      DEPLOY_SMOKE_EMAIL: ${{ secrets.DEPLOY_SMOKE_EMAIL }}
+      DEPLOY_SMOKE_PASSWORD: ${{ secrets.DEPLOY_SMOKE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm --prefix api ci
+      - name: Install Chromium
+        run: cd api && npx playwright install --with-deps chromium
+      - name: Browser smoke against the public deployment
+        run: |
+          test -n "$DEPLOY_SMOKE_EMAIL"
+          test -n "$DEPLOY_SMOKE_PASSWORD"
+          npm --prefix api run test:deploy
+
+  release:
+    name: Tag and release of the verified commit
+    needs: [api, worker, web, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WEB_URL: ${{ vars.WEB_URL }}
+      API_DEPLOYMENT: ${{ needs.api.outputs.deployment_id }}
+      WORKER_DEPLOYMENT: ${{ needs.worker.outputs.deployment_id }}
+      VERCEL_DEPLOYMENT: ${{ needs.web.outputs.deployment_url }}
+      CI_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - name: Publish release with deployment evidence
+        run: |
+          tag="deploy-${DEPLOY_SHA}"
+          printf 'Commit: %s\nWeb: %s\nAPI deployment: %s\nWorker deployment: %s\nVercel deployment: %s\nCI: %s\nCD: %s/%s/actions/runs/%s\n' \
+            "$DEPLOY_SHA" "$WEB_URL" "$API_DEPLOYMENT" "$WORKER_DEPLOYMENT" "$VERCEL_DEPLOYMENT" "$CI_URL" \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > release-notes.txt
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release edit "$tag" --notes-file release-notes.txt
+          else
+            gh release create "$tag" --target "$DEPLOY_SHA" --title "Rescate ${DEPLOY_SHA:0:7}" --notes-file release-notes.txt
+          fi
