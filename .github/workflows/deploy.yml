@@ -116,8 +116,17 @@ jobs:
       - name: Deploy production web
         id: deploy
         run: |
-          vercel deploy --prebuilt --prod --cwd web --token "$VERCEL_TOKEN" --meta "githubCommitSha=$DEPLOY_SHA" > deployment-url.txt
-          printf 'url=%s\n' "$(cat deployment-url.txt)" >> "$GITHUB_OUTPUT"
+          vercel deploy --prebuilt --prod --json --cwd web --token "$VERCEL_TOKEN" --meta "githubCommitSha=$DEPLOY_SHA" > deployment.json
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readFileSync, appendFileSync } from 'node:fs'
+          const result = JSON.parse(readFileSync('deployment.json', 'utf8'))
+          assert.equal(result.status, 'ok')
+          assert.equal(result.deployment.readyState, 'READY')
+          const url = new URL(result.deployment.url)
+          assert.equal(url.protocol, 'https:')
+          appendFileSync(process.env.GITHUB_OUTPUT, `url=${url.href}\n`)
+          NODE
 
   verify:
     name: Public HTTPS / web, API and PostGIS
