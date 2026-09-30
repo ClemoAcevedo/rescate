@@ -31,7 +31,7 @@ jobs:
     outputs:
       deployment_id: ${{ steps.deploy.outputs.deployment_id }}
     env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
       SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
@@ -46,7 +46,7 @@ jobs:
         run: npm install --global @railway/cli@5.63.1
       - name: Validate deployment configuration
         run: |
-          test -n "$RAILWAY_TOKEN"
+          test -n "$RAILWAY_API_TOKEN"
           test -n "$RAILWAY_PROJECT_ID"
           test -n "$RAILWAY_ENVIRONMENT_ID"
           test -n "$SERVICE_ID"
@@ -63,7 +63,7 @@ jobs:
     outputs:
       deployment_id: ${{ steps.deploy.outputs.deployment_id }}
     env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
       SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
