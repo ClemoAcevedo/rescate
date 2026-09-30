@@ -23,6 +23,7 @@ El [worker](../api/src/worker.ts) sigue inactivo y [K005](k005-fotos.md) es una 
 | Trabajar en lotes | [Lotes](lotes.md) |
 | Entender identidad, atomicidad y seguridad | [K008](k008-identidad.md) |
 | Levantar el entorno y ejecutar checks | [Entorno local y CI](desarrollo-local.md) |
+| Desplegar web/API y operar releases | [Railway, Vercel y CD](despliegue.md) |
 | Consultar persistencia y operar migraciones | [Modelo K003](modelo-inicial.md), [guía de migraciones](migraciones.md) y [ADR 0001](adr/0001-gestor-de-migraciones.md) |
 | Interpretar FIFO y ofertas parciales | [ADR 0002](adr/0002-ofertas-parciales.md), decisión vigente sin implementación del flujo |
 | Repetir el prototipo local/B2 | [Guía K005](k005-fotos.md); no es un endpoint ni pipeline de imágenes |

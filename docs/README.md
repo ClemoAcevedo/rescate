@@ -8,6 +8,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Área | Documento |
 | --- | --- |
 | Levantar el proyecto y CI | [Entorno local y CI](desarrollo-local.md) |
+| Producción y releases | [Despliegue Railway/Vercel](despliegue.md) |
 | Arquitectura y capas | [Arquitectura](arquitectura/arquitectura.md) y [punto de entrada al backend](backend.md) |
 | Contrato HTTP | [OpenAPI S02](api/openapi.yaml) y [su guía](api/README.md) |
 | Dominio y requisitos | [Modelo](modelo-inicial.md), [casos de uso](casos-de-uso.md) y [trazabilidad](k013-trazabilidad.md) |

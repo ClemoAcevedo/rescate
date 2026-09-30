@@ -9,6 +9,19 @@ permissions:
   contents: read
 
 jobs:
+  release-source:
+    name: Main / integration from development
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release PR source
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          test "$HEAD_BRANCH" = development
+          test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+
   web:
     name: Web / types, lint, build
     runs-on: ubuntu-latest
@@ -61,6 +74,7 @@ jobs:
 
   compose:
     name: Docker Compose / smoke
+    needs: [web, api]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -69,6 +83,8 @@ jobs:
         run: docker compose --env-file .env.example config --quiet
       - name: Build images
         run: docker compose --env-file .env.example build
+      - name: Deployment image includes the migration runner and SQL
+        run: docker compose --env-file .env.example run --rm --no-deps api node -e "const fs=require('node:fs'); if (!fs.readdirSync('migrations').some(f=>f.endsWith('.sql'))) process.exit(1); require.resolve('node-pg-migrate')"
       - name: Start services
         run: docker compose --env-file .env.example up -d --wait --wait-timeout 120
       - name: API and web

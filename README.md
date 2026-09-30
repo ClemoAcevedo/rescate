@@ -60,8 +60,10 @@ npm run dev
 ```
 
 El valor `VITE_API_BASE_URL=/api` usa el proxy de desarrollo de Vite hacia
-`http://localhost:3000`. Para otro despliegue, configura `VITE_API_BASE_URL` con la
-URL base correspondiente. Para autenticación usa HTTPS del mismo origen; no habilites CORS abierto con credenciales.
+`http://localhost:3000`. En Vercel se conserva `VITE_API_BASE_URL=/api` y
+`API_PROXY_TARGET` configura el origen HTTPS de Railway mediante el proxy.
+Configuración y releases automáticos tras CI de `main` en la
+[guía de despliegue](docs/despliegue.md).
 
 La vista técnica está disponible en `http://localhost:5173/conexion`. Selecciona
 **Comprobar conexión** para consultar el endpoint real `GET /health`; si falla, usa
@@ -251,5 +253,7 @@ lo cambia.
 - **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
   (K010), búsqueda PostGIS y reserva directa idempotente (K015), según OpenAPI.
 - **Worker:** inactivo. **Fotos:** prototipo aislado (K005).
+- **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
+  CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 
 El [índice de documentación](docs/README.md) lleva a cada área.
