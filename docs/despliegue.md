@@ -42,7 +42,10 @@ Railway; el proyecto Vercel tampoco tiene un autodeploy Git independiente.
 Los cambios entran por PR a `development`. El PR de release sale de `development`
 hacia `main`; el check `Main / integration from development` valida ese origen.
 Usar **Create a merge commit** al integrar releases y sincronizaciones entre
-estas ramas: conserva la ascendencia común para los siguientes PR.
+estas ramas: conserva la ascendencia común para los siguientes PR. En GitHub,
+abrir el menú junto al botón de merge y seleccionar esa opción; el método usado
+en otro PR puede quedar como predeterminado. Una sincronización `main` →
+`development` también debe conservar el commit de merge.
 Configurar protección de ambas ramas con revisión de otro integrante y CI
 obligatorio. El [CI](../.github/workflows/ci.yml) valida web/API antes de probar
 Compose, migraciones desde base vacía, upgrade, idempotencia y recorridos HTTPS.
