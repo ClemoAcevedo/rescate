@@ -67,7 +67,8 @@ El environment GitHub `production` admite solo `main`. Contiene:
 | Secrets | `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `DEPLOY_SMOKE_EMAIL`, `DEPLOY_SMOKE_PASSWORD` |
 | Variables | `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_API_SERVICE_ID`, `RAILWAY_WORKER_SERVICE_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `API_PROXY_TARGET`, `WEB_URL` |
 
-`RAILWAY_TOKEN` se limita al proyecto y entorno; `VERCEL_TOKEN`, al proyecto.
+Crear `RAILWAY_TOKEN` para el proyecto y entorno; crear `VERCEL_TOKEN` con alcance
+al equipo propietario del proyecto Vercel.
 Renovar el token de Vercel antes de su expiración en la configuración de secrets.
 La cuenta de smoke se registra una vez por HTTP, con contraseña aleatoria y sin
 memberships. El pipeline usa esa cuenta y revoca su sesión al terminar; no crea
