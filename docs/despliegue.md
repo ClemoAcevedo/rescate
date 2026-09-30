@@ -60,6 +60,8 @@ sin cancelar un despliegue a medio ejecutar:
 2. Espera `SUCCESS` del ID devuelto por ese upload, incluyendo healthcheck.
 3. Sube el worker y espera su propio ID.
 4. Construye y publica web en Vercel con el mismo SHA y un `release.json` público.
+   La CLI devuelve JSON plano en CI y envuelto en modo no interactivo; se admiten
+   ambas respuestas y se exige `READY` y una URL HTTPS antes de continuar.
 5. Chromium comprueba SHA en el dominio estable, rutas SPA, botón de conexión,
    PostGIS, cookies, login, sesión persistida y logout.
 6. Crea `deploy-<SHA>` y un release con commit, IDs de Railway, URL de Vercel y
