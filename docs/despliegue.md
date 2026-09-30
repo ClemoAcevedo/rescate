@@ -41,6 +41,8 @@ Railway; el proyecto Vercel tampoco tiene un autodeploy Git independiente.
 
 Los cambios entran por PR a `development`. El PR de release sale de `development`
 hacia `main`; el check `Main / integration from development` valida ese origen.
+Usar **Create a merge commit** al integrar releases y sincronizaciones entre
+estas ramas: conserva la ascendencia común para los siguientes PR.
 Configurar protección de ambas ramas con revisión de otro integrante y CI
 obligatorio. El [CI](../.github/workflows/ci.yml) valida web/API antes de probar
 Compose, migraciones desde base vacía, upgrade, idempotencia y recorridos HTTPS.
@@ -67,8 +69,14 @@ El environment GitHub `production` admite solo `main`. Contiene:
 | Secrets | `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `DEPLOY_SMOKE_EMAIL`, `DEPLOY_SMOKE_PASSWORD` |
 | Variables | `RAILWAY_PROJECT_ID`, `RAILWAY_ENVIRONMENT_ID`, `RAILWAY_API_SERVICE_ID`, `RAILWAY_WORKER_SERVICE_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `API_PROXY_TARGET`, `WEB_URL` |
 
-Crear `RAILWAY_TOKEN` para el proyecto y entorno; crear `VERCEL_TOKEN` con alcance
-al equipo propietario del proyecto Vercel.
+El secret GitHub `RAILWAY_TOKEN` guarda el token creado en **Account Settings →
+Tokens** de Railway. El workflow lo expone a la CLI como `RAILWAY_API_TOKEN`,
+porque corresponde a cuenta/workspace. No establecer simultáneamente
+`RAILWAY_TOKEN` como variable de entorno de la CLI: ese nombre corresponde a
+un token de proyecto y utiliza otro método de autenticación. El nombre del
+secret GitHub se conserva; no hay que volver a copiar el token.
+
+Crear `VERCEL_TOKEN` con alcance al equipo propietario del proyecto Vercel.
 Renovar el token de Vercel antes de su expiración en la configuración de secrets.
 La cuenta de smoke se registra una vez por HTTP, con contraseña aleatoria y sin
 memberships. El pipeline usa esa cuenta y revoca su sesión al terminar; no crea
