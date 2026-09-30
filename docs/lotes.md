@@ -103,6 +103,9 @@ geográfica, no tiempo de viaje. Cada página tiene hasta 12 lotes. Sin coordena
 se ordena por publicación; fecha e ID desempatan. La disponibilidad puede cambiar
 entre páginas y se vuelve a leer al reservar. El detalle excluye borradores y
 lotes cerrados; los lotes sin stock muestran cero disponibles.
+La web mantiene visibles esos lotes en lista y detalle, indica que no quedan
+packs y oculta el formulario de reserva. Si falta una foto o falla su carga,
+muestra un reemplazo local con texto alternativo.
 
 La persona inicia sesión para reservar. El actor procede de K008, nunca del cuerpo.
 Application coordina la transacción mediante `withReservationTransaction`:
