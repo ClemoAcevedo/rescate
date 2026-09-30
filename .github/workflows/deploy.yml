@@ -121,9 +121,10 @@ jobs:
           import assert from 'node:assert/strict'
           import { readFileSync, appendFileSync } from 'node:fs'
           const result = JSON.parse(readFileSync('deployment.json', 'utf8'))
-          assert.equal(result.status, 'ok')
-          assert.equal(result.deployment.readyState, 'READY')
-          const url = new URL(result.deployment.url)
+          if (result.status !== undefined) assert.equal(result.status, 'ok')
+          const deployment = result.deployment ?? result
+          assert.equal(deployment.readyState, 'READY')
+          const url = new URL(deployment.url)
           assert.equal(url.protocol, 'https:')
           appendFileSync(process.env.GITHUB_OUTPUT, `url=${url.href}\n`)
           NODE
