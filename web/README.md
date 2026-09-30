@@ -121,3 +121,5 @@ los botones de cantidad respetan los límites y se bloquean durante un resultado
 incierto. La confirmación recibe el foco y muestra el identificador persistido.
 La confirmación muestra la reserva persistida y conserva su intención al reintentar
 una respuesta perdida. Reglas y pruebas en [lotes](../docs/lotes.md).
+Los lotes agotados siguen visibles con su estado y sin formulario de reserva;
+una fotografía ausente o fallida muestra el reemplazo local.

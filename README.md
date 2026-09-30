@@ -246,7 +246,8 @@ Este es el único resumen de estado del repositorio; se actualiza en el mismo PR
 lo cambia.
 
 - **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011).
-  Búsqueda pública paginada, detalle y reserva directa con API real (K015).
+  Búsqueda pública paginada, filtros, zona manual, detalle y reserva directa con
+  API real (K016).
 - **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
   (K010), búsqueda PostGIS y reserva directa idempotente (K015), según OpenAPI.
 - **Worker:** inactivo. **Fotos:** prototipo aislado (K005).

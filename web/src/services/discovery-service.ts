@@ -7,17 +7,21 @@ export { HttpError }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function parseLot(value: unknown): PublicLot {
   if (!record(value) || typeof value.id !== 'string' || typeof value.description !== 'string'
-    || typeof value.category !== 'string' || !Number.isInteger(value.quantity)
-    || !Number.isInteger(value.availableQuantity) || typeof value.address !== 'string'
-    || typeof value.latitude !== 'number' || typeof value.longitude !== 'number'
+    || typeof value.category !== 'string' || !Number.isInteger(value.quantity) || (value.quantity as number) < 1
+    || !Number.isInteger(value.availableQuantity) || (value.availableQuantity as number) < 0
+    || (value.availableQuantity as number) > (value.quantity as number) || typeof value.address !== 'string'
+    || typeof value.latitude !== 'number' || !Number.isFinite(value.latitude) || value.latitude < -90 || value.latitude > 90
+    || typeof value.longitude !== 'number' || !Number.isFinite(value.longitude) || value.longitude < -180 || value.longitude > 180
     || typeof value.timeZone !== 'string' || typeof value.pickupStartsAt !== 'string'
     || typeof value.pickupEndsAt !== 'string' || (value.conditions !== null && typeof value.conditions !== 'string')
     || (value.photoUrl !== null && typeof value.photoUrl !== 'string')
-    || (value.distanceKm !== null && typeof value.distanceKm !== 'number')) throw new Error('El lote público tiene un formato inesperado.')
+    || (value.distanceKm !== null && (typeof value.distanceKm !== 'number'
+      || !Number.isFinite(value.distanceKm) || value.distanceKm < 0))) throw new Error('El lote público tiene un formato inesperado.')
   return value as unknown as PublicLot
 }
 function parsePage(value: unknown): PublicLotPage {
-  if (!record(value) || !Array.isArray(value.items) || !Number.isInteger(value.page)
+  if (!record(value) || !Array.isArray(value.items) || value.items.length > 12
+    || !Number.isInteger(value.page) || (value.page as number) < 1
     || typeof value.hasNextPage !== 'boolean') throw new Error('La búsqueda tiene un formato inesperado.')
   return { items: value.items.map(parseLot), page: value.page as number, hasNextPage: value.hasNextPage }
 }

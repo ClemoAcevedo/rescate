@@ -25,9 +25,30 @@ try {
       'America/Santiago', now() + interval '1 hour', now() + interval '3 hours', 'published', now())
     RETURNING public_id::text AS id`, [estate.rows[0].id, title])
   const lotId = created.rows[0].id
+  const soldOutTitle = `Pack agotado K016 ${randomUUID().slice(0, 8)}`
+  const soldOut = await db.query(`INSERT INTO lots
+    (establishment_id, description, category, quantity, address, latitude, longitude, time_zone,
+     pickup_starts_at, pickup_ends_at, status, published_at)
+    VALUES ($1, $2, 'Panadería', 1, 'Santiago Centro', -33.45, -70.66,
+      'America/Santiago', now() + interval '1 hour', now() + interval '3 hours', 'published', now())
+    RETURNING id`, [estate.rows[0].id, soldOutTitle])
+  const soldOutUser = await db.query('INSERT INTO users(email) VALUES ($1) RETURNING id',
+    [`sold-out-${randomUUID()}@example.invalid`])
+  await db.query(`INSERT INTO commitments (user_id, lot_id, quantity, status)
+    VALUES ($1, $2, 1, 'confirmed')`, [soldOutUser.rows[0].id, soldOut.rows[0].id])
   await page.goto(`${base}/lotes`)
   await page.getByText(title).waitFor()
   assert.equal(await page.getByText('Fotografía no disponible').count() > 0, true)
+  const soldOutCard = page.locator('article').filter({ hasText: soldOutTitle })
+  await soldOutCard.getByText('Sin stock', { exact: true }).waitFor()
+  await soldOutCard.getByRole('link', { name: 'Ver detalle del lote' }).click()
+  await page.getByRole('heading', { name: soldOutTitle }).waitFor()
+  await page.getByText('Sin stock disponible').waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Confirmar reserva' }).count(), 0)
+  await page.getByText('No quedan packs libres.').waitFor()
+  await page.getByRole('link', { name: 'Volver a explorar lotes' }).click()
+  await page.getByText(title).waitFor()
+  console.log('OK: lote agotado visible en lista y detalle, sin envío de reserva')
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   const zone = page.locator('.explore-zone')
   assert.equal(await zone.evaluate(element => element.open), false)
