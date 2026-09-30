@@ -95,6 +95,10 @@ export interface HttpSchemas {
   UpdateLotDraftRequest: UpdateLotDraftRequest
   PublishLotDraftRequest: PublishLotDraftRequest
   LotResponse: LotResponse
+  PublicLot: PublicLot
+  PublicLotPage: PublicLotPage
+  ReserveLotRequest: ReserveLotRequest
+  ReservationResponse: ReservationResponse
   ErrorResponse: ErrorResponse
   ValidationIssue: ValidationIssue
 }
@@ -190,6 +194,53 @@ export interface UpdateLotDraftRequest {
  */
 export interface PublishLotDraftRequest {
   version: Version
+}
+export interface PublicLot {
+  id: PublicId
+  description: LotDescription
+  category: Category
+  quantity: Quantity
+  /**
+   * Packs libres al instante de la lectura; puede cambiar.
+   */
+  availableQuantity: number
+  conditions: Conditions
+  address: Address
+  latitude: Latitude
+  longitude: Longitude
+  timeZone: TimeZone
+  pickupStartsAt: Instant
+  pickupEndsAt: Instant
+  /**
+   * Foto visible si existe; null muestra reemplazo local.
+   */
+  photoUrl: string | null
+  /**
+   * Distancia geográfica aproximada al punto enviado.
+   */
+  distanceKm: number | null
+}
+export interface PublicLotPage {
+  /**
+   * @maxItems 12
+   */
+  items: PublicLot[]
+  page: number
+  hasNextPage: boolean
+}
+export interface ReserveLotRequest {
+  quantity: number
+  /**
+   * UUID generado por el cliente para una intención de reserva.
+   */
+  idempotencyKey: string
+}
+export interface ReservationResponse {
+  id: PublicId
+  lotId: PublicId
+  quantity: number
+  status: "confirmed"
+  createdAt: Instant
 }
 export interface ErrorResponse {
   error: {

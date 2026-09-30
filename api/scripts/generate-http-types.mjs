@@ -4,7 +4,7 @@ import { compile } from 'json-schema-to-typescript'
 
 const document = parse(await readFile(new URL('../../docs/api/openapi.yaml', import.meta.url), 'utf8'))
 // DTO consumidos por K008/K010; las definiciones y referencias provienen del YAML.
-const names = ['LoginRequest', 'LoginResponse', 'RegisterRequest', 'RegisterResponse', 'SessionResponse', 'CreateLotDraftRequest', 'UpdateLotDraftRequest', 'PublishLotDraftRequest', 'LotResponse', 'ErrorResponse', 'ValidationIssue']
+const names = ['LoginRequest', 'LoginResponse', 'RegisterRequest', 'RegisterResponse', 'SessionResponse', 'CreateLotDraftRequest', 'UpdateLotDraftRequest', 'PublishLotDraftRequest', 'LotResponse', 'PublicLot', 'PublicLotPage', 'ReserveLotRequest', 'ReservationResponse', 'ErrorResponse', 'ValidationIssue']
 const definitions = JSON.parse(JSON.stringify(document.components.schemas).replaceAll('#/components/schemas/', '#/definitions/'))
 const output = await compile({
   type: 'object', additionalProperties: false, required: names,
@@ -13,6 +13,8 @@ const output = await compile({
 }, 'HttpSchemas', {
   bannerComment: '/* Generado desde docs/api/openapi.yaml. No editar; npm run api:types. */',
   style: { semi: false, singleQuote: false },
+  // Los límites de longitud se validan en HTTP, sin generar uniones de tuplas.
+  maxItems: -1,
 })
 // La web compila por separado (su propio build y Dockerfile), por eso recibe una copia idéntica.
 const targets = [

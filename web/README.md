@@ -108,3 +108,16 @@ WEB_URL=https://localhost:5173 npm --prefix api run test:web:auth
 
 Crea una cuenta de prueba y verifica registro sin sesión automática, credenciales
 incorrectas, login, recarga, rechazo CSRF y logout.
+
+## Búsqueda y reserva directa
+
+`/lotes` y `/lotes/:id` consumen `discovery-service.ts` y los DTO generados desde
+OpenAPI. La búsqueda es pública; la reserva usa la sesión y CSRF de K008.
+Los filtros quedan en la URL. Negar geolocalización conserva la entrada manual.
+Categoría y horario aparecen primero; zona y radio se despliegan cuando hacen
+falta. Las tarjetas separan stock, lugar y ventana de retiro. El detalle muestra
+un panel de reserva junto a la información en escritorio y antes de ella en móvil;
+los botones de cantidad respetan los límites y se bloquean durante un resultado
+incierto. La confirmación recibe el foco y muestra el identificador persistido.
+La confirmación muestra la reserva persistida y conserva su intención al reintentar
+una respuesta perdida. Reglas y pruebas en [lotes](../docs/lotes.md).

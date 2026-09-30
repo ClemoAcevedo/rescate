@@ -36,7 +36,7 @@ para ajustarlo al árbol propuesto ni añadir frameworks o abstracciones sin nec
 ## Contratos, persistencia y decisiones
 
 [OpenAPI S02](docs/api/openapi.yaml) es la fuente de verdad HTTP versionada;
-[su guía](docs/api/README.md) documenta decisiones y validación. K008/K010 incorporan
+[su guía](docs/api/README.md) documenta decisiones y validación. K008/K010/K015 incorporan
 handlers y tipos HTTP generados (`npm --prefix api run api:types`); no mantener catálogos manuales paralelos.
 OpenAPI no define el esquema SQL ni sustituye las reglas de Domain/documentación.
 

@@ -1,7 +1,6 @@
 # Arquitectura de Rescate
 
-Fecha de revisión: 2026-09-21, integración K008 con K010 en el árbol de trabajo.
-Estado: K008 y K010 implementados; pantallas de negocio y restantes operaciones pendientes.
+El [README](../../README.md#estado-actual) mantiene el resumen de implementación.
 Decisión: [ADR 0003](../adr/0003-arquitectura-incremental-s02.md).
 
 Este documento separa el código existente del diseño que guiará S02. No acredita
@@ -74,17 +73,17 @@ HTTPS de producción ni un despliegue público ya disponible.
 
 | Componente | Evidencia real y alcance |
 | --- | --- |
-| Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de demostración. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../evidencia/k009.md) integra registro y sesión; [lotes](../lotes.md) el borrador y la publicación de lotes del operador. |
+| Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de la aplicación. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../evidencia/k009.md) integra registro y sesión; [lotes](../lotes.md) el borrador, publicación, búsqueda pública y reserva directa. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
-| API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth y cuatro de lotes. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
-| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; commitments sigue sin flujo implementado. |
-| Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS. No hay consultas espaciales en la API. |
+| API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cuatro de operador y tres de descubrimiento/reserva. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
+| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor. |
+| Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
 | Worker | [worker.ts](../../api/src/worker.ts) registra inicio, mantiene vivo el proceso y maneja señales. No consulta la base, no hace polling ni ejecuta trabajos. Comparte paquete e imagen con API, pero es otro proceso. |
 | Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../evidencia/k005.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
-| CI | [ci.yml](../../.github/workflows/ci.yml) configura tres jobs: web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y Compose (configuración, imágenes, arranque, web/API/proxy, PostGIS, migraciones y publicación concurrente K010, worker). No prueba login, no ejecuta el smoke remoto B2 ni despliega producción. |
+| CI | [ci.yml](../../.github/workflows/ci.yml) configura tres jobs: web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y Compose (configuración, imágenes, arranque, web/API/proxy, PostGIS, migraciones y publicación concurrente K010, worker). Incluye login, publicación y reserva desde Chromium HTTPS. No ejecuta el smoke remoto B2 ni despliega producción. |
 
 **Conexiones todavía ausentes:** API HTTP → B2,
-worker → base/casos de uso, web → operaciones de identidad/lotes. Compose no
+worker → base/casos de uso. Compose no
 ejecuta migraciones al arrancar. Inyecta DATABASE_URL a API, no al worker.
 `/health` comprueba el proceso HTTP, no la base; esa diferencia frente a la salud
 propuesta en anexos H p. 22 queda pendiente de integración futura.
@@ -100,6 +99,13 @@ la sesión K009 y el formulario de lotes K011. Los dos archivos de tipos prelimi
 definitivo ni modelos de persistencia. Se marcan como antecedentes históricos;
 K011 introduce tipos web generados desde OpenAPI; la sustitución de los tipos
 manuales K009 y K004 queda como deuda en #98.
+
+La búsqueda y reserva K015 siguen los mismos límites: el router de descubrimiento
+consume Application y los DTO generados. Application define la unidad atómica de
+reserva y pasa un único instante leído después del bloqueo a Domain. Infrastructure
+serializa la clave del actor, bloquea el lote, relee stock y escribe la reserva con
+el mismo cliente PostgreSQL. El cuerpo público excluye usuario, claves e ID internos.
+Las reglas y el alcance están en [lotes](../lotes.md#búsqueda-y-reserva-directa).
 
 ## B. Arquitectura objetivo incremental para S02
 

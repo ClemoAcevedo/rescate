@@ -28,7 +28,10 @@ describe publicación, inmutabilidad, autorización y PATCH parcial implementado
 K008 añade `users.public_id`, correo canónico y las tablas `user_credentials`,
 `sessions`, `login_security_state` y `login_failures`; mantiene memberships sin roles
 ni estados. Su migración exige users vacío y aborta si hay filas. Ver [K008](k008-identidad.md).
-No se reinterpretan las restricciones históricas de K003.
+K015 agrega `commitments.public_id` e `idempotency_key`, con unicidad por actor,
+y un índice espacial sobre las coordenadas del lote. La reserva directa usa las
+restricciones existentes y calcula disponibilidad después de bloquear el lote.
+Ver [lotes](lotes.md#búsqueda-y-reserva-directa) y [ADR 0004](adr/0004-reserva-directa-idempotente.md).
 
 **Modelo conceptual E2 (K013, 2026-09-21):** las secciones
 [Modelo conceptual E2](#modelo-conceptual-e2-k013) y posteriores describen el

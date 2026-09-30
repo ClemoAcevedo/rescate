@@ -200,6 +200,76 @@ code, kbd, samp { font-family: var(--font-mono); }
 .lot-summary dt { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
 .lot-summary dd { margin: 0; white-space: pre-line; }
 
+/* Exploración y reserva: comparte tokens y controles con el resto de la web. */
+.explore-page, .public-lot { width: min(100%, var(--layout-max)); margin: 0 auto; }
+.explore-header { padding-block: var(--sp-4) var(--sp-8); }
+.explore-header p { max-width: 65ch; margin: var(--sp-3) 0 0; color: var(--text-muted); }
+.explore-filters { padding: var(--sp-5); margin-bottom: var(--sp-8); }
+.explore-filters__form { display: grid; gap: var(--sp-4); }
+.explore-filters__main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: var(--sp-4); }
+.explore-filters .ui-field { max-width: none; }
+.explore-filters__location { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+.explore-filters__location p { margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
+.explore-zone { border-top: var(--border-width) solid var(--border-subtle); }
+.explore-zone summary { min-height: var(--control-h); padding-block: var(--sp-3); color: var(--text-link); font-weight: var(--fw-semibold); cursor: pointer; }
+.explore-zone summary:focus-visible { outline: var(--border-width-strong) solid var(--focus-ring); outline-offset: var(--border-width-strong); }
+.explore-filters__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); padding-top: var(--sp-2); }
+.explore-results__heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2) var(--sp-4); }
+.explore-results__heading h2 { font-size: var(--fs-display-md); }
+.explore-results__heading p, .explore-results__order { color: var(--text-muted); font-size: var(--fs-meta); }
+.explore-results__heading p { margin: 0; }
+.explore-results__order { margin: var(--sp-2) 0 var(--sp-5); }
+.explore-results > .ui-alert { margin-top: var(--sp-4); }
+.explore-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); }
+.explore-lot { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.explore-lot > .lot-photo { border-radius: 0; aspect-ratio: 16 / 9; border-bottom: var(--border-width) solid var(--border-subtle); }
+.explore-lot > .lot-photo--replacement { aspect-ratio: 3 / 1; }
+.explore-lot__body { display: flex; flex: 1; flex-direction: column; gap: var(--sp-4); padding: var(--sp-5); }
+.explore-lot__labels { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--sp-2); }
+.explore-lot__category { color: var(--text-brand); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.explore-lot h3 { font-size: var(--fs-title-lg); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.explore-lot__facts { display: grid; gap: var(--sp-3); margin: 0; }
+.explore-lot__facts dt { color: var(--text-muted); font-size: var(--fs-micro); }
+.explore-lot__facts dd { margin: var(--sp-1) 0 0; font-size: var(--fs-meta); }
+.explore-lot__distance { display: block; color: var(--text-muted); }
+.explore-lot__link { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); min-height: var(--control-h); padding-top: var(--sp-3); margin-top: auto; border-top: var(--border-width) solid var(--border-subtle); font-weight: var(--fw-semibold); text-decoration: none; }
+.explore-lot__link:hover { text-decoration: underline; }
+.explore-empty { margin-top: var(--sp-5); padding: var(--sp-8); text-align: center; }
+.explore-empty p { max-width: 55ch; margin: var(--sp-3) auto var(--sp-5); color: var(--text-muted); }
+.explore-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--sp-5); margin-top: var(--sp-8); }
+.explore-pagination a { display: inline-flex; align-items: center; min-height: var(--control-h); }
+.lot-photo { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-lg); object-fit: cover; }
+.lot-photo--replacement { display: grid; place-content: center; justify-items: center; gap: var(--sp-2); background: var(--surface-brand-soft); color: var(--text-brand); text-align: center; font-size: var(--fs-micro); }
+.lot-photo--replacement svg { width: var(--sp-20); max-width: 60%; }
+.public-lot__back { display: inline-flex; align-items: center; min-height: var(--control-h); font-size: var(--fs-meta); }
+.public-lot__header { display: grid; justify-items: start; gap: var(--sp-3); max-width: 65ch; margin: var(--sp-5) 0 var(--sp-8); }
+.public-lot__header p { margin: 0; color: var(--text-muted); }
+.public-lot__layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; gap: var(--sp-8); }
+.public-lot__information { min-width: 0; }
+.public-lot__information > .lot-photo--replacement { aspect-ratio: 3 / 1; }
+.public-lot__section { padding-block: var(--sp-6); border-bottom: var(--border-width) solid var(--border-subtle); }
+.public-lot__section h2, .reservation-panel h2, .reservation-confirmation h2 { font-size: var(--fs-title-lg); }
+.public-lot__facts { display: grid; gap: var(--sp-4); margin: var(--sp-5) 0; }
+.public-lot__facts > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--sp-3); }
+.public-lot__facts dt { color: var(--text-muted); font-size: var(--fs-meta); }
+.public-lot__facts dd { margin: 0; }
+.public-lot__hint { margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
+.public-lot__conditions { white-space: pre-line; }
+.reservation-panel { display: grid; justify-items: start; gap: var(--sp-5); padding: var(--sp-6); position: sticky; top: var(--sp-5); border-top: var(--border-width-strong) solid var(--action-primary); }
+.reservation-panel__intro p, .reservation-panel__login p { margin: var(--sp-3) 0 0; color: var(--text-muted); }
+.reservation-panel__login { width: 100%; }
+.reservation-panel__login a { margin-top: var(--sp-5); text-decoration: none; }
+.reservation-panel__login a:hover { color: var(--text-inverse); }
+.reserve-form { display: grid; gap: var(--sp-5); width: 100%; }
+.reserve-quantity { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sp-2); }
+.reserve-quantity .ui-control { text-align: center; font-size: var(--fs-title-lg); font-weight: var(--fw-semibold); }
+.reserve-quantity .ui-button { padding-inline: var(--sp-4); min-width: var(--control-h); }
+.reservation-confirmation { margin-top: var(--sp-4); }
+.reservation-confirmation h2 { color: inherit; }
+.reservation-confirmation p { margin: var(--sp-2) 0 0; }
+.reservation-confirmation__id { font-size: var(--fs-meta); }
+.reservation-confirmation__id span { display: inline-block; overflow-wrap: anywhere; }
+
 /* Breakpoint de navegación existente. Las variables CSS no sirven en media queries. */
 @media (max-width: 48rem) {
   .site-header {
@@ -228,6 +298,15 @@ code, kbd, samp { font-family: var(--font-mono); }
   .page-content { padding-top: var(--sp-5); }
   .lot-form__row, .lot-summary__row { grid-template-columns: minmax(0, 1fr); }
   .lot-summary__row { gap: var(--sp-1); }
+  .explore-filters__main, .explore-filters__fields, .explore-list, .public-lot__layout { grid-template-columns: minmax(0, 1fr); }
+  .explore-header { padding-block: var(--sp-2) var(--sp-6); }
+  .explore-filters__location { align-items: stretch; flex-direction: column; }
+  .explore-zone summary { font-size: var(--fs-meta); }
+  .public-lot__header { margin-bottom: var(--sp-5); }
+  .public-lot__layout { gap: var(--sp-5); }
+  .reservation-panel { position: static; grid-row: 1; padding: var(--sp-5); }
+  .public-lot__facts > div { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+  .explore-empty { padding: var(--sp-5); }
 }
 
 @media (prefers-reduced-motion: reduce) {

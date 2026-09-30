@@ -53,7 +53,8 @@ try {
   assert.deepEqual(existing, [], 'La base debe estar vacía')
   ok(`PostgreSQL ${server.version}; base ${server.database} vacía`)
 
-  run('up')
+  // Este ciclo histórico prueba hasta K008; el rollback posterior depende de ese límite.
+  run('up', '5')
   const columns = await query(`SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
     WHERE table_schema='public' AND table_name='lots' AND column_name = ANY($1) ORDER BY column_name`,
     [['public_id', 'version', 'updated_at']])

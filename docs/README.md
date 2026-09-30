@@ -24,6 +24,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0001](adr/0001-gestor-de-migraciones.md) | node-pg-migrate, SQL y pg |
 | [0002](adr/0002-ofertas-parciales.md) | FIFO, oferta parcial y cierre al aceptar/rechazar/vencer, sin prioridad residual ni reingreso automático |
 | [0003](adr/0003-arquitectura-incremental-s02.md) | Arquitectura incremental HTTP, Application, Domain e Infrastructure; Composition ensambla |
+| [0004](adr/0004-reserva-directa-idempotente.md) | Reserva directa e idempotencia por actor, resultado persistido y bloqueo de lote |
 
 ## Entregas y evidencia
 

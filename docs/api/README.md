@@ -1,13 +1,9 @@
 # Contrato HTTP de S02
 
-[openapi.yaml](openapi.yaml) es la **fuente de verdad HTTP** para K008–K011:
-OpenAPI **3.1.0**, versión inicial del contrato **0.1.0**, un solo archivo.
-Se prepara después de [ADR 0003](../adr/0003-arquitectura-incremental-s02.md) y
-antes de implementar esas tarjetas. K010 ahora implementa las cuatro operaciones
-de lotes con PostgreSQL, además de [`GET /health`](../../api/src/app.ts).
-K008 implementa identidad, sesiones, Origin/CSRF y conexión real con Actor/K010.
-[La guía K008](../k008-identidad.md) reúne operación, decisiones y evidencia nueva.
-Se actualiza la descripción de estado del YAML; no cambian rutas ni schemas.
+[openapi.yaml](openapi.yaml) es la fuente de verdad HTTP para identidad,
+publicación, búsqueda pública y reserva directa. Usa OpenAPI 3.1.0 en un solo
+archivo. [Lotes](../lotes.md) describe las reglas de RF02–RF04 y
+[ADR 0004](../adr/0004-reserva-directa-idempotente.md) define la idempotencia.
 
 OpenAPI define transporte, seguridad, requests, responses y errores. Las
 [migraciones](../../api/migrations) definen persistencia; Domain y la documentación
@@ -92,6 +88,11 @@ cuerpo JSON `400`, `413`, `415`, `422`; no sustituyen errores de autorización.
 RF01/RF02 provienen de anexos A p. 1; las tarjetas se relacionan en el
 [modelo inicial](../modelo-inicial.md), sección Fuera de K003, y en la planificación
 de este trabajo. No se inventan nuevos IDs de requisitos.
+
+Las operaciones `searchPublicLots` y `getPublicLot` son públicas y no usan sesión.
+`reservePublicLot` exige actor autenticado, Origin y CSRF; su ruta pública describe
+el recurso, no un permiso anónimo para escribir. La cantidad y clave viajan en
+JSON, y los reintentos reproducen 201 con el mismo cuerpo.
 
 ## Sesión, establecimientos y CSRF
 
@@ -385,7 +386,7 @@ registro sin login/membresía, sesión vencida, acceso ajeno, CSRF/origen invál
 dos ediciones con misma versión, edición contra publicación y publicación sin fotos.
 
 Nada de esto acredita todavía el Walking Skeleton ni toda E2: E1 incluye además
-búsqueda/reserva/fotos. Se posponen K014, descubrimiento, reserva,
+búsqueda/reserva/fotos. Se posponen K014,
 FIFO/ofertas, cancelación/retiro, chat, incidencias,
 worker y estadísticas. ADR 0001 y ADR 0002 se conservan sin modificaciones.
 

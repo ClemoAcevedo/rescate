@@ -1,8 +1,10 @@
 // Composition: configuración y ensamblado; las políticas viven en Application/HTTP.
 import type { Express } from "express"
 import { createLotUseCases } from "./application/lots/use-cases.js"
+import { createDiscoveryUseCases } from "./application/discovery/use-cases.js"
 import { createIdentityUseCases } from "./application/identity/use-cases.js"
 import { createLotRepository } from "./infrastructure/postgres/lot-repository.js"
+import { createDiscoveryRepository } from "./infrastructure/postgres/discovery-repository.js"
 import { createEmailCanonicalizer, createIdentityRepository } from "./infrastructure/postgres/identity-repository.js"
 import { createSessionRepository } from "./infrastructure/postgres/session-repository.js"
 import { createLoginSecurityRepository } from "./infrastructure/postgres/login-security-repository.js"
@@ -12,6 +14,7 @@ import { createCsrfTokens } from "./infrastructure/crypto/csrf.js"
 import { createPool } from "./infrastructure/postgres/pool.js"
 import { createApp } from "./app.js"
 import { createLotsRouter } from "./http/lots-router.js"
+import { createDiscoveryRouter } from "./http/discovery-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { createTrafficLimits } from "./http/rate-limits.js"
@@ -47,7 +50,9 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
   const authentication = createAuthentication(identities, createCsrfTokens(config.key), config.origins, limits)
   const lotsRouter = createLotsRouter({ useCases: createLotUseCases(createLotRepository(pool), () => new Date()),
     authenticate: authentication.authenticate, protectCommand: authentication.protectCommand })
-  return { app: createApp({ lotsRouter, authRouter: createAuthRouter(identities, authentication, limits),
+  const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), () => new Date()),
+    authentication.authenticate, authentication.protectCommand)
+  return { app: createApp({ lotsRouter, discoveryRouter, authRouter: createAuthRouter(identities, authentication, limits),
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
       try { limits.ip(req.ip ?? req.socket.remoteAddress ?? "unknown"); next() }
