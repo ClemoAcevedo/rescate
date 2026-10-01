@@ -166,17 +166,19 @@ segunda ejecución sin cambios, rollback y reaplicación.
 
 Las entregas y documentos asociados al proyecto se encuentran en `docs`.
 
-Actualmente se incluye la documentación correspondiente a E1:
-
 ```text
 docs/
 └── entregas/
-    └── e1/
-        ├── informe-e1.pdf
-        └── anexos-e1.pdf
+    ├── e1/
+    │   ├── informe-e1.pdf
+    │   └── anexos-e1.pdf
+    └── e2/
+        ├── presentacion-e2.pptx
+        └── estimaciones-e2.xlsx
 ```
 
-Estos documentos contienen el contexto, requerimientos y decisiones definidas durante la primera etapa del proyecto.
+E1 contiene el contexto, requerimientos y decisiones de la primera etapa. E2 contiene
+la presentación y la planilla de estimaciones y plan de trabajo.
 
 El [índice de documentación](docs/README.md) incluye las decisiones posteriores.
 La [arquitectura actual y objetivo incremental S02](docs/arquitectura/arquitectura.md)

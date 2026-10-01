@@ -33,5 +33,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 - [Informe E1](entregas/e1/informe-e1.pdf) y [anexos E1](entregas/e1/anexos-e1.pdf):
   requisitos originales. No se reescriben; los ADR posteriores prevalecen solo en lo
   que modifican.
+- [Presentación E2](entregas/e2/presentacion-e2.pptx) y
+  [estimaciones E2](entregas/e2/estimaciones-e2.xlsx): modelos, arquitectura,
+  respuesta al feedback de E1, riesgos y plan de trabajo de S01–S03.
 - [Evidencia](evidencia/): registros de ejecución de K003, K005, K006, K009 y K010,
   conservados como estaban. La evidencia nueva va en la descripción del PR y en CI.
