@@ -25,6 +25,21 @@ import { assertContract } from '../test/support/openapi.ts'
 import { randomBytes } from 'node:crypto'
 import { animatedWebp, fakePng, jpegWithExif, limitJpeg, pngOf, svg } from '../test/support/images.ts'
 
+// Memoria residente del proceso hijo en MiB. Linux expone el pico (VmHWM) en
+// /proc; macOS y BSD no tienen /proc, así que se muestrea el RSS actual con ps
+// y el bucle de 100 ms aproxima el pico.
+async function residentMiB(pid) {
+  if (process.platform === 'linux') {
+    const hwm = /VmHWM:\s+(\d+) kB/.exec(await readFile(`/proc/${pid}/status`, 'utf8').catch(() => ''))
+    return hwm ? Number(hwm[1]) / 1024 : 0
+  }
+  try {
+    return Number.parseInt(execFileSync('ps', ['-o', 'rss=', '-p', String(pid)], { encoding: 'utf8' }), 10) / 1024 || 0
+  } catch {
+    return 0
+  }
+}
+
 assert.ok(process.env.DATABASE_URL, 'Configura DATABASE_URL para una base de prueba vacía')
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 })
 const query = async (sql, values) => (await client.query(sql, values)).rows
@@ -335,8 +350,7 @@ try {
   const deadline = Date.now() + 60_000
   while (status === 'pending' && Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, 100))
-    const hwm = /VmHWM:\s+(\d+) kB/.exec(await readFile(`/proc/${worker.pid}/status`, 'utf8').catch(() => ''))
-    if (hwm) peak = Math.max(peak, Number(hwm[1]) / 1024)
+    peak = Math.max(peak, await residentMiB(worker.pid))
     status = (await query('SELECT status FROM lot_photos WHERE public_id = $1', [heavy.publicId]))[0].status
   }
   worker.kill('SIGTERM')
