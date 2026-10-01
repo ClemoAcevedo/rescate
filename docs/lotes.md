@@ -90,7 +90,7 @@ recibe una explicación.
 | Respuesta perdida | Se avisa que el comando pudo aplicarse y se ofrece recargar, sin reintento automático. |
 | Envíos | Un solo comando a la vez; un ref evita dobles envíos antes del siguiente render. |
 | Errores 422 | Se muestran en el campo indicado por `details.issues[].path` y el foco va al primero. |
-| Fotos | Solo un aviso «Pendiente de validación»; el formulario no usa todavía las operaciones de [fotos](fotos.md) (K017). |
+| Fotos | Solo un aviso «Pendiente de validación»; el formulario no usa todavía las operaciones de [fotos](fotos.md) (K017, #20). |
 
 Código principal: [lots-service.ts](../web/src/services/lots-service.ts),
 [lot-form.ts](../web/src/lots/lot-form.ts), [lot-time.ts](../web/src/lots/lot-time.ts)
@@ -192,5 +192,5 @@ y crean una base aislada que conservan para inspección.
 - No hay listado de lotes del operador; un borrador solo se recupera con su URL (#96).
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
-- El formulario del operador no carga fotos todavía (K017); la API ya las admite.
+- El formulario del operador no carga fotos todavía (K017, #20); la API ya las admite.
 - El filtro de establecimientos opera sobre la lista completa de la sesión (#99).

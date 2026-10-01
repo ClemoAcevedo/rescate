@@ -151,7 +151,7 @@ adaptador local del prototipo.
 
 `pg_dump` no guarda bytes de fotos. E1 (anexos I p. 28) pide copias separadas de las
 imágenes finales con un manifiesto de referencias y ensayar la restauración; ese
-procedimiento corresponde a K053. Los originales temporales no forman parte del
+procedimiento corresponde a K053 (#56). Los originales temporales no forman parte del
 respaldo.
 
 ## Pruebas

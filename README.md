@@ -254,7 +254,7 @@ lo cambia.
   (K010), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
   retiro de fotos (K014), según OpenAPI.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
-  (K014). La web aún no carga fotos desde el formulario (K017).
+  (K014). La web aún no carga fotos desde el formulario (K017, #20).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 
