@@ -28,6 +28,6 @@ try {
 } catch (error) {
   // No serializar errores del SDK: pueden contener URLs firmadas y datos de configuración.
   const safeName = error instanceof Error ? error.name.replace(/[^a-zA-Z0-9_]/g, "") : "Error"
-  console.error(`FAIL K005 (${safeName}). Revisar configuración y último paso PASS; ver docs/k005-fotos.md.`)
+  console.error(`FAIL K005 (${safeName}). Revisar configuración y último paso PASS; ver docs/fotos.md.`)
   process.exitCode = 1
 }

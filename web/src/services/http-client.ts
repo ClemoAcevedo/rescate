@@ -53,7 +53,8 @@ export interface HttpRequest<T> {
   signal?: AbortSignal
 }
 
-function buildUrl(path: string): string {
+/** URL bajo la base de la API, también para recursos como imágenes de lotes. */
+export function buildUrl(path: string): string {
   // El proxy documentado vive bajo /api. Evita que, sin .env local, una ruta de
   // API caiga en el fallback HTML de Vite y se interprete como respuesta JSON.
   const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '/api'

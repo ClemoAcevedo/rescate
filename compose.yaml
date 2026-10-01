@@ -28,6 +28,11 @@ services:
       # K008/K010: la API necesita el esquema ya migrado. Las migraciones se aplican
       # como etapa aparte (npm run db:migrate), no al arrancar el servicio.
       DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
+      # K014: fotos en un volumen local compartido con el worker; producción usa B2.
+      PHOTO_STORAGE: local
+      PHOTO_LOCAL_DIR: /app/photo-storage
+    volumes:
+      - photo_data:/app/photo-storage
     depends_on:
       db:
         condition: service_healthy
@@ -62,6 +67,17 @@ services:
     build: ./api
     init: true
     command: ["node", "dist/worker.js"]
+    environment:
+      # Valida fotos y limpia temporales; reintenta mientras faltan las migraciones.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
+      PHOTO_STORAGE: local
+      PHOTO_LOCAL_DIR: /app/photo-storage
+    volumes:
+      - photo_data:/app/photo-storage
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  photo_data:

@@ -15,7 +15,10 @@ export function assertContract(method: string, path: string, response: Response,
   const route = path === "/public/lots" ? path
     : path.startsWith("/public/lots/") ? (path.endsWith("/reservations") ? "/public/lots/{lotId}/reservations" : "/public/lots/{lotId}")
     : path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
-    : path.endsWith("/publish") ? "/lots/{lotId}/publish" : "/lots/{lotId}"
+    : path.endsWith("/publish") ? "/lots/{lotId}/publish"
+    : /^\/lots\/[^/]+\/photos\/[^/]+\/[^/]+$/.test(path) ? "/lots/{lotId}/photos/{photoId}/{variant}"
+    : /^\/lots\/[^/]+\/photos\/[^/]+$/.test(path) ? "/lots/{lotId}/photos/{photoId}"
+    : /^\/lots\/[^/]+\/photos$/.test(path) ? "/lots/{lotId}/photos" : "/lots/{lotId}"
   const operation = contract.paths[route][method.toLowerCase()]
   let spec = operation.responses[String(response.status)]
   assert.ok(spec, `${method} ${route}: status ${response.status} no contratado`)

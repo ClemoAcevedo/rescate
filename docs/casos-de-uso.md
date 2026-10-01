@@ -46,9 +46,9 @@ fotos es válido.
 
 **Alternativos y errores.** Sin sesión o membresía se rechaza; lote inexistente se
 trata como tal; versión obsoleta, lote publicado o ventana terminada producen
-conflicto/regla inválida sin mutación. Una foto ausente, no lista o no autorizada
-impide mostrarla; la política exacta de si bloquea toda publicación se debe decidir
-en K014. No se carga ni procesa una imagen dentro de este caso.
+conflicto/regla inválida sin mutación. Una foto en carga, en validación o rechazada
+impide publicar hasta que termine o se quite ([ADR 0005](adr/0005-ciclo-de-fotos.md)).
+No se carga ni procesa una imagen dentro de este caso; ver [fotos](fotos.md).
 
 **Postcondiciones.** Estado Publicado, o ningún cambio ante error. El lote sólo
 será asignable después si además tiene `F > 0`; publicar no crea compromisos.

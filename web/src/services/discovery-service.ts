@@ -1,4 +1,4 @@
-import { ConnectionError, HttpError, UnexpectedResponseError, request } from './http-client'
+import { ConnectionError, HttpError, UnexpectedResponseError, buildUrl, request } from './http-client'
 import type { PublicLot, PublicLotPage, ReservationResponse, ReserveLotRequest } from './openapi'
 
 export type { PublicLot, PublicLotPage, ReservationResponse }
@@ -17,7 +17,9 @@ function parseLot(value: unknown): PublicLot {
     || (value.photoUrl !== null && typeof value.photoUrl !== 'string')
     || (value.distanceKm !== null && (typeof value.distanceKm !== 'number'
       || !Number.isFinite(value.distanceKm) || value.distanceKm < 0))) throw new Error('El lote público tiene un formato inesperado.')
-  return value as unknown as PublicLot
+  // La API entrega la ruta de la foto relativa a su base; el navegador necesita la URL completa.
+  const lot = value as unknown as PublicLot
+  return { ...lot, photoUrl: lot.photoUrl === null ? null : buildUrl(lot.photoUrl) }
 }
 function parsePage(value: unknown): PublicLotPage {
   if (!record(value) || !Array.isArray(value.items) || value.items.length > 12

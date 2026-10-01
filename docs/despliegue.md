@@ -18,7 +18,7 @@ ni usar mocks de identidad en el despliegue.
 | --- | --- |
 | PostgreSQL | Imagen `postgis/postgis:16-3.5`; volumen en `/var/lib/postgresql/data`; `PGDATA=/var/lib/postgresql/data/pgdata`; usuario, base y contraseña propia en variables Railway. Sin dominio público ni TCP proxy. |
 | API | Contexto de build `api/`, [Dockerfile](../api/Dockerfile), `node dist/index.js`, `PORT=3000`, healthcheck `/health`, restart `ON_FAILURE`. Pre-deploy: `npm run db:migrate`. |
-| Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. El proceso está inactivo y no necesita conexión a la base. |
+| Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. Valida fotos y limpia objetos; necesita `DATABASE_URL` y el almacenamiento de fotos. Sin ellos queda inactivo. |
 | Web | Proyecto Vercel vinculado a `web/`, Node 24.x, Vite, `npm ci` y build configurado en `vercel.mjs`; salida `dist/`. |
 
 Railway conserva la configuración de los servicios. Al crear un entorno, fijar
@@ -32,6 +32,11 @@ La API recibe `NODE_ENV=production`, una `CSRF_SIGNING_KEY` generada con
 ```text
 DATABASE_URL=postgresql://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{postgres.POSTGRES_DB}}
 ```
+
+API y worker reciben además `NODE_ENV=production`, ese mismo `DATABASE_URL`,
+`PHOTO_STORAGE=s3` y las cinco variables `PHOTO_S3_*` del bucket B2 privado
+([fotos](fotos.md#configuración)). Sin `PHOTO_STORAGE`, cargar fotos responde 503,
+el worker queda inactivo y el resto del sitio funciona.
 
 Conservar la clave CSRF al reiniciar. Los secretos quedan en Railway, nunca en
 variables `VITE_`. API y worker no están conectados al autodeploy de GitHub en
