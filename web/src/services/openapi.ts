@@ -8,9 +8,6 @@ export type EmailInput = string
  * Contraseña de entrada; mínimo de 12 caracteres. Nunca se devuelve ni se registra en logs.
  */
 export type Password = string
-/**
- * Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización.
- */
 export type PublicId = string
 /**
  * Correo normalizado en minúsculas, sin espacios exteriores; no afirma verificación ni elimina puntos o sufijos +.
@@ -61,7 +58,7 @@ export type Instant = string
  */
 export type Version = number
 /**
- * Representación para operador autorizado en S02. No incluye reservas, contadores futuros, claves de objetos, fotos sin validar ni columnas internas. Sin updatedAt inventado. Las fotos son opcionales y su transporte se acordará con K014.
+ * Representación para operador autorizado en S02. No incluye reservas, contadores futuros, claves de objetos ni columnas internas. Sin updatedAt inventado. Las fotos son opcionales y se consultan en GET /lots/{lotId}/photos.
  */
 export type LotResponse = {
   id: PublicId
@@ -99,6 +96,8 @@ export interface HttpSchemas {
   PublicLotPage: PublicLotPage
   ReserveLotRequest: ReserveLotRequest
   ReservationResponse: ReservationResponse
+  LotPhoto: LotPhoto
+  LotPhotoList: LotPhotoList
   ErrorResponse: ErrorResponse
   ValidationIssue: ValidationIssue
 }
@@ -212,7 +211,7 @@ export interface PublicLot {
   pickupStartsAt: Instant
   pickupEndsAt: Instant
   /**
-   * Foto visible si existe; null muestra reemplazo local.
+   * Ruta relativa a la base de la API de la primera foto lista: miniatura en la búsqueda e imagen de presentación en el detalle. null muestra reemplazo local.
    */
   photoUrl: string | null
   /**
@@ -241,6 +240,48 @@ export interface ReservationResponse {
   quantity: number
   status: "confirmed"
   createdAt: Instant
+}
+/**
+ * Foto de un lote para su operador. Sin claves de objeto, tamaño original ni autor interno.
+ */
+export interface LotPhoto {
+  id: PublicId
+  position: number
+  /**
+   * uploading: carga en curso; pending: en validación; ready: visible; rejected: debe quitarse antes de publicar.
+   */
+  status: "uploading" | "pending" | "ready" | "rejected"
+  createdAt: Instant
+  /**
+   * Ancho de la imagen de presentación; solo en ready.
+   */
+  width: number | null
+  height: number | null
+  /**
+   * Solo en rejected.
+   */
+  rejectionReason:
+    | "unsupported_format"
+    | "animated"
+    | "too_many_pixels"
+    | "undecodable"
+    | "output_too_large"
+    | "processing_failed"
+    | null
+  /**
+   * Ruta relativa a la base de la API; solo en ready.
+   */
+  thumbnailUrl: string | null
+  displayUrl: string | null
+}
+/**
+ * Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización.
+ */
+export interface LotPhotoList {
+  /**
+   * @maxItems 3
+   */
+  items: LotPhoto[]
 }
 export interface ErrorResponse {
   error: {

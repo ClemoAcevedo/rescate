@@ -14,7 +14,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Dominio y requisitos | [Modelo](modelo-inicial.md), [casos de uso](casos-de-uso.md) y [trazabilidad](k013-trazabilidad.md) |
 | Identidad y sesiones | [Identidad](k008-identidad.md) |
 | Lotes | [Lotes](lotes.md) |
-| Fotos | [Prototipo de fotos](k005-fotos.md) |
+| Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 
@@ -26,6 +26,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0002](adr/0002-ofertas-parciales.md) | FIFO, oferta parcial y cierre al aceptar/rechazar/vencer, sin prioridad residual ni reingreso automático |
 | [0003](adr/0003-arquitectura-incremental-s02.md) | Arquitectura incremental HTTP, Application, Domain e Infrastructure; Composition ensambla |
 | [0004](adr/0004-reserva-directa-idempotente.md) | Reserva directa e idempotencia por actor, resultado persistido y bloqueo de lote |
+| [0005](adr/0005-ciclo-de-fotos.md) | Fotos cargadas y leídas por la API, validadas por el worker; publicar exige fotos listas |
 
 ## Entregas y evidencia
 

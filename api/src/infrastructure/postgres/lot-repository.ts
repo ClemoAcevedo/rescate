@@ -2,6 +2,7 @@
 // mapeo de filas a tipos de Domain. No decide autorización ni transiciones.
 
 import type { Lot, LotStatus } from "../../domain/lots.js"
+import type { PhotoStatus } from "../../domain/photos.js"
 import type {
   LotPublication,
   LotRepository,
@@ -153,6 +154,17 @@ function createLotWriter(client: PoolClient): LotWriter {
       // de uso: una ausencia aquí sería una incoherencia, no un caso esperado.
       if (rows.length === 0) throw new Error("La actualización del borrador no afectó ninguna fila")
       return toLot(rows[0]!)
+    },
+
+    async listPhotoStatuses(lotPublicId, now) {
+      const { rows } = await client.query<{ status: PhotoStatus }>(
+        `SELECT p.status FROM public.lot_photos p JOIN public.lots l ON l.id = p.lot_id
+         WHERE l.public_id = $1 AND p.status <> 'removed'
+           AND (p.status <> 'uploading' OR p.upload_expires_at > $2)
+         ORDER BY p.position`,
+        [lotPublicId, now],
+      )
+      return rows.map((row) => row.status)
     },
 
     async markPublished(publication: LotPublication) {

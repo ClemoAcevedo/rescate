@@ -16,7 +16,9 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
   versión aunque el valor no cambie.
 - **Publicar** exige que la ventana termine después de su inicio y después del
   instante del servidor, comprobado bajo bloqueo del lote; si no, 422. Cero
-  fotos permite publicar.
+  fotos permite publicar; si hay fotos, todas deben estar listas o responde 422
+  ([fotos](fotos.md)).
+- **Fotos fijas.** Publicado, no se agregan ni quitan fotos (409).
 - **Inmutabilidad.** Un lote publicado no se edita ni se republica (409):
   cantidad, contenido, lugar y plazo quedan fijos.
 - **Autorización del operador.** Cada operación de borrador/publicación comprueba la membership actual sobre el
@@ -88,7 +90,7 @@ recibe una explicación.
 | Respuesta perdida | Se avisa que el comando pudo aplicarse y se ofrece recargar, sin reintento automático. |
 | Envíos | Un solo comando a la vez; un ref evita dobles envíos antes del siguiente render. |
 | Errores 422 | Se muestran en el campo indicado por `details.issues[].path` y el foco va al primero. |
-| Fotos | Solo un aviso «Pendiente de validación»; OpenAPI aún no admite fotos (K014/K017). |
+| Fotos | Solo un aviso «Pendiente de validación»; el formulario no usa todavía las operaciones de [fotos](fotos.md) (K017). |
 
 Código principal: [lots-service.ts](../web/src/services/lots-service.ts),
 [lot-form.ts](../web/src/lots/lot-form.ts), [lot-time.ts](../web/src/lots/lot-time.ts)
@@ -104,7 +106,8 @@ se ordena por publicación; fecha e ID desempatan. La disponibilidad puede cambi
 entre páginas y se vuelve a leer al reservar. El detalle excluye borradores y
 lotes cerrados; los lotes sin stock muestran cero disponibles.
 La web mantiene visibles esos lotes en lista y detalle, indica que no quedan
-packs y oculta el formulario de reserva. Si falta una foto o falla su carga,
+packs y oculta el formulario de reserva. `photoUrl` lleva a la miniatura en la lista y
+a la imagen de presentación en el detalle; si falta una foto o falla su carga,
 muestra un reemplazo local con texto alternativo.
 
 La persona inicia sesión para reservar. El actor procede de K008, nunca del cuerpo.
@@ -189,5 +192,5 @@ y crean una base aislada que conservan para inspección.
 - No hay listado de lotes del operador; un borrador solo se recupera con su URL (#96).
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
-- Sin fotos hasta K014/K017.
+- El formulario del operador no carga fotos todavía (K017); la API ya las admite.
 - El filtro de establecimientos opera sobre la lista completa de la sesión (#99).

@@ -251,8 +251,10 @@ lo cambia.
   Búsqueda pública paginada, filtros, zona manual, detalle y reserva directa con
   API real (K016).
 - **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
-  (K010), búsqueda PostGIS y reserva directa idempotente (K015), según OpenAPI.
-- **Worker:** inactivo. **Fotos:** prototipo aislado (K005).
+  (K010), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
+  retiro de fotos (K014), según OpenAPI.
+- **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
+  (K014). La web aún no carga fotos desde el formulario (K017).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

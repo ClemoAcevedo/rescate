@@ -1,9 +1,8 @@
 # Entorno local y CI
 
 Guía vigente para el árbol de trabajo K008/K010 (2026-09-21).
-Compose levanta web, API, PostgreSQL/PostGIS y un worker inactivo. La API añade
-[operaciones de lotes](lotes.md); requiere migraciones aplicadas.
-K008 integra identidad/sesiones; reservas sigue pendiente. K005 es una CLI aislada.
+Compose levanta web, API, PostgreSQL/PostGIS y el worker de fotos. La API añade
+[operaciones de lotes](lotes.md) y [fotos](fotos.md); requiere migraciones aplicadas.
 Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
 [K006](evidencia/k006.md).
 
@@ -38,7 +37,7 @@ puertos publicados escuchan solo en `127.0.0.1`. No usar este Compose en producc
 | `web` | Vite, React y proxy `/api` | http://localhost:5173 |
 | `api` | Express compilado; `GET /health` | http://localhost:3000/health |
 | `db` | PostgreSQL 16 + PostGIS 3.5 | localhost:5432 |
-| `worker` | Proceso Node independiente, infraestructura inicial | Sin puerto |
+| `worker` | Proceso Node independiente: valida fotos y limpia temporales | Sin puerto |
 
 Variables del `.env` raíz (leídas por Compose):
 
@@ -64,7 +63,8 @@ del servidor, no se publica como variable del navegador. Fuera de Docker conserv
 el destino `http://localhost:3000`; para otro destino, exporta esa variable antes
 de `npm run dev`. `web/.env` solo es necesario al ejecutar Vite en el host.
 
-API y worker comparten el Dockerfile de `api`. No hay montajes de código ni de
+API y worker comparten el Dockerfile de `api` y el volumen `photo_data`, donde
+guardan las fotos con `PHOTO_STORAGE=local`. No hay montajes de código ni de
 `node_modules`: después de cambiar código o dependencias, ejecuta
 `docker compose up -d --build --wait`. Para recarga inmediata, usa los comandos
 de desarrollo del README. Los contextos Docker excluyen `.env`, dependencias y
@@ -89,12 +89,12 @@ La web debe responder HTML y ambas rutas de salud deben responder
 mostrar la base configurada y la versión de PostGIS.
 
 `db`, `api` y `web` tienen healthchecks; web espera a que API esté saludable.
-`/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable. El worker
-no consulta PostgreSQL. Compose no aplica migraciones automáticamente.
-El worker debe figurar `running` y registrar `Worker K006 iniciado`.
-Permanece inactivo con un temporizador de 24 horas sin tareas, polling ni logs
-periódicos, y termina limpiamente con SIGTERM/SIGINT. No tiene healthcheck de
-trabajos porque todavía no procesa ninguno.
+`/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable.
+Compose no aplica migraciones automáticamente.
+El worker debe figurar `running` y registrar `Worker iniciado: validación y limpieza de fotos`.
+Consulta PostgreSQL cada 2 s y limpia objetos cada minuto. Mientras falten las
+migraciones registra `photo_worker_error` y reintenta cada 5 s. Termina la foto en
+curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` o `PHOTO_STORAGE` queda inactivo.
 
 ## Persistencia y migraciones K002/K003
 
@@ -106,7 +106,7 @@ ni Compose. El [modelo K003](modelo-inicial.md) describe las cinco entidades.
 Desde el host, configurar `DATABASE_URL` en `api/.env` o en el entorno con el
 usuario, base y puerto de Compose. Ejecutar `npm run db:migrate` desde `api/`.
 El destino del host es `127.0.0.1` y el valor de `POSTGRES_PORT`; dentro de Compose,
-`db:5432`. API recibe esa URL y consulta PostgreSQL; worker permanece inactivo.
+`db:5432`. API y worker reciben esa URL y consultan PostgreSQL.
 K008 exige `users` vacío al migrar: nunca borrar datos automáticamente para eludir
 la precondición. Ver [operación y HTTPS K008](k008-identidad.md).
 
@@ -159,7 +159,7 @@ API en paralelo y después Compose:
 - `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud, identidad, seguridad y lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, reinicio de API y Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reinicio de API y Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay

@@ -12,7 +12,8 @@ ni B2. [K008](k008-identidad.md) incorpora las cuatro operaciones auth, scrypt,
 sesiones persistentes, cookies, origen/CSRF y Actor real. No hay actor temporal
 en runtime. K015 añade búsqueda PostGIS y reserva directa bajo bloqueo;
 [ADR 0004](adr/0004-reserva-directa-idempotente.md) define sus reintentos.
-El [worker](../api/src/worker.ts) sigue inactivo y [K005](k005-fotos.md) es una CLI aislada.
+K014 agrega carga, lectura y retiro de [fotos](fotos.md); el [worker](../api/src/worker.ts)
+las valida y limpia objetos con los mismos casos de uso de Application.
 
 ## Documentación vigente por tarea
 
@@ -26,7 +27,7 @@ El [worker](../api/src/worker.ts) sigue inactivo y [K005](k005-fotos.md) es una 
 | Desplegar web/API y operar releases | [Railway, Vercel y CD](despliegue.md) |
 | Consultar persistencia y operar migraciones | [Modelo K003](modelo-inicial.md), [guía de migraciones](migraciones.md) y [ADR 0001](adr/0001-gestor-de-migraciones.md) |
 | Interpretar FIFO y ofertas parciales | [ADR 0002](adr/0002-ofertas-parciales.md), decisión vigente sin implementación del flujo |
-| Repetir el prototipo local/B2 | [Guía K005](k005-fotos.md); no es un endpoint ni pipeline de imágenes |
+| Trabajar en fotos, el worker o el bucket B2 | [Fotos](fotos.md) y [ADR 0005](adr/0005-ciclo-de-fotos.md) |
 
 Antes de ampliar backend, revisar arquitectura, ADR aplicables, modelo y contrato.
 OpenAPI determina HTTP; el modelo/SQL determina persistencia. La UI no cambia

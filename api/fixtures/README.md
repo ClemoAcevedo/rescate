@@ -15,4 +15,4 @@ creado programáticamente para esta prueba. No contiene fotografías, datos pers
 ni metadatos EXIF. Se versiona únicamente este fixture; las copias de prueba se borran.
 
 La comparación exacta de bytes demuestra integridad del almacenamiento. No constituye
-validación de imágenes de usuarios ni implementa el procesamiento previsto en K014.
+validación de imágenes de usuarios: esa validación la hace el worker ([fotos](../../docs/fotos.md)).

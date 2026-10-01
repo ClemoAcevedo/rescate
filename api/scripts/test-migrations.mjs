@@ -14,6 +14,7 @@ const migrations = [
   '1790000000001_identity-sessions',
   '1790620000000_public-reservations',
   '1790700000000_discovery-postgis',
+  '1790800000000_lot-photos',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -43,9 +44,9 @@ const snapshot = () => query(`
   WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname <> 'spatial_ref_sys' ORDER BY c.relname
 `)
 
-async function verifyModel() {
+async function verifyModel(laterTables = []) {
   assert.deepEqual((await snapshot()).map(row => row.relname),
-    [...tables, ...identityTables, 'migration_tool_test', 'pgmigrations'].sort())
+    [...tables, ...identityTables, ...laterTables, 'migration_tool_test', 'pgmigrations'].sort())
   const constraints = await query(`
     SELECT c.conname, t.relname AS table_name, c.contype,
            pg_get_constraintdef(c.oid) AS definition
@@ -208,9 +209,14 @@ try {
   assert.deepEqual(reservationColumns.map(row => row.column_name), ['idempotency_key', 'public_id'])
   assert.equal((await query('SELECT count(*)::int AS count FROM commitments WHERE public_id IS NULL'))[0].count, 0)
   ok('K015 agrega IDs de reserva e idempotencia sin perder compromisos existentes')
+  // K014 solo agrega lot_photos: las tablas previas conservan OID.
+  const withPhotos = await snapshot()
+  assert.deepEqual(withPhotos.filter(row => row.relname !== 'lot_photos'), before)
+  assert.ok(withPhotos.some(row => row.relname === 'lot_photos'))
+  ok('K014 agrega lot_photos sin recrear tablas existentes')
   run('up')
   assert.deepEqual(await history(), applied)
-  assert.deepEqual(await snapshot(), before)
+  assert.deepEqual(await snapshot(), withPhotos)
   assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
   assert.equal(migrations.filter(name => !applied.some(row => row.name === name)).length, 0)
   ok('segunda ejecución: 0 pendientes; historial, OID de tablas y datos intactos')
@@ -220,6 +226,9 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.deepEqual(await snapshot(), before)
+  ok('rollback K014 retira solo lot_photos')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name, null)
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
@@ -275,7 +284,7 @@ try {
   assert.deepEqual((await history()).map(row => row.name), migrations)
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
-  await verifyModel()
+  await verifyModel(['lot_photos'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

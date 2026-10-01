@@ -82,8 +82,10 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
       return repository.withLotTransaction(input.publicId, async (lot, writer) => {
         const target = await authorizeLot(lot, actor, writer)
         requireVersion(target, input.expectedVersion)
-        // El instante se lee después de obtener el lote bloqueado.
-        const published = applyPublication(target, now())
+        // El instante y las fotos se leen después de obtener el lote bloqueado:
+        // cargar o quitar fotos también bloquea el lote, sin llamadas externas.
+        const at = now()
+        const published = applyPublication(target, at, await writer.listPhotoStatuses(target.publicId, at))
         return writer.markPublished({
           publicId: target.publicId,
           expectedVersion: input.expectedVersion,

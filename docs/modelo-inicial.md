@@ -32,11 +32,13 @@ K015 agrega `commitments.public_id` e `idempotency_key`, con unicidad por actor,
 y un índice espacial sobre las coordenadas del lote. La reserva directa usa las
 restricciones existentes y calcula disponibilidad después de bloquear el lote.
 Ver [lotes](lotes.md#búsqueda-y-reserva-directa) y [ADR 0004](adr/0004-reserva-directa-idempotente.md).
+K014 agrega `lot_photos`: lote, autor, posición 1–3, estado, plazo de carga, formato,
+tamaño, dimensiones y motivo de rechazo. Ver [fotos](fotos.md).
 
 **Modelo conceptual E2 (K013, 2026-09-21):** las secciones
 [Modelo conceptual E2](#modelo-conceptual-e2-k013) y posteriores describen el
 dominio que deben cubrir los siguientes casos de uso. No son una ampliación del
-SQL K003/K010 ni prueban una funcionalidad integrada: fotos, solicitudes, ofertas,
+SQL K003/K010 ni prueban una funcionalidad integrada: solicitudes, ofertas,
 códigos, entregas, conversaciones e incidencias siguen fuera de la persistencia y
 de las rutas actuales. Conservan las reglas E1 que no fueron modificadas y aplican
 la excepción de oferta parcial de [ADR 0002](adr/0002-ofertas-parciales.md).
@@ -157,8 +159,7 @@ fuente principal son el [informe E1](entregas/e1/informe-e1.pdf), pp. 1–3 y 5,
 los [anexos E1](entregas/e1/anexos-e1.pdf), A pp. 1–2, B p. 4, C p. 5, F p. 8,
 H pp. 20–21 e I pp. 24–27. [ADR 0002](adr/0002-ofertas-parciales.md) prevalece
 sólo sobre la cantidad que se puede ofrecer y el cierre de la solicitud parcial.
-La guía [K005](k005-fotos.md) es evidencia de un prototipo de objetos; no define
-la relación de fotos de producto. [OpenAPI S02](api/README.md) es autoridad
+La relación de fotos de producto está en [fotos](fotos.md) (K014). [OpenAPI S02](api/README.md) es autoridad
 únicamente para las operaciones HTTP K008–K011 ya delimitadas.
 
 Los términos se usan así:
@@ -194,7 +195,7 @@ Los términos se usan así:
 | Establecimiento | Representar al negocio que publica y acredita retiros. | Tiene 0..N membresías y publica 0..N lotes; una membresía y un lote pertenecen a un establecimiento. | `establishments` existe. |
 | Membresía | Vincular un usuario con el establecimiento que puede operar. Es la base del permiso de operador, no un catálogo de roles. | Resuelve la relación N:M entre usuario y establecimiento; una sola por par. | Existe y K010 la comprueba al gestionar el lote. |
 | Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Existe como borrador/publicado; no guarda fotos ni contadores. |
-| Foto de lote | Ser una imagen opcional que ayuda a describir un lote publicado. Sólo una foto lista y autorizada puede hacerse visible; el conjunto queda fijo al publicar. | Cada foto pertenece a exactamente un lote; un lote tiene de 0 a 3 según anexo I p. 25. | K005 sólo prueba objetos privados con un fixture; no existe asociación, carga ni consulta de fotos de lote. |
+| Foto de lote | Ser una imagen opcional que ayuda a describir un lote publicado. Sólo una foto lista y autorizada puede hacerse visible; el conjunto queda fijo al publicar. | Cada foto pertenece a exactamente un lote; un lote tiene de 0 a 3 según anexo I p. 25. | `lot_photos` (K014) guarda referencias y estado; los bytes están en objetos privados. Ver [fotos](fotos.md). |
 | Compromiso | Conservar la intención del usuario sobre una cantidad y, si corresponde, su reserva confirmada. Debe distinguir cantidad solicitada, ofrecida y confirmada. | Pertenece a un usuario y un lote; puede originar 0..N ofertas sucesivas sólo si las reglas futuras lo permiten; una reserva confirmada puede tener el código y la entrega que correspondan. | Sólo existe la reserva confirmada, sin solicitud/oferta ni cantidades separadas. |
 | Código de retiro | Presentar la credencial de una reserva confirmada para que su titular la consulte y un operador autorizado la revise antes de confirmar el retiro completo. No es un identificador público ni una autorización por sí solo. | Una reserva confirmada tiene un código de ocho caracteres; una solicitud en espera no lo tiene. Se consume al acreditar la única entrega completa. | No existe. Anexos A p. 2 y G pp. 13 y 16 lo definen; no se inventan rotaciones ni códigos alternativos. |
 | Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | No existe. |
@@ -243,8 +244,8 @@ de la membresía en el establecimiento del lote.
 | Elemento | Consulta | Modificación confirmada | Límite o pendiente |
 | --- | --- | --- | --- |
 | Establecimiento y membresía | El usuario consulta sus establecimientos operables mediante la sesión K008; esa lista no sustituye la autorización por operación. | La administración de membresías no está especificada. | Registrarse no concede una membresía; K010 exige una existente. |
-| Lote | El operador miembro puede consultar su lote; RF03 exige el recorrido de descubrimiento, aún sin contrato integrado. | Sólo el operador miembro crea, edita borradores y publica; lo publicado es inmutable. | La visibilidad exacta de fotos y del detalle para quien rescata debe acordarse con K014/RF03. |
-| Fotos | Quien esté autorizado a consultar el lote visible podrá recibir sólo fotos listas; el acceso al objeto no debe ser público por defecto. | Operador autorizado antes de publicar; después el conjunto es fijo. | Faltan carga, validación, eliminación, autorización y contrato HTTP. |
+| Lote | El operador miembro puede consultar su lote; RF03 exige el recorrido de descubrimiento, aún sin contrato integrado. | Sólo el operador miembro crea, edita borradores y publica; lo publicado es inmutable. | Las fotos de un lote publicado son públicas; las de un borrador, solo para sus operadores ([fotos](fotos.md#lectura)). |
+| Fotos | Quien esté autorizado a consultar el lote visible podrá recibir sólo fotos listas; el acceso al objeto no debe ser público por defecto. | Operador autorizado antes de publicar; después el conjunto es fijo. | Implementado en K014; la publicación exige que todas estén listas. |
 | Compromiso, oferta, código y entrega | El titular consulta cantidad, estado, lugar, plazo y código de su reserva; el operador autorizado lo revisa para confirmar el retiro. | Solicitar/aceptar/cancelar corresponde a quien rescata; ofrecer y acreditar corresponde al flujo autorizado del establecimiento/sistema. | El código no va en URL, historial ni logs, y no sustituye sesión, membresía ni comprobación de reserva. |
 | Incidencia | El usuario consulta sólo los avisos que le corresponden, aun con el lote cerrado o el chat terminado; el operador miembro ve pendientes, generados y leídos. | Cualquier usuario con acceso al lote reporta; un operador miembro o administración publica, actualiza, resuelve y decide cerrar el lote (anexo I p. 26). | Un reporte no cierra el lote ni avisa por sí solo. No se muestran identidades de otros destinatarios. |
 | Conversación | Participantes requieren acceso contextual al compromiso. | Cada participante escribe en su conversación. | No se presupone acceso de otros usuarios ni un rol externo de soporte. |

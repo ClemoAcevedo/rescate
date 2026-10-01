@@ -2,8 +2,8 @@ import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
 
 /**
- * OpenAPI S02 no admite cargas ni referencias de fotos en los comandos de lote. Este bloque
- * reserva el lugar del futuro flujo (K014/K017) sin enviar archivos ni llamar a la API.
+ * Reserva el lugar de la carga de fotos sin enviar archivos ni llamar a la API. Las
+ * operaciones de fotos de OpenAPI (K014) se conectan al formulario en K017.
  */
 export function LotPhotosPending() {
   return (

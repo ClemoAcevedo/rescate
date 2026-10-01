@@ -37,6 +37,8 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
       lots.set(updated.publicId, updated)
       return updated
     },
+    // Sin fotos en memoria: la publicación con fotos se prueba con PostgreSQL.
+    async listPhotoStatuses() { return [] },
     async markPublished(publication) {
       const current = lots.get(publication.publicId)
       if (current === undefined || current.version !== publication.expectedVersion || current.status !== "draft") {

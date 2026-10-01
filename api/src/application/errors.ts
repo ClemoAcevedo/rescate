@@ -8,6 +8,10 @@ export type ApplicationErrorCode =
   | "establishment_not_found"
   | "version_conflict"
   | "idempotency_conflict"
+  | "photo_not_found"
+  | "photo_upload_expired"
+  | "photo_storage_unavailable"
+  | "concurrent_photo_uploads"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -36,3 +40,19 @@ export const idempotencyConflict = (): ApplicationError =>
 
 export const establishmentNotFound = (): ApplicationError =>
   new ApplicationError("establishment_not_found", "El establecimiento no existe.")
+
+export const photoNotFound = (): ApplicationError =>
+  new ApplicationError("photo_not_found", "La foto no existe o no está visible.")
+
+export const photoUploadExpired = (): ApplicationError =>
+  new ApplicationError("photo_upload_expired", "La carga venció o fue retirada antes de confirmarse.")
+
+export const photoStorageUnavailable = (): ApplicationError =>
+  new ApplicationError("photo_storage_unavailable", "El almacenamiento de fotos no está configurado.")
+
+/** E1 I p. 25: máximo dos cargas simultáneas por operador. */
+export class ConcurrentUploadsError extends ApplicationError {
+  constructor(readonly retryAfter: number) {
+    super("concurrent_photo_uploads", "El operador ya tiene el máximo de cargas simultáneas.")
+  }
+}
