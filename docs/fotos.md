@@ -69,6 +69,30 @@ base `/api`. Si falta o falla, la web muestra el reemplazo local. El operador co
 estado, motivo de rechazo y rutas en `GET /lots/{lotId}/photos` y quita una foto con
 `DELETE /lots/{lotId}/photos/{photoId}`.
 
+## Formulario del operador
+
+En `/operador/lotes/:lotId` el borrador muestra sus fotos por posición, con estado
+(«Cargando», «En validación», «Lista», «Rechazada» con el motivo) y botón para quitarlas.
+Un lote nuevo pide guardar el borrador antes, porque la carga exige un lote existente.
+
+- **Carga:** un archivo por vez. La web avisa antes de enviar si el tipo no es JPEG, PNG
+  o WebP o si supera 5 MiB; la decisión es de la API. El archivo viaja como cuerpo
+  binario con su Content-Type. «Agregar foto» se oculta con tres fotos activas.
+- **Validación:** mientras haya fotos en carga o validación, la web consulta
+  `GET /lots/{lotId}/photos` cada 3 s (20 por minuto, dentro del límite por usuario) y
+  deja de hacerlo al terminar o al salir de la página.
+- **Errores:** 413, 415 y 422 explican el archivo; 409 actualiza la lista (lote
+  publicado, tres fotos o carga vencida); 429 indica cuántos segundos esperar según
+  `Retry-After`; 503 explica que la carga no está disponible y que se puede publicar
+  sin fotos. Una respuesta perdida no se reintenta: se consulta la lista.
+- **Publicar (D-05):** el botón se deshabilita mientras haya fotos no listas. Si la API
+  igual responde 422 (por ejemplo, otra pestaña cargó una foto), se muestra su mensaje y
+  se actualiza la lista.
+- **Publicado:** las fotos listas se muestran en solo lectura, sin cargar ni quitar.
+
+Las miniaturas usan el mismo componente que la búsqueda: si una imagen falla, se muestra
+el reemplazo local y el resto del lote sigue visible.
+
 ## Persistencia y limpieza
 
 `lot_photos` guarda lote, autor, posición, estado, plazo de la carga, tamaño y formato
@@ -159,6 +183,7 @@ respaldo.
 | Comando | Qué comprueba |
 | --- | --- |
 | `npm --prefix api test` | Firmas, APNG, SVG, animaciones, 20 MP, truncados, EXIF eliminado, orientación y límites de salida con sharp real; transporte HTTP (401, 403, 413 declarado y por streaming, 415, 422, 429) contra OpenAPI; D-05 en Domain. |
+| `npm --prefix api run test:web:compose` | Formulario del operador en Chromium con la API y un worker reales: tipo no permitido sin enviar, archivo falso (422), imagen animada rechazada por el worker, JPEG listo con miniatura, quitar, 422 por foto no lista desde otra pestaña, publicación con fotos y reemplazo en el detalle público. |
 | `npm --prefix api run db:test:photos:compose` | PostgreSQL real y objetos en disco: acceso ajeno, archivos falsos y grandes, límites de 3 fotos y 2 cargas, publicación bloqueada hasta quitar la rechazada, reinicio con reclamo vencido sin duplicar, tres intentos, carga vencida limpiada, foto quitada durante la validación, recorrido HTTP con sesión/CSRF y proceso real del worker con un archivo de 20 MP y 4,3 MiB (memoria máxima medida y SIGTERM). Termina con un inventario: solo quedan salidas de fotos listas. |
 
 Ambos corren en CI.

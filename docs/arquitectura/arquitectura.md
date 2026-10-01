@@ -346,7 +346,7 @@ Ejemplo de trazabilidad que ya puede mostrarse:
 | --- | --- | --- |
 | Web → API | ConnectionPage, proxy, app.ts y [health.test.ts](../../api/test/health.test.ts) | Recorrido de salud; no negocio ni acceso HTTP a base. |
 | Persistencia inicial | [Modelo K003](../modelo-inicial.md), migraciones y [evidencia K003](../evidencia/k003.md) | Restricciones e historial probados previamente; no publicación/reserva implementadas. |
-| Fotos | [Fotos](../fotos.md) y `db:test:photos:compose` | Carga, validación, reinicio, limpieza y lectura con PostgreSQL real y worker real; el formulario web aún no carga fotos (K017, #20). |
+| Fotos | [Fotos](../fotos.md) y `db:test:photos:compose` | Carga, validación, reinicio, limpieza y lectura con PostgreSQL real y worker real; `test:web:compose` recorre el formulario web con fotos (K017). |
 | Entorno y CI | Compose, workflow y [evidencia K006](../evidencia/k006.md) | Configuración y resultados históricos con sus límites; no certificación de un nuevo run remoto. |
 
 E1 (informe p. 5; anexos D p. 6 y H p. 19) contempla para E2 búsqueda/reserva y
