@@ -41,7 +41,7 @@ try {
   assert.equal(await page.getByText('Fotografía no disponible').count() > 0, true)
   const soldOutCard = page.locator('article').filter({ hasText: soldOutTitle })
   await soldOutCard.getByText('Sin stock', { exact: true }).waitFor()
-  await soldOutCard.getByRole('link', { name: 'Ver detalle del lote' }).click()
+  await soldOutCard.getByRole('link', { name: soldOutTitle }).click()
   await page.getByRole('heading', { name: soldOutTitle }).waitFor()
   await page.getByText('Sin stock disponible').waitFor()
   assert.equal(await page.getByRole('button', { name: 'Confirmar reserva' }).count(), 0)
@@ -93,7 +93,7 @@ try {
   console.log('OK: volver atrás sincroniza filtros y resultados')
 
   await page.locator('article').filter({ hasText: title })
-    .getByRole('link', { name: 'Ver detalle del lote' }).click()
+    .getByRole('link', { name: title }).click()
   await page.getByRole('heading', { name: title }).waitFor()
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.setViewportSize({ width: 1366, height: 768 })

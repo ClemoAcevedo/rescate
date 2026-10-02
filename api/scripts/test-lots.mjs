@@ -166,6 +166,18 @@ try {
   await failsWith('identificador con otra forma', useCases.getLot(actor, 'no-es-uuid'), 'lot_not_found')
   ok('un identificador inexistente o con otra forma no consulta datos ajenos')
 
+  const listed = await useCases.listLots(actor, establishment.public_id, { page: 1 })
+  const expectedIds = (await query(`SELECT public_id::text FROM lots WHERE establishment_id = $1
+    ORDER BY COALESCE(published_at, created_at) DESC, id DESC`, [establishment.id])).map(row => row.public_id)
+  assert.deepEqual(listed.items.map(lot => lot.publicId), expectedIds)
+  assert.equal(listed.hasNextPage, false)
+  assert.deepEqual((await useCases.listLots(actor, establishment.public_id, { status: 'published', page: 1 })).items
+    .map(lot => [lot.publicId, lot.status, lot.reservedQuantity, lot.photoId]), [[draft.publicId, 'published', 0, null]])
+  assert.ok((await useCases.listLots(actor, establishment.public_id, { status: 'draft', page: 1 })).items.every(lot => lot.status === 'draft'))
+  await failsWith('listar lotes de otro establecimiento', useCases.listLots(foreign, establishment.public_id, { page: 1 }), 'not_authorized')
+  await failsWith('listar con la PK interna', useCases.listLots(actor, establishment.id, { page: 1 }), 'establishment_not_found')
+  ok('listado del operador: sus lotes en orden, filtro por estado y 403 para otro establecimiento')
+
   // Dos transacciones reales compiten por la misma versión: editar/publicar.
   const racing = await useCases.createDraft(actor, { establishmentId: establishment.public_id, declaration: declaration() })
   const mixed = await Promise.allSettled([

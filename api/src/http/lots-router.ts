@@ -3,11 +3,12 @@ import { Router } from "express"
 import type { Request, Response } from "express"
 import type { Lot, LotDeclaration } from "../domain/lots.js"
 import type { LotUseCases } from "../application/lots/use-cases.js"
-import type { Actor } from "../application/lots/ports.js"
+import type { Actor, LotSummary } from "../application/lots/ports.js"
 import { notAuthenticated } from "../application/errors.js"
 import type { Authenticate } from "./actor.js"
 import type { HttpSchemas } from "./openapi.js"
 import { handleError, sendError } from "./errors.js"
+import { photoPath } from "./photos-router.js"
 
 export interface LotsRouterOptions {
   useCases: LotUseCases
@@ -35,6 +36,31 @@ function toBody(lot: Lot): HttpSchemas["LotResponse"] {
     createdAt: lot.createdAt.toISOString(),
     publishedAt: lot.publishedAt === null ? null : lot.publishedAt.toISOString(),
   }
+}
+
+function toSummaryBody(lot: LotSummary): HttpSchemas["OperatorLotSummary"] {
+  return {
+    id: lot.publicId, status: lot.status, version: lot.version, description: lot.description,
+    category: lot.category, quantity: lot.quantity, reservedQuantity: lot.reservedQuantity,
+    pickupStartsAt: lot.pickupStartsAt.toISOString(), pickupEndsAt: lot.pickupEndsAt.toISOString(),
+    timeZone: lot.timeZone, createdAt: lot.createdAt.toISOString(),
+    publishedAt: lot.publishedAt === null ? null : lot.publishedAt.toISOString(),
+    photoUrl: lot.photoId === null ? null : photoPath(lot.publicId, lot.photoId, "thumbnail"),
+  }
+}
+
+/** Filtros del listado: valores únicos y conocidos; el resto es error de validación. */
+function readListQuery(query: Request["query"]): { status?: "draft" | "published"; page: number } {
+  const invalid = Object.keys(query).filter((key) => !["status", "page"].includes(key))
+  const status = query.status
+  if (status !== undefined && status !== "draft" && status !== "published") invalid.push("status")
+  let page = 1
+  if (query.page !== undefined) {
+    page = typeof query.page === "string" && /^[1-9]\d{0,3}$/.test(query.page) ? Number(query.page) : 0
+    if (page < 1 || page > 1000) invalid.push("page")
+  }
+  if (invalid.length) throw new InvalidRequestError(invalid)
+  return { status: status as "draft" | "published" | undefined, page }
 }
 
 class InvalidRequestError extends Error {
@@ -108,6 +134,10 @@ export function createLotsRouter({ useCases, authenticate, protectCommand, log =
       }
     }
 
+  router.get("/establishments/:establishmentId/lots", withActor(async (actor, request, response) => {
+    const result = await useCases.listLots(actor, routeId(request.params.establishmentId), readListQuery(request.query))
+    response.json({ items: result.items.map(toSummaryBody), page: result.page, hasNextPage: result.hasNextPage } satisfies HttpSchemas["OperatorLotPage"])
+  }))
   router.post("/establishments/:establishmentId/lots", withActor(async (actor, request, response) => {
     const payload = readPayload(request.body, declarationFields)
     const lot = await useCases.createDraft(actor, {

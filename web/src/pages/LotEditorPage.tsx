@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { Icon } from '../components/Icon'
 import { LotFormFields } from '../components/lots/LotForm'
 import { LotPhotos } from '../components/lots/LotPhotos'
 import { LotSummary } from '../components/lots/LotSummary'
@@ -91,6 +92,8 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
     ? { tone: 'success', message: 'Borrador guardado. Revísalo y publícalo cuando esté listo.' }
     : null)
   const [pending, setPending] = useState<Pending>(lotId ? 'reload' : null)
+  // Instante de apertura: decide si ofrecer la vista pública de un lote publicado.
+  const [openedAt] = useState(() => Date.now())
   const [confirmingPublish, setConfirmingPublish] = useState(false)
 
   // El aviso de creación se muestra una vez; al recargar la página no debe repetirse.
@@ -211,7 +214,13 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
         {result && <ResultAlert result={result} {...reloadButton} />}
         <LotSummary lot={lot} establishmentName={establishmentName(lot.establishmentId)} />
         <LotPhotos photos={photos.photos} loadFailed={photos.loadFailed} notice={photos.notice} editable={false} onRetry={() => { void photos.refresh() }} />
-        <Link className="text-link" to="/operador/lotes/nuevo">Crear otro lote</Link>
+        <div className="lot-actions lot-actions--footer">
+          {Date.parse(lot.pickupEndsAt) > openedAt && (
+            <Link className="ui-button ui-button--primary" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Ver como rescatista</Link>
+          )}
+          <Link className="ui-button ui-button--secondary" to="/operador/lotes">Volver a mis lotes</Link>
+          <Link className="ui-button ui-button--ghost" to="/operador/lotes/nuevo"><Icon name="plus" />Crear otro lote</Link>
+        </div>
       </Card>
     )
   }
@@ -339,7 +348,8 @@ export function LotEditorPage() {
   }
 
   return (
-    <main className="page-content">
+    <main className="page-content page-content--stack">
+      <Link className="back-link" to="/operador/lotes"><Icon name="arrowLeft" />Mis lotes</Link>
       <LotEditor key={lotId ?? 'nuevo'} lotId={lotId} establishments={session.operableEstablishments} csrfToken={csrfToken} />
     </main>
   )

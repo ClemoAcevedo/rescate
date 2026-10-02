@@ -14,9 +14,11 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // La búsqueda usa la miniatura; el detalle, la imagen de presentación.
 function publicBody(lot: PublicLot, variant: 'thumbnail' | 'display'): HttpSchemas['PublicLot'] {
-  const { photoId, ...fields } = lot
+  const { photoId, photos, ...fields } = lot
   return { ...fields, pickupStartsAt: lot.pickupStartsAt.toISOString(), pickupEndsAt: lot.pickupEndsAt.toISOString(),
-    photoUrl: photoId === null ? null : photoPath(lot.id, photoId, variant) }
+    photoUrl: photoId === null ? null : photoPath(lot.id, photoId, variant),
+    photos: photos.map(photo => ({ ...photo, thumbnailUrl: photoPath(lot.id, photo.id, 'thumbnail'),
+      displayUrl: photoPath(lot.id, photo.id, 'display') })) }
 }
 function reservationBody(reservation: Reservation): HttpSchemas['ReservationResponse'] {
   return { id: reservation.id, lotId: reservation.lotId, quantity: reservation.quantity,

@@ -5,13 +5,14 @@
 import { declareDraftEdit, declareLot, publishLot as applyPublication } from "../../domain/lots.js"
 import type { Lot, LotDeclaration } from "../../domain/lots.js"
 import { establishmentNotFound, lotNotFound, notAuthorized, versionConflict } from "../errors.js"
-import type { Actor, Clock, LotRepository, LotWriter } from "./ports.js"
+import type { Actor, Clock, LotListFilter, LotRepository, LotSummary, LotWriter } from "./ports.js"
 
 export interface LotUseCases {
   createDraft(actor: Actor, input: CreateDraftInput): Promise<Lot>
   updateDraft(actor: Actor, input: UpdateDraftInput): Promise<Lot>
   publish(actor: Actor, input: PublishInput): Promise<Lot>
   getLot(actor: Actor, publicId: string): Promise<Lot>
+  listLots(actor: Actor, establishmentId: string, filter: LotListFilter): Promise<{ items: LotSummary[]; hasNextPage: boolean; page: number }>
 }
 
 export interface CreateDraftInput {
@@ -92,6 +93,13 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
           publishedAt: published.publishedAt as Date,
         })
       })
+    },
+
+    async listLots(actor, establishmentId, filter) {
+      const establishment = await repository.findEstablishment(establishmentId)
+      if (establishment === null) throw establishmentNotFound()
+      await requireMembership(repository, actor, establishment.id)
+      return { ...(await repository.listByEstablishment(establishment.id, filter)), page: filter.page }
     },
 
     async getLot(actor, publicId) {

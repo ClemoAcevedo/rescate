@@ -1,10 +1,14 @@
 import { ConnectionError, HttpError, UnexpectedResponseError, buildUrl, request } from './http-client'
-import type { PublicLot, PublicLotPage, ReservationResponse, ReserveLotRequest } from './openapi'
+import type { PublicLot, PublicLotPage, PublicLotPhoto, ReservationResponse, ReserveLotRequest } from './openapi'
 
-export type { PublicLot, PublicLotPage, ReservationResponse }
+export type { PublicLot, PublicLotPage, PublicLotPhoto, ReservationResponse }
 export { HttpError }
 
 function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function isPhoto(value: unknown): value is PublicLotPhoto {
+  return record(value) && typeof value.id === 'string' && Number.isInteger(value.width) && Number.isInteger(value.height)
+    && typeof value.thumbnailUrl === 'string' && typeof value.displayUrl === 'string'
+}
 function parseLot(value: unknown): PublicLot {
   if (!record(value) || typeof value.id !== 'string' || typeof value.description !== 'string'
     || typeof value.category !== 'string' || !Number.isInteger(value.quantity) || (value.quantity as number) < 1
@@ -15,11 +19,13 @@ function parseLot(value: unknown): PublicLot {
     || typeof value.timeZone !== 'string' || typeof value.pickupStartsAt !== 'string'
     || typeof value.pickupEndsAt !== 'string' || (value.conditions !== null && typeof value.conditions !== 'string')
     || (value.photoUrl !== null && typeof value.photoUrl !== 'string')
+    || !Array.isArray(value.photos) || value.photos.length > 3 || !value.photos.every(isPhoto)
     || (value.distanceKm !== null && (typeof value.distanceKm !== 'number'
       || !Number.isFinite(value.distanceKm) || value.distanceKm < 0))) throw new Error('El lote público tiene un formato inesperado.')
   // La API entrega la ruta de la foto relativa a su base; el navegador necesita la URL completa.
   const lot = value as unknown as PublicLot
-  return { ...lot, photoUrl: lot.photoUrl === null ? null : buildUrl(lot.photoUrl) }
+  return { ...lot, photoUrl: lot.photoUrl === null ? null : buildUrl(lot.photoUrl),
+    photos: lot.photos.map(photo => ({ ...photo, thumbnailUrl: buildUrl(photo.thumbnailUrl), displayUrl: buildUrl(photo.displayUrl) })) }
 }
 function parsePage(value: unknown): PublicLotPage {
   if (!record(value) || !Array.isArray(value.items) || value.items.length > 12

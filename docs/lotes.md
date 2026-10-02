@@ -29,12 +29,20 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
 
 | Método | Ruta | Resultado |
 | --- | --- | --- |
+| GET | `/establishments/:establishmentId/lots` | 200, lotes del establecimiento para su operador |
 | POST | `/establishments/:establishmentId/lots` | 201, borrador versión 1 |
 | GET | `/lots/:lotId` | 200, lote del operador autorizado |
 | PATCH | `/lots/:lotId` | 200, versión incrementada |
 | POST | `/lots/:lotId/publish` | 200, publicado |
 
-Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. El listado del operador sigue pendiente (#96); la búsqueda pública usa rutas separadas.
+Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. La búsqueda pública usa rutas separadas.
+
+- El listado exige membership actual sobre el establecimiento (403 para otro
+  operador, 404 si el establecimiento no existe). Incluye borradores y publicados,
+  también con la ventana vencida, ordenados por publicación o creación descendente,
+  en páginas de 20. Filtra con `status=draft|published`; un filtro desconocido
+  responde 422. Cada resumen trae los packs reservados y la miniatura de la primera
+  foto lista.
 
 - PATCH recibe `version` y al menos un campo. Omitir un campo lo conserva;
   `conditions: null` lo borra. Application combina el patch con la declaración
@@ -70,11 +78,13 @@ identifica un establecimiento y responde 404.
 
 | Ruta | Qué hace |
 | --- | --- |
+| `/operador/lotes` | «Mis lotes»: borradores y publicados del establecimiento, con filtros Todos/Borradores/Publicados, reservas y acceso a la vista pública. Con varios establecimientos se elige uno. |
 | `/operador/lotes/nuevo` | Formulario completo; «Guardar borrador» crea el lote y navega a su ruta. |
 | `/operador/lotes/:lotId` | Carga, edita y publica el borrador; un lote publicado se muestra en solo lectura. |
 
-La cabecera muestra «Publicar lote» solo si la sesión tiene establecimientos
-operables. Sin sesión se ofrece iniciar sesión y volver; una cuenta sin membership
+La cabecera muestra «Mis lotes» y «Publicar lote» solo si la sesión tiene
+establecimientos operables. Un lote publicado ofrece «Ver como rescatista» mientras
+su ventana sigue abierta. Sin sesión se ofrece iniciar sesión y volver; una cuenta sin membership
 recibe una explicación.
 
 | Tema | Decisión |
@@ -106,9 +116,14 @@ se ordena por publicación; fecha e ID desempatan. La disponibilidad puede cambi
 entre páginas y se vuelve a leer al reservar. El detalle excluye borradores y
 lotes cerrados; los lotes sin stock muestran cero disponibles.
 La web mantiene visibles esos lotes en lista y detalle, indica que no quedan
-packs y oculta el formulario de reserva. `photoUrl` lleva a la miniatura en la lista y
-a la imagen de presentación en el detalle; si falta una foto o falla su carga,
-muestra un reemplazo local con texto alternativo.
+packs y oculta el formulario de reserva. `photoUrl` lleva a la miniatura en la lista;
+el detalle muestra todas las fotos listas (`photos`) en una galería. Si falta una foto
+o falla su carga, muestra un reemplazo local con texto alternativo.
+
+El lote no tiene un campo de título. La web deriva uno corto de la descripción (el
+texto antes del primer `: `, `. ` o salto de línea, si mide entre 8 y 70 caracteres)
+para tarjetas y encabezados ([lot-title.ts](../web/src/lots/lot-title.ts)); el detalle
+muestra la descripción completa en «Qué incluye».
 
 La persona inicia sesión para reservar. El actor procede de K008, nunca del cuerpo.
 Application coordina la transacción mediante `withReservationTransaction`:
@@ -182,14 +197,13 @@ y crean una base aislada que conservan para inspección.
 | Comando | Qué comprueba |
 | --- | --- |
 | `npm --prefix api test` | Reglas, requests HTTP, permisos, PATCH parcial, versión, inmutabilidad y errores; Ajv valida las respuestas contra OpenAPI. |
-| `npm --prefix api run db:test:lots:compose` | PostgreSQL real: IDs, permisos, conflictos concurrentes, edición contra publicación y rollback. |
+| `npm --prefix api run db:test:lots:compose` | PostgreSQL real: IDs, permisos, listado por establecimiento y estado, conflictos concurrentes, edición contra publicación y rollback. |
 | `npm --prefix api run db:test:auth:compose` | Sesión real hasta lotes por HTTPS; datos semilla, publicación por dos operadores y rechazo entre establecimientos y del visitante. |
 | `npm --prefix api run db:test:discovery:compose` | Búsqueda PostGIS, filtros/páginas, último pack concurrente, reintentos, claves por actor, rollback y cierre tras esperar bloqueo. |
-| `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS, la API y el worker de fotos: formularios, fotos del borrador (rechazo, lista, D-05 y publicación), búsqueda sin geolocalización, reserva real, respuesta perdida tras commit y layout sin scroll horizontal. |
+| `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS, la API y el worker de fotos: formularios, fotos del borrador (rechazo, lista, D-05 y publicación), galería pública, «Mis lotes» con filtros, búsqueda sin geolocalización, reserva real, respuesta perdida tras commit y layout sin scroll horizontal. |
 
 ## Limitaciones
 
-- No hay listado de lotes del operador; un borrador solo se recupera con su URL (#96).
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
 - El filtro de establecimientos opera sobre la lista completa de la sesión (#99).
