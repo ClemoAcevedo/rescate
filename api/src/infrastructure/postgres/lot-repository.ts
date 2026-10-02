@@ -5,6 +5,7 @@ import type { Lot, LotStatus } from "../../domain/lots.js"
 import type { PhotoStatus } from "../../domain/photos.js"
 import type {
   LotPublication,
+  LotSummary,
   LotRepository,
   LotUpdate,
   LotWriter,
@@ -65,6 +66,32 @@ function toLot(row: LotRow): Lot {
   }
 }
 
+interface SummaryRow {
+  public_id: string
+  status: string
+  version: number
+  description: string
+  category: string
+  quantity: number
+  reserved_quantity: number
+  pickup_starts_at: Date
+  pickup_ends_at: Date
+  time_zone: string
+  created_at: Date
+  published_at: Date | null
+  photo_id: string | null
+}
+
+function toSummary(row: SummaryRow): LotSummary {
+  return {
+    publicId: row.public_id, status: row.status as LotStatus, version: row.version,
+    description: row.description, category: row.category, quantity: row.quantity,
+    reservedQuantity: row.reserved_quantity, pickupStartsAt: row.pickup_starts_at,
+    pickupEndsAt: row.pickup_ends_at, timeZone: row.time_zone, createdAt: row.created_at,
+    publishedAt: row.published_at, photoId: row.photo_id,
+  }
+}
+
 type Queryable = Pick<PoolClient, "query">
 
 /** El identificador público es uuid: un texto con otra forma no es un lote. */
@@ -117,6 +144,23 @@ export function createLotRepository(pool: Pool): LotRepository {
 
     async findByPublicId(publicId) {
       return findLot(pool, publicId, false)
+    },
+
+    async listByEstablishment(establishmentId, filter) {
+      const { rows } = await pool.query<SummaryRow>(
+        `SELECT l.public_id::text, l.status, l.version, l.description, l.category, l.quantity,
+           COALESCE((SELECT sum(c.quantity) FROM public.commitments c
+             WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)::integer AS reserved_quantity,
+           l.pickup_starts_at, l.pickup_ends_at, l.time_zone, l.created_at, l.published_at,
+           (SELECT p.public_id::text FROM public.lot_photos p
+             WHERE p.lot_id = l.id AND p.status = 'ready' ORDER BY p.position LIMIT 1) AS photo_id
+         FROM public.lots l
+         WHERE l.establishment_id = $1 AND ($2::text IS NULL OR l.status = $2)
+         ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
+         LIMIT 21 OFFSET $3`,
+        [establishmentId, filter.status ?? null, (filter.page - 1) * 20],
+      )
+      return { items: rows.slice(0, 20).map(toSummary), hasNextPage: rows.length > 20 }
     },
 
     async withLotTransaction(publicId, operate) {

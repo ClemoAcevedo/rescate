@@ -327,6 +327,55 @@ paths:
     parameters:
       -
         $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "listEstablishmentLots"
+      summary: "Listar lotes del establecimiento para su operador"
+      description: "Solo operador con membership actual sobre el establecimiento de la ruta; otro establecimiento o un visitante con sesión reciben 403. Borradores y publicados, incluso con la ventana vencida. Orden por publicación o creación descendente; páginas de 20. Sin request body ni CSRF por ser lectura. Se rechazan filtros desconocidos."
+      tags:
+        - "Lots"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, published] }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de lotes del establecimiento."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorLotPage" }
+              example:
+                items:
+                  - id: "lot_demo_R4q"
+                    status: "draft"
+                    version: 1
+                    description: "Pack de cuatro panes surtidos."
+                    category: "Panadería"
+                    quantity: 12
+                    reservedQuantity: 0
+                    pickupStartsAt: "2030-01-15T18:00:00Z"
+                    pickupEndsAt: "2030-01-15T21:00:00Z"
+                    timeZone: "America/Santiago"
+                    createdAt: "2030-01-15T10:00:00Z"
+                    publishedAt: null
+                    photoUrl: null
+                page: 1
+                hasNextPage: false
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
     post:
       operationId: "createLotDraft"
       summary: "Crear borrador completo"
@@ -1017,7 +1066,7 @@ components:
     PublicLot:
       type: object
       additionalProperties: false
-      required: [id, description, category, quantity, availableQuantity, conditions, address, latitude, longitude, timeZone, pickupStartsAt, pickupEndsAt, photoUrl, distanceKm]
+      required: [id, description, category, quantity, availableQuantity, conditions, address, latitude, longitude, timeZone, pickupStartsAt, pickupEndsAt, photoUrl, photos, distanceKm]
       properties:
         id: { $ref: "#/components/schemas/PublicId" }
         description: { $ref: "#/components/schemas/LotDescription" }
@@ -1032,7 +1081,46 @@ components:
         pickupStartsAt: { $ref: "#/components/schemas/Instant" }
         pickupEndsAt: { $ref: "#/components/schemas/Instant" }
         photoUrl: { type: [string, "null"], pattern: "^/lots/[^/]+/photos/[^/]+/(thumbnail|display)$", description: "Ruta relativa a la base de la API de la primera foto lista: miniatura en la búsqueda e imagen de presentación en el detalle. null muestra reemplazo local." }
+        photos: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/PublicLotPhoto" }, description: "Fotos listas en orden de posición; vacío muestra reemplazo local. photoUrl corresponde a la primera." }
         distanceKm: { type: [number, "null"], minimum: 0, description: "Distancia geográfica aproximada al punto enviado." }
+    PublicLotPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, width, height, thumbnailUrl, displayUrl]
+      description: "Foto lista de un lote publicado. Las imágenes se leen sin sesión."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        width: { type: integer, minimum: 1, maximum: 1600, description: "Ancho de la imagen de presentación." }
+        height: { type: integer, minimum: 1, maximum: 1600 }
+        thumbnailUrl: { type: string, pattern: "^/lots/[^/]+/photos/[^/]+/thumbnail$" }
+        displayUrl: { type: string, pattern: "^/lots/[^/]+/photos/[^/]+/display$" }
+    OperatorLotSummary:
+      type: object
+      additionalProperties: false
+      required: [id, status, version, description, category, quantity, reservedQuantity, pickupStartsAt, pickupEndsAt, timeZone, createdAt, publishedAt, photoUrl]
+      description: "Resumen de un lote para el operador de su establecimiento."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        status: { type: string, enum: [draft, published] }
+        version: { $ref: "#/components/schemas/Version" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+        category: { $ref: "#/components/schemas/Category" }
+        quantity: { $ref: "#/components/schemas/Quantity" }
+        reservedQuantity: { type: integer, minimum: 0, description: "Packs en reservas confirmadas; 0 en borradores." }
+        pickupStartsAt: { $ref: "#/components/schemas/Instant" }
+        pickupEndsAt: { $ref: "#/components/schemas/Instant" }
+        timeZone: { $ref: "#/components/schemas/TimeZone" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        publishedAt: { type: [string, "null"], format: date-time }
+        photoUrl: { type: [string, "null"], pattern: "^/lots/[^/]+/photos/[^/]+/thumbnail$", description: "Miniatura de la primera foto lista." }
+    OperatorLotPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/OperatorLotSummary" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
     PublicLotPage:
       type: object
       additionalProperties: false
