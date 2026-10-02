@@ -248,11 +248,12 @@ Este es el único resumen de estado del repositorio; se actualiza en el mismo PR
 lo cambia.
 
 - **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011)
-  con carga, validación y retiro de fotos (K017).
-  Búsqueda pública paginada, filtros, zona manual, detalle y reserva directa con
-  API real (K016).
-- **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
-  (K010), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
+  con carga, validación y retiro de fotos (K017) y «Mis lotes» con borradores y
+  publicados (#96).
+  Búsqueda pública paginada, filtros, zona manual, detalle con galería de fotos y
+  reserva directa con API real (K016).
+- **API:** `/health`, identidad y sesiones (K008), borrador/publicación y listado de
+  lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
   retiro de fotos (K014), según OpenAPI.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
   (K014).

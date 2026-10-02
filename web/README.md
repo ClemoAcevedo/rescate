@@ -49,7 +49,9 @@ la evidencia local están en [integración del design system](../docs/frontend-d
 
 La web consulta `GET /auth/session` al cargar, conserva el `csrfToken` solo en
 memoria y envía `X-CSRF-Token` en los comandos. `fetch` usa `credentials: include`:
-la cookie opaca no se lee ni se guarda en la aplicación. Registro no inicia sesión;
+la cookie opaca no se lee ni se guarda en la aplicación. Los formularios de registro
+y login se muestran habilitados de inmediato: si se envían antes de recibir el token,
+esperan la comprobación de sesión en curso. Registro no inicia sesión;
 login actualiza la sesión y rota CSRF; logout mantiene el estado si el servidor no
 confirma el cierre. Errores de credenciales, validación, red, permisos y respuestas
 inesperadas se presentan por separado.

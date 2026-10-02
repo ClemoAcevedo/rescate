@@ -55,41 +55,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
   const controller = useRef<AbortController | null>(null)
+  // El formulario no espera al token para mostrarse: un envío temprano espera la comprobación en curso.
+  const tokenRef = useRef<string | null>(null)
+  const pendingCheck = useRef<Promise<void> | null>(null)
+  const applyToken = useCallback((token: string | null) => { tokenRef.current = token; setCsrfToken(token) }, [])
 
-  const refreshSession = useCallback(async () => {
-    const requestGeneration = ++generation.current
-    controller.current?.abort()
-    const signalController = new AbortController()
-    controller.current = signalController
-    setStatus('checking'); setError(null)
-    try {
-      const response = await identityService.getSession(signalController.signal)
-      if (requestGeneration !== generation.current) return
-      setSession(response.session); setCsrfToken(response.csrfToken)
-      setStatus(response.session ? 'authenticated' : 'anonymous')
-    } catch (requestError) {
-      if (signalController.signal.aborted || requestGeneration !== generation.current) return
-      setError(messageFor(requestError, 'session')); setStatus('error')
-    }
-  }, [])
+  const refreshSession = useCallback(() => {
+    const check = (async () => {
+      const requestGeneration = ++generation.current
+      controller.current?.abort()
+      const signalController = new AbortController()
+      controller.current = signalController
+      setStatus('checking'); setError(null)
+      try {
+        const response = await identityService.getSession(signalController.signal)
+        if (requestGeneration !== generation.current) return
+        setSession(response.session); applyToken(response.csrfToken)
+        setStatus(response.session ? 'authenticated' : 'anonymous')
+      } catch (requestError) {
+        if (signalController.signal.aborted || requestGeneration !== generation.current) return
+        setError(messageFor(requestError, 'session')); setStatus('error')
+      }
+    })()
+    pendingCheck.current = check
+    return check
+  }, [applyToken])
 
   useEffect(() => {
     void Promise.resolve().then(refreshSession)
     return () => controller.current?.abort()
   }, [refreshSession])
 
-  const requireCsrf = () => {
-    if (!csrfToken) throw new Error('Aún se está preparando la protección de la sesión.')
-    return csrfToken
+  const requireCsrf = async () => {
+    if (!tokenRef.current && pendingCheck.current) await pendingCheck.current
+    if (!tokenRef.current) throw new Error('No fue posible preparar la protección de la sesión. Recarga la página.')
+    return tokenRef.current
   }
 
-  const register = async (input: { email: string; password: string }) => identityService.register(input, requireCsrf())
+  const register = async (input: { email: string; password: string }) => identityService.register(input, await requireCsrf())
 
   const login = async (input: { email: string; password: string }) => {
-    const result: LoginResponse = await identityService.login(input, requireCsrf())
+    const result: LoginResponse = await identityService.login(input, await requireCsrf())
     ++generation.current
     controller.current?.abort()
-    setSession(result.session); setCsrfToken(result.csrfToken); setError(null); setStatus('authenticated')
+    setSession(result.session); applyToken(result.csrfToken); setError(null); setStatus('authenticated')
   }
 
   const logout = async () => {
@@ -97,9 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     controller.current?.abort()
     setStatus('signing-out'); setError(null)
     try {
-      await identityService.logout(requireCsrf())
+      await identityService.logout(await requireCsrf())
       if (requestGeneration !== generation.current) return
-      setSession(null); setCsrfToken(null); setStatus('anonymous')
+      setSession(null); applyToken(null); setStatus('anonymous')
       await refreshSession()
     } catch (requestError) {
       if (requestGeneration !== generation.current) return

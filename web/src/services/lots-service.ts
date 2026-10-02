@@ -2,6 +2,7 @@ import {
   ConnectionError,
   HttpError,
   UnexpectedResponseError,
+  buildUrl,
   request,
   type ResponseParser,
 } from './http-client'
@@ -11,12 +12,14 @@ import type {
   LotPhoto,
   LotPhotoList,
   LotResponse,
+  OperatorLotPage,
+  OperatorLotSummary,
   PublishLotDraftRequest,
   UpdateLotDraftRequest,
   ValidationIssue,
 } from './openapi'
 
-export type { CreateLotDraftRequest, LotPhoto, LotResponse, UpdateLotDraftRequest }
+export type { CreateLotDraftRequest, LotPhoto, LotResponse, OperatorLotPage, OperatorLotSummary, UpdateLotDraftRequest }
 export type LotErrorCode = ErrorResponse['error']['code']
 export type LotError = { code: LotErrorCode; message: string; issues: ValidationIssue[] }
 
@@ -120,6 +123,24 @@ const parsePhotoList: ResponseParser<LotPhotoList> = (value) => {
   return { items: value.items.map(parsePhoto) }
 }
 
+function parseSummary(value: unknown): OperatorLotSummary {
+  if (!isRecord(value) || typeof value.id !== 'string' || (value.status !== 'draft' && value.status !== 'published')
+    || typeof value.description !== 'string' || typeof value.category !== 'string'
+    || !Number.isInteger(value.quantity) || !Number.isInteger(value.reservedQuantity) || !Number.isInteger(value.version)
+    || typeof value.pickupStartsAt !== 'string' || typeof value.pickupEndsAt !== 'string' || typeof value.timeZone !== 'string'
+    || typeof value.createdAt !== 'string' || !nullableString(value.publishedAt) || !nullableString(value.photoUrl)) {
+    throw new Error('La lista de lotes contiene un lote con formato inesperado.')
+  }
+  const lot = value as unknown as OperatorLotSummary
+  return { ...lot, photoUrl: lot.photoUrl === null ? null : buildUrl(lot.photoUrl) }
+}
+
+const parseLotPage: ResponseParser<OperatorLotPage> = (value) => {
+  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 20
+    || !Number.isInteger(value.page) || typeof value.hasNextPage !== 'boolean') throw new Error('La lista de lotes no tiene el formato esperado.')
+  return { items: value.items.map(parseSummary), page: value.page as number, hasNextPage: value.hasNextPage }
+}
+
 type SendOptions<T> = { body?: unknown; csrfToken?: string; signal?: AbortSignal; parse?: ResponseParser<T> }
 
 async function send<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', options: SendOptions<T>): Promise<T | undefined> {
@@ -163,6 +184,16 @@ export function updateLotDraft(lotId: string, body: UpdateLotDraftRequest, csrfT
 
 export function publishLotDraft(lotId: string, body: PublishLotDraftRequest, csrfToken: string): Promise<LotResponse> {
   return sendLot(`${lotPath(lotId)}/publish`, 'POST', { body, csrfToken })
+}
+
+export async function listEstablishmentLots(establishmentId: string, query: { status?: 'draft' | 'published'; page?: number }, signal?: AbortSignal): Promise<OperatorLotPage> {
+  const params = new URLSearchParams()
+  if (query.status) params.set('status', query.status)
+  if (query.page && query.page > 1) params.set('page', String(query.page))
+  const search = params.toString()
+  const page = await send(`/establishments/${encodeURIComponent(establishmentId)}/lots${search ? `?${search}` : ''}`, 'GET', { signal, parse: parseLotPage })
+  if (page === undefined) throw new UnexpectedResponseError('La API no devolvió los lotes.', undefined)
+  return page
 }
 
 const photosPath = (lotId: string) => `${lotPath(lotId)}/photos`
