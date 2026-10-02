@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { LotFormFields } from '../components/lots/LotForm'
-import { LotPhotosPending } from '../components/lots/LotPhotosPending'
+import { LotPhotos } from '../components/lots/LotPhotos'
 import { LotSummary } from '../components/lots/LotSummary'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -13,6 +13,7 @@ import {
   type LotField, type LotFieldErrors, type LotFormValues,
 } from '../lots/lot-form'
 import { DEFAULT_TIME_ZONE } from '../lots/lot-time'
+import { isSettled, useLotPhotos } from '../lots/use-lot-photos'
 import type { OperableEstablishment } from '../services/identity-service'
 import {
   ConnectionError, LotRequestError, UnexpectedResponseError,
@@ -66,6 +67,14 @@ function ResultAlert({ result, onReload, reloading }: { result: Result; onReload
   )
 }
 
+/** Un 422 puede traer issues sin campo del formulario (por ejemplo fotos no listas): se muestran sus mensajes. */
+function withUnmatchedIssues(result: Result, error: unknown, matched: LotFieldErrors): Result {
+  if (!(error instanceof LotRequestError) || error.error.code !== 'VALIDATION_ERROR') return result
+  const fieldNames = new Set(Object.keys(matched))
+  const other = error.error.issues.filter((issue) => !fieldNames.has(issue.path.split('/')[1] ?? ''))
+  return other.length === 0 ? result : { ...result, message: other.map((issue) => issue.message).join(' ') }
+}
+
 type EditorProps = { lotId?: string; establishments: OperableEstablishment[]; csrfToken: string }
 
 function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
@@ -88,6 +97,10 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
   useEffect(() => {
     if (location.state) navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
+
+  const photos = useLotPhotos(lot?.id, csrfToken, { poll: lot?.status === 'draft' })
+  // D-05: publicar exige que toda foto activa esté lista; la API lo vuelve a comprobar bajo bloqueo.
+  const photosBlockPublish = photos.photos?.some((photo) => !isSettled(photo)) ?? false
 
   const applyLot = (loaded: LotResponse) => {
     setLot(loaded); setValues(lotValues(loaded)); setErrors({}); setConfirmingPublish(false)
@@ -166,8 +179,10 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
       setResult({ tone: 'success', message: 'Lote publicado. Sus datos ya no se pueden modificar.' })
     } catch (error) {
       setConfirmingPublish(false)
-      if (error instanceof LotRequestError) setErrors(fieldErrorsFromIssues(error.error.issues))
-      setResult(resultFor(error, 'publish'))
+      const matched = error instanceof LotRequestError ? fieldErrorsFromIssues(error.error.issues) : {}
+      setErrors(matched)
+      setResult(withUnmatchedIssues(resultFor(error, 'publish'), error, matched))
+      void photos.refresh()
     }
   })
 
@@ -195,7 +210,7 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
         <p>La cantidad, el contenido, el lugar y el plazo quedaron fijos al publicar.</p>
         {result && <ResultAlert result={result} {...reloadButton} />}
         <LotSummary lot={lot} establishmentName={establishmentName(lot.establishmentId)} />
-        <LotPhotosPending />
+        <LotPhotos photos={photos.photos} loadFailed={photos.loadFailed} notice={photos.notice} editable={false} onRetry={() => { void photos.refresh() }} />
         <Link className="text-link" to="/operador/lotes/nuevo">Crear otro lote</Link>
       </Card>
     )
@@ -228,19 +243,37 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
           onChange={onChange}
           establishment={lot ? undefined : { options: establishments, value: establishmentId, onChange: setEstablishmentId }}
         />
-        <LotPhotosPending />
+        {lot
+          ? <LotPhotos
+            photos={photos.photos}
+            loadFailed={photos.loadFailed}
+            notice={photos.notice}
+            editable
+            busy={photos.busy}
+            locked={locked}
+            onUpload={(file) => { void photos.upload(file) }}
+            onRemove={(photoId) => { void photos.remove(photoId) }}
+            onRetry={() => { void photos.refresh() }}
+          />
+          : <Card as="section" tone="sunken" className="lot-photos" aria-labelledby="lot-photos-title">
+            <h2 id="lot-photos-title">Fotos (opcional)</h2>
+            <p>Guarda el borrador para agregar hasta tres fotos. Puedes publicar sin fotos.</p>
+          </Card>}
         <div className="lot-actions">
           <Button type="submit" variant={lot ? 'secondary' : 'primary'} loading={pending === 'save'} disabled={locked || (lot !== null && !dirty)}>
             {pending === 'save' ? 'Guardando…' : 'Guardar borrador'}
           </Button>
           {lot && !confirmingPublish && (
-            <Button loading={pending === 'publish'} disabled={locked || dirty} onClick={() => setConfirmingPublish(true)}>
+            <Button loading={pending === 'publish'} disabled={locked || dirty || photosBlockPublish || photos.busy !== null} onClick={() => setConfirmingPublish(true)}>
               Publicar lote
             </Button>
           )}
         </div>
         {lot && dirty && <p className="lot-actions__hint">Tienes cambios sin guardar. Guarda el borrador antes de publicar.</p>}
         {lot && !dirty && !confirmingPublish && <p className="lot-actions__hint">El borrador está guardado; no hay cambios pendientes.</p>}
+        {lot && photosBlockPublish && (
+          <p className="lot-actions__hint">Hay fotos en carga, en validación o rechazadas. Espera a que estén listas o quítalas antes de publicar.</p>
+        )}
         {lot && confirmingPublish && (
           <Alert className="form-result" tone="warning" role="alert">
             <p>Al publicar, la cantidad, el contenido, el lugar y el plazo quedan fijos y no se podrán editar.</p>

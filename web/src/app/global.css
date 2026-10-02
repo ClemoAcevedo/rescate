@@ -161,6 +161,19 @@ code, kbd, samp { font-family: var(--font-mono); }
 .form-result { margin-top: var(--sp-4); }
 .auth-switch { margin-top: var(--sp-5); color: var(--text-muted); }
 
+/* Oculto a la vista pero disponible para tecnologías de apoyo o activación programática. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Formulario de lote del operador (K011). */
 .lot-card .eyebrow { margin-bottom: var(--sp-2); }
 .lot-card h1 { font-size: var(--fs-display-md); }
@@ -188,6 +201,29 @@ code, kbd, samp { font-family: var(--font-mono); }
 .lot-photos__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
 .lot-photos h2 { font-size: var(--fs-title-lg); }
 .lot-photos p { margin: 0; color: var(--text-muted); }
+.lot-photos__count { color: var(--text-muted); font-size: var(--fs-meta); }
+.lot-photos__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.lot-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lot-photo-item {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+.lot-photo-item .lot-photo { aspect-ratio: 4 / 3; border-radius: var(--radius-md); }
+.lot-photo-item__placeholder { background: var(--surface-sunken); }
+.lot-photo-item__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-meta); }
+.lot-photos .lot-photo-item__reason { color: var(--text-danger); font-size: var(--fs-meta); }
 .lot-location { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
 .lot-location__status { flex: 1 1 16rem; margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
 .lot-location__status--error { color: var(--text-danger); }

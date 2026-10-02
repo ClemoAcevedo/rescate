@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import pg from 'pg'
+import sharp from 'sharp'
 import { chromium } from 'playwright'
 
-// K011: recorrido real web → proxy → API → PostgreSQL. Requiere Vite HTTPS, API y una base
+// K011/K017: recorrido real web → proxy → API → PostgreSQL (y worker de fotos para K017). Requiere Vite HTTPS, API y una base
 // de prueba ya migrada; DATABASE_URL solo se usa para habilitar la membresía ficticia.
 const baseUrl = (process.env.WEB_URL ?? 'https://localhost:5174').replace(/\/$/, '')
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL debe apuntar a la base de prueba usada por la API')
@@ -23,7 +24,9 @@ const commands = []
 page.on('request', (request) => {
   const { pathname } = new URL(request.url())
   if (request.method() !== 'GET' && pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
-    commands.push({ method: request.method(), path: pathname, body: request.postDataJSON() })
+    let body = null
+    try { body = request.postDataJSON() } catch { body = null } // las fotos viajan como binario
+    commands.push({ method: request.method(), path: pathname, body })
   }
 })
 const ok = (message) => console.log(`✓ ${message}`)
@@ -47,10 +50,10 @@ async function fillLot(values) {
   }
 }
 
-async function assertNoHorizontalScroll(viewport) {
+async function assertNoHorizontalScroll(viewport, name = 'k011') {
   await page.setViewportSize(viewport)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `scroll horizontal en ${viewport.width}px`)
-  await page.screenshot({ path: `/tmp/rescate-k011-${viewport.width}x${viewport.height}.png`, fullPage: true })
+  await page.screenshot({ path: `/tmp/rescate-${name}-${viewport.width}x${viewport.height}.png`, fullPage: true })
 }
 
 async function apiCommand(method, path, body) {
@@ -114,9 +117,9 @@ try {
   await page.locator('form.lot-form').waitFor()
   assert.equal(await page.locator('[name="establishmentId"]').inputValue(), estate.public_id)
   assert.equal(await page.locator('[name="timeZone"]').inputValue(), 'America/Santiago')
-  await page.getByText('Pendiente de validación').waitFor()
+  await page.getByText('Guarda el borrador para agregar hasta tres fotos').waitFor()
   assert.equal(await page.locator('input[type="file"]').count(), 0)
-  ok('con membresía: enlace, establecimiento único preseleccionado, zona America/Santiago por defecto y fotos solo como aviso')
+  ok('con membresía: enlace, establecimiento único preseleccionado, zona America/Santiago por defecto y fotos tras guardar')
 
   const locateButton = page.getByRole('button', { name: 'Usar mi ubicación actual' })
   await context.clearPermissions()
@@ -284,10 +287,110 @@ try {
   await page.getByRole('alert').filter({ hasText: 'El lote no existe' }).waitFor()
   ok('lote inexistente: 404 explicado sin formulario')
 
+  // K017: fotos con worker real. Tercera cuenta con su propia cuota de límite por usuario.
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+  await page.getByRole('link', { name: 'Iniciar sesión' }).first().waitFor()
+  const photoEmail = `k017-photos-${Date.now()}@example.com`
+  await signIn(photoEmail, '/operador/lotes/nuevo')
+  await page.waitForURL(`${baseUrl}/operador/lotes/nuevo`)
+  await grantMembership(photoEmail, estate.id)
+  await page.reload()
+  await page.locator('form.lot-form').waitFor()
+  await page.getByText('Guarda el borrador para agregar hasta tres fotos').waitFor()
+  assert.equal(await page.locator('input[name="photo"]').count(), 0)
+  await fillLot({ ...validLot, conditions: 'Traer una bolsa reutilizable.' })
+  const photoLotResponse = await waitForApiResponse(/\/api\/establishments\/[^/]+\/lots$/, 'POST', () => page.getByRole('button', { name: 'Guardar borrador' }).click())
+  const photoLot = await photoLotResponse.json()
+  await page.getByText('Borrador · versión 1').waitFor()
+  await page.getByText('0 de 3').waitFor()
+  ok('fotos: en un lote nuevo se pide guardar antes; el borrador muestra 0 de 3')
+
+  const photoInput = page.locator('input[name="photo"]')
+  const photoPath = `/api/lots/${photoLot.id}/photos`
+  const commandsBeforePhotos = commands.length
+  await photoInput.setInputFiles({ name: 'notas.txt', mimeType: 'text/plain', buffer: Buffer.from('no es una imagen') })
+  await page.getByRole('alert').filter({ hasText: 'Usa una imagen JPEG, PNG o WebP.' }).waitFor()
+  assert.equal(commands.length, commandsBeforePhotos)
+  const fake = await waitForApiResponse(photoPath, 'POST', () => photoInput.setInputFiles({ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('esto no es una imagen, aunque se llame foto.jpg') }))
+  assert.equal(fake.status(), 422)
+  await page.getByRole('alert').filter({ hasText: 'no es una imagen JPEG, PNG o WebP válida' }).waitFor()
+  await page.getByText('0 de 3').waitFor()
+  ok('fotos: tipo no permitido se avisa sin enviar; archivo falso con MIME de imagen → 422 sin agregar foto')
+
+  const frames = await Promise.all(['#f00', '#00f'].map((color) => sharp({ create: { width: 40, height: 40, channels: 3, background: color } }).png().toBuffer()))
+  const animated = await sharp(frames, { join: { animated: true } }).webp().toBuffer()
+  const animatedUpload = await waitForApiResponse(photoPath, 'POST', () => photoInput.setInputFiles({ name: 'animada.webp', mimeType: 'image/webp', buffer: animated }))
+  assert.equal(animatedUpload.status(), 202)
+  assert.equal(commands.at(-1).body, null)
+  await page.getByText('Foto recibida. Se está validando').waitFor()
+  await page.getByText('Las imágenes animadas no están permitidas.').waitFor({ timeout: 20000 })
+  await page.getByText('Hay fotos en carga, en validación o rechazadas').waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Publicar lote' }).isDisabled(), true)
+  ok('fotos: animada → 202, el worker la rechaza, la UI muestra el motivo y bloquea publicar (D-05)')
+
+  const jpeg = await sharp({ create: { width: 1200, height: 900, channels: 3, background: '#3a7' } }).jpeg({ quality: 85 }).toBuffer()
+  const validUpload = await waitForApiResponse(photoPath, 'POST', () => photoInput.setInputFiles({ name: 'pan.jpg', mimeType: 'image/jpeg', buffer: jpeg }))
+  assert.equal(validUpload.status(), 202)
+  const thumbnail = page.locator('.lot-photo-item img.lot-photo')
+  await thumbnail.waitFor({ timeout: 20000 })
+  await page.waitForFunction(() => {
+    const image = document.querySelector('.lot-photo-item img.lot-photo')
+    return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0
+  })
+  assert.match(await thumbnail.getAttribute('src'), /^\/api\/lots\/[^/]+\/photos\/[^/]+\/thumbnail$/)
+  await page.getByText('2 de 3').waitFor()
+  await page.getByText('Foto recibida. Se está validando').waitFor({ state: 'detached' })
+  assert.equal(await page.getByRole('button', { name: 'Publicar lote' }).isDisabled(), true)
+  await page.locator('.lot-photos').scrollIntoViewIfNeeded()
+  await assertNoHorizontalScroll({ width: 360, height: 800 }, 'k017')
+  await assertNoHorizontalScroll({ width: 1366, height: 768 }, 'k017')
+  ok('fotos: JPEG válido → lista; la miniatura carga desde la API del borrador; sin scroll horizontal')
+
+  const rejectedCard = page.locator('.lot-photo-item').filter({ hasText: 'Rechazada' })
+  const removal = await waitForApiResponse(/\/api\/lots\/[^/]+\/photos\/[^/]+$/, 'DELETE', () => rejectedCard.getByRole('button', { name: /Quitar foto/ }).click())
+  assert.equal(removal.status(), 204)
+  await page.getByText('1 de 3').waitFor()
+  await page.getByText('Hay fotos en carga, en validación o rechazadas').waitFor({ state: 'detached' })
+  ok('fotos: quitar la rechazada vuelve a habilitar publicar')
+
+  // Otra pestaña carga una foto que esta vista no conoce: la API decide con 422 (D-05).
+  const outside = await page.evaluate(async ({ path, bytes }) => {
+    const { csrfToken } = await (await fetch('/api/auth/session')).json()
+    const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-CSRF-Token': csrfToken }, body: new Uint8Array(bytes) })
+    return response.status
+  }, { path: photoPath, bytes: [...jpeg] })
+  assert.equal(outside, 202)
+  await page.getByRole('button', { name: 'Publicar lote' }).click()
+  const blocked = await waitForApiResponse(`/api/lots/${photoLot.id}/publish`, 'POST', () => page.getByRole('button', { name: 'Confirmar publicación' }).click())
+  assert.equal(blocked.status(), 422)
+  await page.getByRole('alert').filter({ hasText: 'Hay fotos en carga, en validación o rechazadas; espera o quítalas antes de publicar.' }).waitFor()
+  await page.getByText('2 de 3').waitFor()
+  ok('fotos: 422 por foto no lista muestra el mensaje de la API y actualiza la lista')
+
+  await page.waitForFunction(() => document.querySelectorAll('.lot-photo-item img.lot-photo').length === 2, null, { timeout: 20000 })
+  await page.getByRole('button', { name: 'Publicar lote' }).click()
+  const photoPublish = await waitForApiResponse(`/api/lots/${photoLot.id}/publish`, 'POST', () => page.getByRole('button', { name: 'Confirmar publicación' }).click())
+  assert.equal(photoPublish.status(), 200)
+  await page.getByRole('heading', { name: 'Lote publicado' }).waitFor()
+  await page.getByText('Las fotos quedaron fijas al publicar.').waitFor()
+  assert.equal(await page.locator('.lot-photo-item').count(), 2)
+  assert.equal(await page.getByRole('button', { name: /Quitar foto|Agregar foto/ }).count(), 0)
+  ok('fotos: publicado con fotos válidas, en solo lectura y sin acciones de carga')
+
+  await page.goto(`${baseUrl}/lotes/${photoLot.id}`)
+  await page.waitForFunction(() => [...document.querySelectorAll('img.lot-photo')].some((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))
+  await page.route(/\/api\/lots\/[^/]+\/photos\/[^/]+\/(display|thumbnail)$/, (route) => route.fulfill({ status: 503, body: '' }))
+  await page.reload()
+  await page.getByRole('img', { name: 'Fotografía no disponible' }).first().waitFor()
+  await page.getByRole('heading', { name: 'Condiciones del lote' }).waitFor()
+  await page.getByText('Traer una bolsa reutilizable.').waitFor()
+  await page.unroute(/\/api\/lots\/[^/]+\/photos\/[^/]+\/(display|thumbnail)$/)
+  ok('fotos: el detalle público muestra la foto; si la imagen falla, hay reemplazo y las condiciones siguen visibles')
+
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(rateLimited, [], 'la prueba no debe depender de respuestas 429')
   ok('ninguna respuesta 429 durante el recorrido')
-  console.log('K011 web lots: real API, proxy, CSRF, draft, edit, conflict, publish and errors checks passed')
+  console.log('K011/K017 web lots: real API, worker, proxy, CSRF, draft, edit, conflict, photos, publish and errors checks passed')
 } catch (error) {
   if (rateLimited.length > 0) console.error('Respuestas 429 durante la prueba:', rateLimited)
   throw error

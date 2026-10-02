@@ -90,11 +90,11 @@ recibe una explicación.
 | Respuesta perdida | Se avisa que el comando pudo aplicarse y se ofrece recargar, sin reintento automático. |
 | Envíos | Un solo comando a la vez; un ref evita dobles envíos antes del siguiente render. |
 | Errores 422 | Se muestran en el campo indicado por `details.issues[].path` y el foco va al primero. |
-| Fotos | Solo un aviso «Pendiente de validación»; el formulario no usa todavía las operaciones de [fotos](fotos.md) (K017, #20). |
+| Fotos | Se cargan después de guardar el borrador; ver [fotos en el formulario](fotos.md#formulario-del-operador). Publicar se deshabilita mientras haya fotos no listas. |
 
 Código principal: [lots-service.ts](../web/src/services/lots-service.ts),
-[lot-form.ts](../web/src/lots/lot-form.ts), [lot-time.ts](../web/src/lots/lot-time.ts)
-y [LotEditorPage.tsx](../web/src/pages/LotEditorPage.tsx).
+[lot-form.ts](../web/src/lots/lot-form.ts), [lot-time.ts](../web/src/lots/lot-time.ts),
+[use-lot-photos.ts](../web/src/lots/use-lot-photos.ts) y [LotEditorPage.tsx](../web/src/pages/LotEditorPage.tsx).
 
 ## Búsqueda y reserva directa
 
@@ -185,12 +185,11 @@ y crean una base aislada que conservan para inspección.
 | `npm --prefix api run db:test:lots:compose` | PostgreSQL real: IDs, permisos, conflictos concurrentes, edición contra publicación y rollback. |
 | `npm --prefix api run db:test:auth:compose` | Sesión real hasta lotes por HTTPS; datos semilla, publicación por dos operadores y rechazo entre establecimientos y del visitante. |
 | `npm --prefix api run db:test:discovery:compose` | Búsqueda PostGIS, filtros/páginas, último pack concurrente, reintentos, claves por actor, rollback y cierre tras esperar bloqueo. |
-| `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS y la API: formularios, búsqueda sin geolocalización, reserva real, respuesta perdida tras commit y layout sin scroll horizontal. |
+| `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS, la API y el worker de fotos: formularios, fotos del borrador (rechazo, lista, D-05 y publicación), búsqueda sin geolocalización, reserva real, respuesta perdida tras commit y layout sin scroll horizontal. |
 
 ## Limitaciones
 
 - No hay listado de lotes del operador; un borrador solo se recupera con su URL (#96).
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
-- El formulario del operador no carga fotos todavía (K017, #20); la API ya las admite.
 - El filtro de establecimientos opera sobre la lista completa de la sesión (#99).
