@@ -247,12 +247,15 @@ K003
 Este es el único resumen de estado del repositorio; se actualiza en el mismo PR que
 lo cambia.
 
-- **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011).
+- **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011)
+  con carga, validación y retiro de fotos (K017).
   Búsqueda pública paginada, filtros, zona manual, detalle y reserva directa con
   API real (K016).
 - **API:** `/health`, identidad y sesiones (K008) y borrador/publicación de lotes
-  (K010), búsqueda PostGIS y reserva directa idempotente (K015), según OpenAPI.
-- **Worker:** inactivo. **Fotos:** prototipo aislado (K005).
+  (K010), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
+  retiro de fotos (K014), según OpenAPI.
+- **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
+  (K014).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

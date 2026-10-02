@@ -28,7 +28,7 @@ visualmente todas las maquetas. No se modificaron los PDF.
 | Informe pp. 3–4 | Propone monolito modular, PostgreSQL/PostGIS, objetos y trabajador con reglas compartidas. Las cuatro responsabilidades internas de este documento detallan esa dirección; no se atribuyen literalmente a E1. |
 | Anexos C p. 5 y H p. 23 | Operaciones críticas coordinadas bajo transacción, mismo cliente PostgreSQL, relectura tras bloqueo y ausencia de llamadas externas bajo bloqueo. Son diseño para futuras operaciones, no capacidades actuales. |
 | Anexos H p. 21 | Ya define contraseña con scrypt, sesión opaca persistida en PostgreSQL, plazo de 12 horas, cookie HttpOnly/Secure/SameSite Lax, token CSRF y validación de origen. K008 lo materializa; no se considera indeciso por el texto preliminar de K004. |
-| Anexos I pp. 24–25 y 27 | Migraciones versionadas, fotos opcionales en objetos y copias separadas. ADR 0001 concreta el gestor y K005 documenta el prototipo B2. |
+| Anexos I pp. 24–25 y 27 | Migraciones versionadas, fotos opcionales en objetos y copias separadas. ADR 0001 concreta el gestor, K005 eligió B2 y K014 integra las fotos ([ADR 0005](../adr/0005-ciclo-de-fotos.md)). |
 | Informe p. 5 y anexos E p. 7 | E2 prevé modelos, arquitectura, Walking Skeleton, fotos, CI y migraciones; no demuestra su cumplimiento actual. |
 
 Los módulos de negocio de E1 (Identidad, Publicaciones, Asignación,
@@ -48,7 +48,7 @@ regla tampoco está implementada. No se reabren esas decisiones con este documen
 ### Sistema actual: entorno de desarrollo
 
 Las flechas continuas representan caminos existentes en código/configuración,
-no una nueva comprobación de servicios en ejecución. K010 conecta HTTP con PostgreSQL; B2 y worker siguen aislados. CI es automatización de
+no una nueva comprobación de servicios en ejecución. K010 conecta HTTP con PostgreSQL; K014 conecta API y worker con el almacenamiento de objetos. CI es automatización de
 verificación, no un servicio usado por una persona.
 
 ```mermaid
@@ -59,9 +59,10 @@ flowchart LR
   cliente["Cliente HTTPS K008/K010"] -->|Sesión, CSRF y lotes| api
   api -->|Identidad, sesiones y lotes| db
   migraciones["Migraciones y scripts de prueba"] --> db["PostgreSQL / PostGIS"]
-  fotos["CLI de fotos K005 aislada"] --> b2["Backblaze B2 privado / S3"]
-  fotos --> disco["Disco local de prueba"]
-  worker["Worker independiente e inactivo"]
+  api -->|Fotos: original temporal y lectura| objetos
+  worker["Worker de fotos"] -->|Reclama y registra resultado| db
+  worker -->|Valida, transforma y limpia| objetos["B2 privado (S3) o disco local en desarrollo"]
+  fotos["CLI de fotos K005 aislada"] --> objetos
   ci["GitHub Actions: tipos, lint, pruebas, build y smoke Compose"]
 ```
 
@@ -78,16 +79,15 @@ servicios, las migraciones previas y el pipeline de producción.
 | --- | --- |
 | Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de la aplicación. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../evidencia/k009.md) integra registro y sesión; [lotes](../lotes.md) el borrador, publicación, búsqueda pública y reserva directa. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
-| API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cuatro de operador y tres de descubrimiento/reserva. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
+| API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cuatro de operador, cuatro de fotos y tres de descubrimiento/reserva. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
 | Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
-| Worker | [worker.ts](../../api/src/worker.ts) registra inicio, mantiene vivo el proceso y maneja señales. No consulta la base, no hace polling ni ejecuta trabajos. Comparte paquete e imagen con API, pero es otro proceso. |
-| Fotos | [CLI](../../api/src/prototypes/photos/cli.ts), [adaptador local](../../api/src/prototypes/photos/local.ts) y [smoke S3](../../api/src/prototypes/photos/s3.ts) operan un fixture conocido. El [registro K005](../evidencia/k005.md) documenta pruebas previas reales en B2; no es integración de fotos de lotes ni procesamiento de entradas de usuarios. |
+| Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createPhotoWorker` de Composition: valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Sin base o almacenamiento queda inactivo. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
+| Fotos | [Router](../../api/src/http/photos-router.ts), [casos de uso](../../api/src/application/photos/use-cases.ts), [reglas](../../api/src/domain/photos.ts), [repositorio](../../api/src/infrastructure/postgres/photo-repository.ts), adaptadores [S3](../../api/src/infrastructure/objects/s3-object-store.ts), [local](../../api/src/infrastructure/objects/local-object-store.ts) y [sharp](../../api/src/infrastructure/images/sharp-image-processor.ts). La [CLI K005](../../api/src/prototypes/photos/cli.ts) conserva el smoke del bucket. Ver [fotos](../fotos.md). |
 | CI/CD | [ci.yml](../../.github/workflows/ci.yml) valida el origen development de los PR a main y ejecuta web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y después Compose (imágenes, web/API/proxy, PostGIS, migraciones, publicación concurrente y worker). Incluye login, publicación y reserva desde Chromium HTTPS. [deploy.yml](../../.github/workflows/deploy.yml) publica API, worker y web tras CI exitoso de main; verifica el sitio por HTTPS antes de crear el tag/release. |
 
-**Conexiones todavía ausentes:** API HTTP → B2,
-worker → base/casos de uso. Compose no
-ejecuta migraciones al arrancar. Inyecta DATABASE_URL a API, no al worker.
+Compose no ejecuta migraciones al arrancar. Inyecta DATABASE_URL y el volumen
+local de fotos a API y worker.
 `/health` comprueba el proceso HTTP, no la base; esa diferencia frente a la salud
 propuesta en anexos H p. 22 queda pendiente de integración futura.
 
@@ -129,7 +129,7 @@ flowchart LR
     application -.->|Mediante ports necesarios| infra["Infrastructure: adaptadores"]
   end
   infra -.-> db["PostgreSQL / PostGIS"]
-  infra -.->|Cuando se integren fotos| b2["Almacenamiento de objetos B2"]
+  infra -.->|Fotos K014| b2["Almacenamiento de objetos B2"]
 ```
 
 Este es un diagrama de colaboración en ejecución. La flecha Application →
@@ -334,8 +334,8 @@ de la instrucción de este PR; no se atribuye a una pauta del profesor no revisa
 6. **Pruebas y operación:** asociar reglas puras con sus pruebas, casos de uso con
    sus escenarios y adaptadores con integración real. Adjuntar comandos,
    entorno, commit y resultado observado; distinguir pruebas nuevas de registros
-   S01. Mostrar CI y migraciones; el smoke B2 aislado no demuestra fotos integradas
-   y un worker vivo no demuestra trabajos procesados.
+   S01. Mostrar CI y migraciones; las fotos se demuestran con la prueba K014, que
+   procesa archivos reales con el worker, no con el smoke B2 aislado.
 7. **Brechas y decisiones:** mantener tabla de requisito/decisión → archivo →
    prueba/evidencia → estado. Registrar lo pendiente y las desviaciones con motivo,
    sin rellenar con carpetas vacías o diagramas de capacidades inexistentes.
@@ -346,7 +346,7 @@ Ejemplo de trazabilidad que ya puede mostrarse:
 | --- | --- | --- |
 | Web → API | ConnectionPage, proxy, app.ts y [health.test.ts](../../api/test/health.test.ts) | Recorrido de salud; no negocio ni acceso HTTP a base. |
 | Persistencia inicial | [Modelo K003](../modelo-inicial.md), migraciones y [evidencia K003](../evidencia/k003.md) | Restricciones e historial probados previamente; no publicación/reserva implementadas. |
-| Fotos | CLI y [evidencia K005](../evidencia/k005.md) | Prototipo privado aislado; no carga de fotos de un lote. |
+| Fotos | [Fotos](../fotos.md) y `db:test:photos:compose` | Carga, validación, reinicio, limpieza y lectura con PostgreSQL real y worker real; `test:web:compose` recorre el formulario web con fotos (K017). |
 | Entorno y CI | Compose, workflow y [evidencia K006](../evidencia/k006.md) | Configuración y resultados históricos con sus límites; no certificación de un nuevo run remoto. |
 
 E1 (informe p. 5; anexos D p. 6 y H p. 19) contempla para E2 búsqueda/reserva y
@@ -373,8 +373,9 @@ tarjetas y evidencia de entrega; cualquier cambio de alcance se registra aparte.
 - K010 concreta port transaccional, mapeo de errores y generación de tipos HTTP. Estas reglas tienen
   revisión manual, no enforcement
   automático de dependencias en CI todavía.
-- B2 y PostgreSQL tienen fallos y ciclos de vida diferentes. Referencias, limpieza,
-  validación de fotos, restauración y trabajos recuperables siguen pendientes.
+- B2 y PostgreSQL tienen fallos y ciclos de vida diferentes. K014 registra cada
+  clave antes de escribir su objeto y limpia con el worker; restauración de objetos
+  y trabajos recuperables de otros módulos siguen pendientes.
 - Mantener el riesgo de ADR 0002: reingreso tras oferta parcial frente al compromiso
   confirmado activo por usuario/lote. No relajar el índice ni inventar tablas aquí.
 - Despliegue público, recursos y operación no se deducen de Compose. Las propuestas
@@ -402,3 +403,16 @@ No hay llamadas externas bajo bloqueo ni políticas de permisos escondidas en SQ
 en runtime. Origin y CSRF protegen los comandos HTTP sin introducir cookies
 en Application. Ver [implementación y evidencia K008](../k008-identidad.md).
 [Pruebas y límites](../evidencia/k010.md) distinguen ejecución local de CI remoto.
+
+## Recorrido implementado K014
+
+[HTTP](../../api/src/http/photos-router.ts) autentica, exige Origin/CSRF y el tipo
+de imagen, y entrega a Application una función que lee el cuerpo hasta 5 MiB.
+[Application](../../api/src/application/photos/use-cases.ts) autoriza y reserva la
+carga dentro de `withLotPhotos`, que bloquea el lote; recién después lee los bytes,
+aplica la firma de [Domain](../../api/src/domain/photos.ts), escribe el objeto fuera
+de la transacción y confirma en otra unidad atómica. La publicación consulta el estado
+de las fotos con el mismo cliente que bloquea el lote. El worker reutiliza esos casos
+de uso para reclamar, transformar con [sharp](../../api/src/infrastructure/images/sharp-image-processor.ts)
+y limpiar; no llama a la API. Ninguna llamada al almacenamiento ocurre bajo bloqueo.
+Detalle y pruebas en [fotos](../fotos.md).

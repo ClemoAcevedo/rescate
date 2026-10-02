@@ -11,7 +11,8 @@ export interface PublicLot {
   timeZone: string
   pickupStartsAt: Date
   pickupEndsAt: Date
-  photoUrl: string | null
+  /** Primera foto lista por posición; HTTP la representa como ruta de imagen. */
+  photoId: string | null
   distanceKm: number | null
 }
 

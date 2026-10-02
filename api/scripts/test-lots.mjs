@@ -53,8 +53,9 @@ try {
   assert.deepEqual(existing, [], 'La base debe estar vacía')
   ok(`PostgreSQL ${server.version}; base ${server.database} vacía`)
 
-  // Este ciclo histórico prueba hasta K008; el rollback posterior depende de ese límite.
-  run('up', '5')
+  // Esquema completo: publicar consulta lot_photos (K014). El rollback histórico
+  // vuelve después a K008 antes de recorrer K010.
+  run('up')
   const columns = await query(`SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
     WHERE table_schema='public' AND table_name='lots' AND column_name = ANY($1) ORDER BY column_name`,
     [['public_id', 'version', 'updated_at']])
@@ -209,6 +210,7 @@ try {
   // Primero se revierte K008. Su precondición users vacío impide reaplicarla
   // sobre estos fixtures: el ciclo histórico apunta explícitamente hasta K010.
   const usersBeforeRollback = await query('SELECT id, email, created_at FROM users ORDER BY id')
+  run('down', '3') // K014, índice espacial y K015: vuelve al límite histórico K008.
   run('down', '1')
   assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeRollback)
   assert.deepEqual((await query('SELECT name FROM public.pgmigrations ORDER BY id')).map(r => r.name), [

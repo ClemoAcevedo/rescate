@@ -84,6 +84,10 @@ cuerpo JSON `400`, `413`, `415`, `422`; no sustituyen errores de autorización.
 | `getLot` · GET `/lots/{lotId}` | Sesión y permiso sobre establecimiento del lote | No, lectura | 200, 401, 403, 404, G | RF02, RF01 / K010–K011 |
 | `updateLotDraft` · PATCH `/lots/{lotId}` | Sesión y permiso sobre establecimiento del lote | C | 200, 401, 403, 404, 409, J, G | RF02, RF01 / K010–K011 |
 | `publishLotDraft` · POST `/lots/{lotId}/publish` | Sesión y permiso sobre establecimiento del lote | C | 200, 401, 403, 404, 409, J, G | RF02, RF01 / K010–K011 |
+| `listLotPhotos` · GET `/lots/{lotId}/photos` | Sesión y permiso sobre establecimiento del lote | No, lectura | 200, 401, 403, 404, G | RF02 / K014 |
+| `uploadLotPhoto` · POST `/lots/{lotId}/photos` | Sesión y permiso; lote en borrador | C | 202, 400, 401, 403, 404, 409, 413 (5 MiB), 415, 422, G | RF02 / K014 |
+| `removeLotPhoto` · DELETE `/lots/{lotId}/photos/{photoId}` | Sesión y permiso; lote en borrador | C | 204, 401, 403, 404, 409, G | RF02 / K014 |
+| `getLotPhotoImage` · GET `/lots/{lotId}/photos/{photoId}/{variant}` | Pública si el lote está publicado; si no, sesión y permiso | No, lectura | 200 (WebP), 404, G | RF02, RF03 / K014 |
 
 RF01/RF02 provienen de anexos A p. 1; las tarjetas se relacionan en el
 [modelo inicial](../modelo-inicial.md), sección Fuera de K003, y en la planificación
@@ -198,12 +202,14 @@ retirar y crear otro según RF02; el endpoint de retiro queda fuera de este cont
 `LotResponse` solo añade id público, establecimiento, estado, versión, `createdAt`
 y `publishedAt`; no expone todas las columnas ni inventa `updatedAt`.
 
-**Fotos:** cero fotos permite publicar. Este contrato no recibe archivos, keys,
-URLs ni IDs de imágenes, y no define pipeline ni endpoints de K014. La representación
-HTTP de fotos se incorporará con esa tarjeta. Si existen asociaciones, solo imágenes
-listas/validadas pueden ser visibles; publicación debe verificarlo sin llamadas
-externas bajo bloqueo. E1 I p. 25 conserva hasta tres fotos, acceso autorizado y
-contenido fijo tras publicación; omitir su transporte aquí no elimina RF02.
+**Fotos:** cero fotos permite publicar. Las fotos son un subrecurso del lote
+(etiqueta `Photos`) y no forman parte de `LotResponse` ni cambian su `version`.
+La carga es el archivo binario con `image/jpeg`, `image/png` o `image/webp`, hasta
+5 MiB, fuera del límite JSON; responde 202 con la foto `pending`. Publicar con una
+foto que no está lista responde 422 (D-05). Las rutas de imagen (`thumbnailUrl`,
+`displayUrl`, `PublicLot.photoUrl`) son relativas a la base de la API, como las de
+este contrato; no se exponen claves de objeto ni URLs del proveedor. Reglas, límites
+y alternativas en [fotos](../fotos.md) y [ADR 0005](../adr/0005-ciclo-de-fotos.md).
 
 ## Errores y límites
 
@@ -386,7 +392,7 @@ registro sin login/membresía, sesión vencida, acceso ajeno, CSRF/origen invál
 dos ediciones con misma versión, edición contra publicación y publicación sin fotos.
 
 Nada de esto acredita todavía el Walking Skeleton ni toda E2: E1 incluye además
-búsqueda/reserva/fotos. Se posponen K014,
+búsqueda/reserva/fotos. Se posponen
 FIFO/ofertas, cancelación/retiro, chat, incidencias,
 worker y estadísticas. ADR 0001 y ADR 0002 se conservan sin modificaciones.
 

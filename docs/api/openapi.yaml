@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador, búsqueda pública y reserva directa, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública y reserva directa, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -15,6 +15,9 @@ tags:
   -
     name: "Lots"
     description: "RF02: borrador completo, edición optimista y publicación por operador autorizado."
+  -
+    name: "Photos"
+    description: "RF02: fotos opcionales de un borrador, validadas por el worker antes de ser visibles."
   -
     name: "Discovery"
     description: "RF03/RF04: exploración pública y reserva directa."
@@ -537,7 +540,7 @@ paths:
     post:
       operationId: "publishLotDraft"
       summary: "Publicar explícitamente el borrador revisado"
-      description: "Solo operador autorizado. En una unidad atómica valida pertenencia, estado draft, versión esperada, campos y ventana (fin posterior a inicio y al instante de publicación); asigna publishedAt, status=published e incrementa versión. Cero fotos es válido. Si existen fotos asociadas, únicamente listas/validadas pueden ser visibles; comprobar sin llamadas externas bajo bloqueo. Publicado no se edita: cantidad, contenido, lugar y plazo quedan fijos; corregir exige retirar y crear otro (retiro fuera de S02). 409 por versión obsoleta o lote ya publicado, incluido reintento. Tras respuesta perdida consultar GET; no se promete reproducción idempotente del 200."
+      description: "Solo operador autorizado. En una unidad atómica valida pertenencia, estado draft, versión esperada, campos y ventana (fin posterior a inicio y al instante de publicación); asigna publishedAt, status=published e incrementa versión. Cero fotos es válido. Si hay fotos activas, todas deben estar listas: una en carga, en validación o rechazada produce 422 hasta que termine o se quite (D-05); se comprueba bajo el mismo bloqueo, sin llamadas externas. Publicado no se edita: cantidad, contenido, lugar y plazo quedan fijos; corregir exige retirar y crear otro (retiro fuera de S02). 409 por versión obsoleta o lote ya publicado, incluido reintento. Tras respuesta perdida consultar GET; no se promete reproducción idempotente del 200."
       tags:
         - "Lots"
       security:
@@ -607,6 +610,151 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  "/lots/{lotId}/photos":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    get:
+      operationId: "listLotPhotos"
+      summary: "Consultar las fotos de un lote del operador"
+      description: "Solo operador del establecimiento del lote. Incluye cargas vigentes, fotos en validación, listas y rechazadas, por posición. Las rutas de imagen solo existen para fotos listas."
+      tags: ["Photos"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Fotos activas del lote, hasta tres."
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LotPhotoList" }
+              example:
+                items:
+                  - id: "photo_demo_T2k"
+                    position: 1
+                    status: "ready"
+                    createdAt: "2030-01-15T10:02:00Z"
+                    width: 1600
+                    height: 1200
+                    rejectionReason: null
+                    thumbnailUrl: "/lots/lot_demo_R4q/photos/photo_demo_T2k/thumbnail"
+                    displayUrl: "/lots/lot_demo_R4q/photos/photo_demo_T2k/display"
+                  - id: "photo_demo_V7n"
+                    position: 2
+                    status: "rejected"
+                    createdAt: "2030-01-15T10:03:00Z"
+                    width: null
+                    height: null
+                    rejectionReason: "animated"
+                    thumbnailUrl: null
+                    displayUrl: null
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      operationId: "uploadLotPhoto"
+      summary: "Cargar una foto a un borrador"
+      description: "Solo operador del establecimiento y lote en borrador. Antes de leer el cuerpo se autoriza y se reserva una carga de 5 minutos en la primera posición libre (hasta 3 fotos). Máximo 2 cargas simultáneas por operador (429 con Retry-After). El cuerpo es el archivo binario, hasta 5 MiB, fuera del límite JSON de 16 KiB. El MIME declarado no basta: los bytes deben tener firma JPEG, PNG o WebP (422 si no). 202 deja la foto pendiente; el worker la decodifica, rechaza SVG, animaciones o más de 20 megapíxeles, quita EXIF y genera imagen y miniatura WebP. Consultar GET /lots/{lotId}/photos para ver el resultado. 409 si el lote está publicado, ya tiene tres fotos o la carga venció. No reintentar automáticamente: una respuesta perdida puede haber dejado la foto cargada."
+      tags: ["Photos"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema: { type: string, contentMediaType: image/jpeg }
+          image/png:
+            schema: { type: string, contentMediaType: image/png }
+          image/webp:
+            schema: { type: string, contentMediaType: image/webp }
+      responses:
+        "202":
+          description: "Archivo recibido; la foto queda pendiente de validación."
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LotPhoto" }
+              example:
+                id: "photo_demo_T2k"
+                position: 1
+                status: "pending"
+                createdAt: "2030-01-15T10:02:00Z"
+                width: null
+                height: null
+                rejectionReason: null
+                thumbnailUrl: null
+                displayUrl: null
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PhotoTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedImageType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/photos/{photoId}":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+      - $ref: "#/components/parameters/PhotoId"
+    delete:
+      operationId: "removeLotPhoto"
+      summary: "Quitar una foto de un borrador"
+      description: "Solo operador del establecimiento y lote en borrador; publicado, las fotos quedan fijas (409). Libera la posición de inmediato; el worker borra los objetos después."
+      tags: ["Photos"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      responses:
+        "204":
+          description: "Foto quitada."
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/photos/{photoId}/{variant}":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+      - $ref: "#/components/parameters/PhotoId"
+      - name: variant
+        in: path
+        required: true
+        description: "display: hasta 1600 px y 500 KiB. thumbnail: hasta 400 px y 100 KiB."
+        schema: { type: string, enum: [display, thumbnail] }
+    get:
+      operationId: "getLotPhotoImage"
+      summary: "Obtener una imagen lista"
+      description: "Lote publicado: pública, sin sesión. Borrador: solo operador del establecimiento; para otros responde 404 sin confirmar existencia. Siempre WebP generado por el worker, sin EXIF. Las rutas aparecen en LotPhoto y PublicLot.photoUrl."
+      tags: ["Photos"]
+      security: [{}, { SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Imagen WebP. Cache-Control private, max-age=3600 para lotes publicados y no-store para borradores."
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: ["private, max-age=3600", "no-store"] }
+          content:
+            image/webp:
+              schema: { type: string, contentMediaType: image/webp }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
 components:
   securitySchemes:
     SessionCookie:
@@ -645,6 +793,14 @@ components:
       schema:
         $ref: "#/components/schemas/PublicId"
       example: "est_demo_P8m"
+    PhotoId:
+      name: "photoId"
+      in: "path"
+      required: true
+      description: "Identificador público aleatorio de la foto; nunca es un nombre aportado por el usuario."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "photo_demo_T2k"
     LotId:
       name: "lotId"
       in: "path"
@@ -759,6 +915,32 @@ components:
             error:
               code: "PAYLOAD_TOO_LARGE"
               message: "El cuerpo supera el tamaño permitido."
+    PhotoTooLarge:
+      description: "PAYLOAD_TOO_LARGE: El archivo supera 5 MiB (5242880 bytes); límite de E1 I p. 25 concretado en bytes."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "PAYLOAD_TOO_LARGE"
+              message: "La foto supera 5 MiB."
+    UnsupportedImageType:
+      description: "UNSUPPORTED_MEDIA_TYPE: El cuerpo debe declarar image/jpeg, image/png o image/webp; la firma de los bytes se valida aparte."
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/NoStore"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "UNSUPPORTED_MEDIA_TYPE"
+              message: "Se requiere image/jpeg, image/png o image/webp."
     UnsupportedMediaType:
       description: "UNSUPPORTED_MEDIA_TYPE: El cuerpo debe utilizar application/json."
       headers:
@@ -849,7 +1031,7 @@ components:
         timeZone: { $ref: "#/components/schemas/TimeZone" }
         pickupStartsAt: { $ref: "#/components/schemas/Instant" }
         pickupEndsAt: { $ref: "#/components/schemas/Instant" }
-        photoUrl: { type: [string, "null"], format: uri, description: "Foto visible si existe; null muestra reemplazo local." }
+        photoUrl: { type: [string, "null"], pattern: "^/lots/[^/]+/photos/[^/]+/(thumbnail|display)$", description: "Ruta relativa a la base de la API de la primera foto lista: miniatura en la búsqueda e imagen de presentación en el detalle. null muestra reemplazo local." }
         distanceKm: { type: [number, "null"], minimum: 0, description: "Distancia geográfica aproximada al punto enviado." }
     PublicLotPage:
       type: object
@@ -878,6 +1060,33 @@ components:
         createdAt: { $ref: "#/components/schemas/Instant" }
     PublicId:
       type: "string"
+    LotPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, position, status, createdAt, width, height, rejectionReason, thumbnailUrl, displayUrl]
+      description: "Foto de un lote para su operador. Sin claves de objeto, tamaño original ni autor interno."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        position: { type: integer, minimum: 1, maximum: 3 }
+        status:
+          type: string
+          enum: [uploading, pending, ready, rejected]
+          description: "uploading: carga en curso; pending: en validación; ready: visible; rejected: debe quitarse antes de publicar."
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        width: { type: [integer, "null"], minimum: 1, maximum: 1600, description: "Ancho de la imagen de presentación; solo en ready." }
+        height: { type: [integer, "null"], minimum: 1, maximum: 1600 }
+        rejectionReason:
+          type: [string, "null"]
+          enum: [unsupported_format, animated, too_many_pixels, undecodable, output_too_large, processing_failed, null]
+          description: "Solo en rejected."
+        thumbnailUrl: { type: [string, "null"], pattern: "^/lots/[^/]+/photos/[^/]+/thumbnail$", description: "Ruta relativa a la base de la API; solo en ready." }
+        displayUrl: { type: [string, "null"], pattern: "^/lots/[^/]+/photos/[^/]+/display$" }
+    LotPhotoList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/LotPhoto" } }
       description: "Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización."
       minLength: 1
     EmailInput:
@@ -1182,7 +1391,7 @@ components:
             - "null"
           format: "date-time"
           description: "null en draft; instante asignado por servidor al publicar."
-      description: "Representación para operador autorizado en S02. No incluye reservas, contadores futuros, claves de objetos, fotos sin validar ni columnas internas. Sin updatedAt inventado. Las fotos son opcionales y su transporte se acordará con K014."
+      description: "Representación para operador autorizado en S02. No incluye reservas, contadores futuros, claves de objetos ni columnas internas. Sin updatedAt inventado. Las fotos son opcionales y se consultan en GET /lots/{lotId}/photos."
       allOf:
         -
           if:

@@ -6,13 +6,17 @@ import { notAuthenticated } from '../application/errors.js'
 import type { Authenticate } from './actor.js'
 import type { HttpSchemas } from './openapi.js'
 import { handleError, sendError } from './errors.js'
+import { photoPath } from './photos-router.js'
 
 type Cases = ReturnType<typeof createDiscoveryUseCases>
 class InvalidInput extends Error { constructor(readonly fields: string[]) { super('Entrada inválida') } }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function publicBody(lot: PublicLot): HttpSchemas['PublicLot'] {
-  return { ...lot, pickupStartsAt: lot.pickupStartsAt.toISOString(), pickupEndsAt: lot.pickupEndsAt.toISOString() }
+// La búsqueda usa la miniatura; el detalle, la imagen de presentación.
+function publicBody(lot: PublicLot, variant: 'thumbnail' | 'display'): HttpSchemas['PublicLot'] {
+  const { photoId, ...fields } = lot
+  return { ...fields, pickupStartsAt: lot.pickupStartsAt.toISOString(), pickupEndsAt: lot.pickupEndsAt.toISOString(),
+    photoUrl: photoId === null ? null : photoPath(lot.id, photoId, variant) }
 }
 function reservationBody(reservation: Reservation): HttpSchemas['ReservationResponse'] {
   return { id: reservation.id, lotId: reservation.lotId, quantity: reservation.quantity,
@@ -83,10 +87,10 @@ export function createDiscoveryRouter(cases: Cases, authenticate: Authenticate,
     }
   router.get('/public/lots', route(async (request, response) => {
     const result = await cases.search(parseSearch(request))
-    response.json({ items: result.items.map(publicBody), page: result.page, hasNextPage: result.hasNextPage } satisfies HttpSchemas['PublicLotPage'])
+    response.json({ items: result.items.map(lot => publicBody(lot, 'thumbnail')), page: result.page, hasNextPage: result.hasNextPage } satisfies HttpSchemas['PublicLotPage'])
   }))
   router.get('/public/lots/:lotId', route(async (request, response) => {
-    response.json(publicBody(await cases.get(id(request.params.lotId))))
+    response.json(publicBody(await cases.get(id(request.params.lotId)), 'display'))
   }))
   router.post('/public/lots/:lotId/reservations', route(async (request, response) => {
     const actor = await authenticate(request)

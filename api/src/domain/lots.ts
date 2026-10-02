@@ -2,6 +2,9 @@
 // No conoce HTTP, Express, pg, entorno ni almacenamiento. Recibe el instante
 // relevante como parámetro: no lee el reloj del sistema para decidir vigencia.
 
+import { allPhotosReady } from "./photos.js"
+import type { PhotoStatus } from "./photos.js"
+
 export type LotStatus = "draft" | "published"
 
 /** Datos declarados por el operador. Son los campos que describen la oferta. */
@@ -46,6 +49,7 @@ export type LotRuleViolation =
   | "pickup_window_already_ended"
   | "lot_already_published"
   | "published_lot_is_immutable"
+  | "photo_not_ready"
 
 export class LotRuleError extends Error {
   readonly violations: readonly LotRuleViolation[]
@@ -159,17 +163,20 @@ export function declareDraftEdit(lot: Lot, declaration: LotDeclaration): LotDecl
  * RF02 y H p. 20: se reserva desde la publicación hasta el cierre. Publicar un
  * lote cuya ventana ya terminó dejaría una oferta que nadie puede retirar.
  */
-export function checkPublication(lot: Lot, now: Date): LotRuleViolation[] {
+export function checkPublication(lot: Lot, now: Date, photos: readonly PhotoStatus[] = []): LotRuleViolation[] {
   const violations: LotRuleViolation[] = []
   if (lot.status === "published") violations.push("lot_already_published")
   violations.push(...checkDeclaration(lot.declaration))
   if (lot.declaration.pickupEndsAt.getTime() <= now.getTime()) violations.push("pickup_window_already_ended")
+  // Cero fotos es válido. Una foto en carga, validación o rechazada impide publicar:
+  // las fotos quedan fijas y omitirlas cambiaría lo que el operador revisó (D-05).
+  if (!allPhotosReady(photos)) violations.push("photo_not_ready")
   return violations
 }
 
-/** Transición borrador → publicado. Devuelve el lote publicado. */
-export function publishLot(lot: Lot, now: Date): Lot {
-  const violations = checkPublication(lot, now)
+/** Transición borrador → publicado. Recibe el estado de sus fotos activas. */
+export function publishLot(lot: Lot, now: Date, photos: readonly PhotoStatus[] = []): Lot {
+  const violations = checkPublication(lot, now, photos)
   if (violations.length > 0) throw new LotRuleError(violations)
   return { ...lot, status: "published", publishedAt: now, updatedAt: now }
 }

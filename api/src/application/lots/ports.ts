@@ -2,6 +2,7 @@
 // No exponen pg, clientes ni SQL. Se definen junto a su consumidor.
 
 import type { Lot, LotDeclaration } from "../../domain/lots.js"
+import type { PhotoStatus } from "../../domain/photos.js"
 
 /** Actor autenticado. K008 lo resolverá desde la sesión persistida. */
 export interface Actor {
@@ -53,6 +54,8 @@ export interface LotWriter {
   isMemberOfEstablishment(userId: string, establishmentId: string): Promise<boolean>
   updateDeclaration(update: LotUpdate): Promise<Lot>
   markPublished(publication: LotPublication): Promise<Lot>
+  /** Estados de las fotos activas del lote bloqueado: en carga vigente, validación, listas o rechazadas. */
+  listPhotoStatuses(lotPublicId: string, now: Date): Promise<PhotoStatus[]>
 }
 
 /** Instante de la operación. Se inyecta para poder fijarlo en las pruebas. */

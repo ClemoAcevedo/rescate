@@ -1,4 +1,5 @@
-// K009/K011: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
+// K009/K011/K017: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
+// Las fotos (K017) usan almacenamiento local temporal y un worker real con la misma base.
 // Usa una base dedicada nueva; no migra ni altera la base de desarrollo.
 import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -49,9 +50,11 @@ try {
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert,
     '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' })
 
+  const photoEnv = { PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: join(dir, 'photos') }
   children.push(spawn(process.execPath, ['dist/index.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'], env: {
-    ...env, PORT: String(apiPort), RESCATE_ALLOWED_ORIGINS: webUrl, CSRF_SIGNING_KEY: randomBytes(32).toString('base64'),
+    ...env, ...photoEnv, PORT: String(apiPort), RESCATE_ALLOWED_ORIGINS: webUrl, CSRF_SIGNING_KEY: randomBytes(32).toString('base64'),
   } }))
+  children.push(spawn(process.execPath, ['dist/worker.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'], env: { ...env, ...photoEnv } }))
   children.push(spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', '5174', '--strictPort'], {
     cwd: web, stdio: ['ignore', 'ignore', 'inherit'],
     env: { ...process.env, DEV_TLS_CERT_FILE: cert, DEV_TLS_KEY_FILE: key, API_PROXY_TARGET: `http://localhost:${apiPort}` },
