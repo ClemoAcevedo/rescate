@@ -5,6 +5,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { LotDetailPage } from '../pages/LotDetailPage'
 import { LotEditorPage } from '../pages/LotEditorPage'
 import { LotsPage } from '../pages/LotsPage'
+import { MyLotsPage } from '../pages/MyLotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { RegisterPage } from '../pages/RegisterPage'
 
@@ -21,6 +22,7 @@ function App() {
         <Route index element={<RootRedirect />} />
         <Route path="lotes" element={<LotsPage />} />
         <Route path="lotes/:id" element={<LotDetailPage />} />
+        <Route path="operador/lotes" element={<MyLotsPage />} />
         <Route path="operador/lotes/nuevo" element={<LotEditorPage />} />
         <Route path="operador/lotes/:lotId" element={<LotEditorPage />} />
         <Route path="registro" element={<RegisterPage />} />

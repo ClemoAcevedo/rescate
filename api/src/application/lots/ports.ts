@@ -1,7 +1,7 @@
 // K010 · Application: límites tipados hacia Infrastructure.
 // No exponen pg, clientes ni SQL. Se definen junto a su consumidor.
 
-import type { Lot, LotDeclaration } from "../../domain/lots.js"
+import type { Lot, LotDeclaration, LotStatus } from "../../domain/lots.js"
 import type { PhotoStatus } from "../../domain/photos.js"
 
 /** Actor autenticado. K008 lo resolverá desde la sesión persistida. */
@@ -29,6 +29,29 @@ export interface LotPublication {
   publishedAt: Date
 }
 
+/** Resumen de un lote para el listado de su establecimiento. */
+export interface LotSummary {
+  publicId: string
+  status: LotStatus
+  version: number
+  description: string
+  category: string
+  quantity: number
+  reservedQuantity: number
+  pickupStartsAt: Date
+  pickupEndsAt: Date
+  timeZone: string
+  createdAt: Date
+  publishedAt: Date | null
+  /** Primera foto lista por posición. */
+  photoId: string | null
+}
+
+export interface LotListFilter {
+  status?: LotStatus
+  page: number
+}
+
 /**
  * Persistencia de lotes y de la pertenencia necesaria para autorizarlos.
  * Las operaciones que leen y escriben el mismo lote se ejecutan dentro de
@@ -39,6 +62,8 @@ export interface LotRepository {
   isMemberOfEstablishment(userId: string, establishmentId: string): Promise<boolean>
   insertLot(lot: NewLot): Promise<Lot>
   findByPublicId(publicId: string): Promise<Lot | null>
+  /** Lotes del establecimiento (ID interno), publicación o creación descendente, páginas de 20. */
+  listByEstablishment(establishmentId: string, filter: LotListFilter): Promise<{ items: LotSummary[]; hasNextPage: boolean }>
   /**
    * Bloquea el lote, entrega el estado releído y confirma los cambios juntos.
    * Devolver `null` desde `operate` deja la transacción sin escrituras.

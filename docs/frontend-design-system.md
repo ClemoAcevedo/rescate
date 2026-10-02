@@ -50,7 +50,12 @@ está diseñado; la sugerencia de un selector oscuro no constituye un segundo te
   Se aplica la marca textual, tipografía, borde y colores; no se añade navegación.
   `/`, `/lotes`, `/lotes/:id`, `/registro`, `/login`, `/conexion` y 404 se conservan.
 - `index.html` declara español de Chile y título Rescate; se quita la referencia
-  al favicon que no existía. No se inventa un logotipo.
+  al favicon que no existía. La marca es el texto Rescate con una hoja en SVG propio.
+- Componentes de aplicación sobre los mismos tokens: `Icon` (iconos de línea en SVG,
+  decorativos), `LotCard` (tarjeta pública cuyo título es el enlace), `LotGallery`
+  (foto principal y miniaturas con `aria-pressed`), filtro segmentado de «Mis lotes»,
+  `page-header`, `empty-state` y pie de página. Siguen fuera de `ui/` porque solo
+  tienen un consumidor de dominio.
 
 No se importaron kits/páginas, componentes de dominio, stock, timers, Tabs, Dialog,
 Tooltip, Toast, Checkbox/Switch, IconButton ni variantes urgente/inverse. No hay

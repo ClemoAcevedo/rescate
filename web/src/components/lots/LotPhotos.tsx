@@ -45,7 +45,7 @@ export function LotPhotos({ photos, loadFailed, notice, editable, busy = null, l
   return (
     <Card as="section" tone="sunken" className="lot-photos" aria-labelledby="lot-photos-title" aria-busy={busy !== null}>
       <div className="lot-photos__header">
-        <h2 id="lot-photos-title">Fotos (opcional)</h2>
+        <h2 id="lot-photos-title">{editable ? 'Fotos (opcional)' : 'Fotos'}</h2>
         {photos && <span className="lot-photos__count">{photos.length} de {MAX_PHOTOS}</span>}
       </div>
       <p>

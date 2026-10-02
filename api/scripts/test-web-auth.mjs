@@ -48,6 +48,17 @@ try {
   const healthResponse = await waitForApiResponse(page, '/api/health', () => page.getByRole('button', { name: 'Comprobar conexión' }).click())
   await assertJson(healthResponse, 200, ['status'])
 
+  // El formulario se habilita sin esperar el token CSRF; un envío temprano espera la comprobación de sesión.
+  await page.route('**/api/auth/session', async (route) => { await new Promise((resolve) => setTimeout(resolve, 1500)); await route.continue() })
+  await page.goto(`${baseUrl}/registro`)
+  assert.equal(await page.getByRole('button', { name: 'Crear cuenta' }).isEnabled(), true)
+  await page.locator('input[name="email"]').fill(`temprano-${email}`)
+  await page.locator('input[name="password"]').fill(password)
+  const earlyRegister = await waitForApiResponse(page, '/api/auth/register', () => page.getByRole('button', { name: 'Crear cuenta' }).click())
+  assert.equal(earlyRegister.status(), 201)
+  await page.unroute('**/api/auth/session')
+  console.log('OK: registro habilitado de inmediato; el envío espera el token CSRF y crea la cuenta')
+
   const sessionResponse = await waitForApiResponse(page, '/api/auth/session', () => page.goto(`${baseUrl}/registro`))
   const anonymousSession = await assertJson(sessionResponse, 200, ['session', 'csrfToken'])
   assert.equal(anonymousSession.session, null)

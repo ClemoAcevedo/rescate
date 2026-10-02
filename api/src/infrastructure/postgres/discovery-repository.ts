@@ -1,4 +1,4 @@
-import type { DiscoveryRepository, PublicLot, Reservation } from '../../application/discovery/ports.js'
+import type { DiscoveryRepository, PublicLot, PublicPhoto, Reservation } from '../../application/discovery/ports.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
 
@@ -6,7 +6,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 interface LotRow {
   id: string; description: string; category: string; quantity: number; available_quantity: number
   conditions: string | null; address: string; latitude: number; longitude: number; time_zone: string
-  pickup_starts_at: Date; pickup_ends_at: Date; distance_km: number | null; photo_id: string | null
+  pickup_starts_at: Date; pickup_ends_at: Date; distance_km: number | null; photos: PublicPhoto[]
 }
 interface ReservationRow { id: string; lot_id: string; quantity: number; created_at: Date }
 
@@ -18,15 +18,16 @@ const publicColumns = `l.public_id::text AS id, l.description, l.category, l.qua
     WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0))::integer AS available_quantity,
   l.conditions, l.address, l.latitude, l.longitude, l.time_zone, l.pickup_starts_at,
   l.pickup_ends_at, ${distance} AS distance_km,
-  (SELECT p.public_id::text FROM public.lot_photos p
-    WHERE p.lot_id = l.id AND p.status = 'ready' ORDER BY p.position LIMIT 1) AS photo_id`
+  (SELECT COALESCE(json_agg(json_build_object('id', p.public_id::text, 'width', p.width, 'height', p.height)
+      ORDER BY p.position), '[]'::json)
+    FROM public.lot_photos p WHERE p.lot_id = l.id AND p.status = 'ready') AS photos`
 
 function toLot(row: LotRow): PublicLot {
   return { id: row.id, description: row.description, category: row.category, quantity: row.quantity,
     availableQuantity: row.available_quantity, conditions: row.conditions, address: row.address,
     latitude: row.latitude, longitude: row.longitude, timeZone: row.time_zone,
     pickupStartsAt: row.pickup_starts_at, pickupEndsAt: row.pickup_ends_at,
-    photoId: row.photo_id, distanceKm: row.distance_km === null ? null : Math.round(row.distance_km * 10) / 10 }
+    photoId: row.photos[0]?.id ?? null, photos: row.photos, distanceKm: row.distance_km === null ? null : Math.round(row.distance_km * 10) / 10 }
 }
 function toReservation(row: ReservationRow): Reservation {
   return { id: row.id, lotId: row.lot_id, quantity: row.quantity,

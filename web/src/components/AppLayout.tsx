@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { RescateLogo } from './RescateLogo'
 import { SiteHeader } from './SiteHeader'
 import { Alert } from './ui/Alert'
 
@@ -19,6 +20,12 @@ export function AppLayout() {
         </div>
       )}
       <Outlet />
+      <footer className="site-footer">
+        <div className="site-footer__inner">
+          <RescateLogo className="site-footer__brand" />
+          <p>Excedentes de alimentos que llegan a quien los necesita. Retiro presencial, sin pagos.</p>
+        </div>
+      </footer>
     </div>
   )
 }

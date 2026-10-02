@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { LotPhoto } from '../components/lots/LotPhoto'
+import { Icon } from '../components/Icon'
+import { LotCard } from '../components/lots/LotCard'
 import { Alert } from '../components/ui/Alert'
-import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
-import { formatInstant } from '../lots/lot-time'
 import { discoveryError, searchPublicLots, type PublicLotPage } from '../services/discovery-service'
 
 type Filters = { category: string; latitude: string; longitude: string; radiusKm: string; pickupBefore: string }
@@ -96,9 +95,17 @@ function LotsSearch() {
   }
   const hasFilters = Object.values(filters).some(value => value.trim()) || search !== ''
   return <main className="page-content"><div className="explore-page">
-    <header className="explore-header">
-      <h1>Encuentra packs para rescatar</h1>
-      <p>Explora los lotes, revisa el retiro y reserva los packs que necesitas.</p>
+    <header className="explore-hero">
+      <div className="explore-hero__text">
+        <p className="eyebrow">Alimentos que no se pierden</p>
+        <h1>Encuentra packs para rescatar cerca de ti</h1>
+        <p>Panaderías, almacenes y restaurantes publican sus excedentes del día. Reserva tus packs y retíralos en el horario indicado.</p>
+      </div>
+      <ol className="explore-hero__steps" aria-label="Cómo funciona">
+        <li><span className="explore-hero__step-icon"><Icon name="pin" /></span><span><strong>Busca</strong> lotes por zona o categoría</span></li>
+        <li><span className="explore-hero__step-icon"><Icon name="box" /></span><span><strong>Reserva</strong> los packs que vas a retirar</span></li>
+        <li><span className="explore-hero__step-icon"><Icon name="clock" /></span><span><strong>Retira</strong> dentro de la ventana del local</span></li>
+      </ol>
     </header>
     <Card as="section" className="explore-filters" aria-label="Filtros de búsqueda">
       <form className="explore-filters__form" onSubmit={submit}>
@@ -138,21 +145,8 @@ function LotsSearch() {
           <Button variant="secondary" onClick={clear}>Ver todos los lotes</Button>
         </Card> : <>
           <p className="explore-results__order">{params.has('latitude') ? 'Más cercanos primero. Las distancias son aproximadas.' : 'Publicaciones más recientes primero.'}</p>
-          <div className="explore-list">{result.items.map(lot => <Card as="article" className="explore-lot" key={lot.id}>
-            <LotPhoto src={lot.photoUrl} description={`Fotografía del pack: ${lot.description}`} />
-            <div className="explore-lot__body">
-              <div className="explore-lot__labels"><span className="explore-lot__category">{lot.category}</span>
-                <Badge tone={lot.availableQuantity > 0 ? 'success' : 'warning'}>{lot.availableQuantity > 0 ? `${lot.availableQuantity} ${lot.availableQuantity === 1 ? 'pack libre' : 'packs libres'}` : 'Sin stock'}</Badge>
-              </div>
-              <h3>{lot.description}</h3>
-              <dl className="explore-lot__facts">
-                <div><dt>Lugar de retiro</dt><dd>{lot.address}{lot.distanceKm !== null && <span className="explore-lot__distance">A {lot.distanceKm} km aprox.</span>}</dd></div>
-                <div><dt>Retiro desde</dt><dd><time dateTime={lot.pickupStartsAt}>{formatInstant(lot.pickupStartsAt, lot.timeZone)}</time></dd></div>
-                <div><dt>Retiro hasta</dt><dd><time dateTime={lot.pickupEndsAt}>{formatInstant(lot.pickupEndsAt, lot.timeZone)}</time></dd></div>
-              </dl>
-              <Link className="explore-lot__link" to={{ pathname: `/lotes/${encodeURIComponent(lot.id)}`, search: search ? `?${search}` : '' }}>Ver detalle del lote <span aria-hidden="true">↗</span></Link>
-            </div>
-          </Card>)}</div>
+          <div className="explore-list">{result.items.map(lot => <LotCard key={lot.id} lot={lot}
+            to={{ pathname: `/lotes/${encodeURIComponent(lot.id)}`, search: search ? `?${search}` : '' }} />)}</div>
         </>}
         {(page > 1 || result.hasNextPage) && <nav className="explore-pagination" aria-label="Páginas de resultados">
           {page > 1 && <Link to={pageLink(page - 1)}>Página anterior</Link>}

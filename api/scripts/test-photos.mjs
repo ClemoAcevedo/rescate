@@ -217,9 +217,13 @@ try {
   const [cover] = await query(`SELECT public_id::text FROM lot_photos WHERE status = 'ready'
     AND lot_id = (SELECT id FROM lots WHERE public_id = $1) ORDER BY position LIMIT 1`, [second.publicId])
   assert.equal(detail.photoId, cover.public_id)
+  const readyPhotos = await query(`SELECT public_id::text AS id, width, height FROM lot_photos WHERE status = 'ready'
+    AND lot_id = (SELECT id FROM lots WHERE public_id = $1) ORDER BY position`, [second.publicId])
+  assert.equal(readyPhotos.length, 2)
+  assert.deepEqual(detail.photos, readyPhotos)
   const search = await discovery.search({ page: 1 })
   assert.equal(search.items.find(item => item.id === second.publicId).photoId, detail.photoId)
-  ok('publicado: sin cargas ni retiros; imagen pública y primera foto en búsqueda y detalle')
+  ok('publicado: sin cargas ni retiros; imagen pública, primera foto en búsqueda y detalle, y las dos fotos listas en orden')
 
   // Carga abandonada: vence a los 5 minutos y la limpieza la borra.
   const abandoned = heldContent(jpeg)
@@ -325,6 +329,7 @@ try {
     assert.equal((await call('POST', `/lots/${lotId}/publish`, { body: { version: 1 }, type: 'application/json' })).status, 200)
     const publicDetail = await call('GET', `/public/lots/${lotId}`, { cookies: false })
     assert.equal(publicDetail.body.photoUrl, displayUrl)
+    assert.deepEqual(publicDetail.body.photos.map(photo => [photo.thumbnailUrl, photo.displayUrl]), [[thumbnailUrl, displayUrl]])
     const publicImage = await call('GET', publicDetail.body.photoUrl, { cookies: false })
     assert.equal(publicImage.status, 200)
     assert.equal(publicImage.headers.get('cache-control'), 'private, max-age=3600')
