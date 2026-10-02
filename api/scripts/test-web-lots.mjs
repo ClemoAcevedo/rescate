@@ -56,6 +56,9 @@ async function assertNoHorizontalScroll(viewport, name = 'k011') {
   await page.screenshot({ path: `/tmp/rescate-${name}-${viewport.width}x${viewport.height}.png`, fullPage: true })
 }
 
+// Ráfaga completa del límite por usuario de K008: 20 solicitudes a 2/s.
+const refillUserQuota = () => page.waitForTimeout(10_000)
+
 async function apiCommand(method, path, body) {
   return page.evaluate(async ({ method, path, body }) => {
     const { csrfToken } = await (await fetch('/api/auth/session')).json()
@@ -218,11 +221,14 @@ try {
   await page.getByText('Traer una bolsa.').waitFor()
   ok('publicar: confirmación explícita, un solo POST ante doble clic y vista de solo lectura persistente')
 
+  // K008 limita por usuario (ráfaga 20, 2/s) y cuenta también las lecturas; desde K017 el editor
+  // además consulta fotos. Esperar a que la ráfaga se recupere antes de los últimos pasos de esta cuenta.
+  await refillUserQuota()
   const republish = await apiCommand('POST', `/lots/${createdLot.id}/publish`, { version: 4 })
   assert.equal(republish.status, 409)
   ok('lote publicado: la API rechaza republicar (409), la UI no ofrece edición')
 
-  // K008 limita por usuario (ráfaga 20, 2/s). Los casos restantes usan otra cuenta con su propia cuota.
+  // Los casos restantes usan otra cuenta con su propia cuota.
   await page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await page.getByRole('link', { name: 'Iniciar sesión' }).first().waitFor()
   const secondEmail = `k011-second-${Date.now()}@example.com`
