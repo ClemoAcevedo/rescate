@@ -94,6 +94,9 @@ export interface HttpSchemas {
   LotResponse: LotResponse
   PublicLot: PublicLot
   PublicLotPage: PublicLotPage
+  PublicLotPhoto: PublicLotPhoto
+  OperatorLotSummary: OperatorLotSummary
+  OperatorLotPage: OperatorLotPage
   ReserveLotRequest: ReserveLotRequest
   ReservationResponse: ReservationResponse
   LotPhoto: LotPhoto
@@ -215,15 +218,66 @@ export interface PublicLot {
    */
   photoUrl: string | null
   /**
+   * Fotos listas en orden de posición; vacío muestra reemplazo local. photoUrl corresponde a la primera.
+   *
+   * @maxItems 3
+   */
+  photos: PublicLotPhoto[]
+  /**
    * Distancia geográfica aproximada al punto enviado.
    */
   distanceKm: number | null
+}
+/**
+ * Foto lista de un lote publicado. Las imágenes se leen sin sesión.
+ */
+export interface PublicLotPhoto {
+  id: PublicId
+  /**
+   * Ancho de la imagen de presentación.
+   */
+  width: number
+  height: number
+  thumbnailUrl: string
+  displayUrl: string
 }
 export interface PublicLotPage {
   /**
    * @maxItems 12
    */
   items: PublicLot[]
+  page: number
+  hasNextPage: boolean
+}
+/**
+ * Resumen de un lote para el operador de su establecimiento.
+ */
+export interface OperatorLotSummary {
+  id: PublicId
+  status: "draft" | "published"
+  version: Version
+  description: LotDescription
+  category: Category
+  quantity: Quantity
+  /**
+   * Packs en reservas confirmadas; 0 en borradores.
+   */
+  reservedQuantity: number
+  pickupStartsAt: Instant
+  pickupEndsAt: Instant
+  timeZone: TimeZone
+  createdAt: Instant
+  publishedAt: string | null
+  /**
+   * Miniatura de la primera foto lista.
+   */
+  photoUrl: string | null
+}
+export interface OperatorLotPage {
+  /**
+   * @maxItems 20
+   */
+  items: OperatorLotSummary[]
   page: number
   hasNextPage: boolean
 }

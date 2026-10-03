@@ -348,3 +348,42 @@ test("errores internos/disponibilidad no filtran diagnósticos y respetan OpenAP
     assert.equal(JSON.stringify(response.body).includes(error.message), false)
   }
 })
+
+test("lista los lotes del establecimiento solo a su operador", async (t) => {
+  const api = await startApi()
+  t.after(() => api.close())
+
+  const draft = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration() })
+  const toPublish = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration({ category: "Panadería" }) })
+  await api.request("POST", `/lots/${toPublish.body.id}/publish`, { body: { version: 1 } })
+  await api.request("POST", `/establishments/${OTHER_ESTABLISHMENT}/lots`, { body: declaration(), actor: OTHER_OPERATOR })
+
+  const all = await api.request("GET", `/establishments/${ESTABLISHMENT}/lots`)
+  assert.equal(all.status, 200)
+  assert.deepEqual(all.body.items.map((lot: { id: string }) => lot.id).sort(), [draft.body.id, toPublish.body.id].sort())
+  assert.equal(all.body.page, 1)
+  assert.equal(all.body.hasNextPage, false)
+  assert.equal(all.body.items[0].establishmentId, undefined)
+
+  const drafts = await api.request("GET", `/establishments/${ESTABLISHMENT}/lots?status=draft`)
+  assert.deepEqual(drafts.body.items.map((lot: { id: string; status: string }) => [lot.id, lot.status]), [[draft.body.id, "draft"]])
+  const published = await api.request("GET", `/establishments/${ESTABLISHMENT}/lots?status=published`)
+  assert.deepEqual(published.body.items.map((lot: { id: string }) => lot.id), [toPublish.body.id])
+  assert.equal(published.body.items[0].reservedQuantity, 0)
+  assert.equal(published.body.items[0].photoUrl, null)
+
+  assert.equal((await api.request("GET", `/establishments/${ESTABLISHMENT}/lots`, { actor: OTHER_OPERATOR })).status, 403)
+  assert.equal((await api.request("GET", `/establishments/${ESTABLISHMENT}/lots`, { actor: null })).status, 401)
+  assert.equal((await api.request("GET", "/establishments/33333333-3333-4333-8333-333333333333/lots")).status, 404)
+})
+
+test("rechaza filtros desconocidos o inválidos en el listado", async (t) => {
+  const api = await startApi()
+  t.after(() => api.close())
+
+  for (const [query, field] of [["status=archived", "/status"], ["page=0", "/page"], ["page=abc", "/page"], ["page=1001", "/page"], ["owner=1", "/owner"]]) {
+    const response = await api.request("GET", `/establishments/${ESTABLISHMENT}/lots?${query}`)
+    assert.equal(response.status, 422, query)
+    assert.deepEqual(response.body.error.details.issues.map((issue: { path: string }) => issue.path), [field])
+  }
+})

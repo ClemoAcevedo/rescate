@@ -393,6 +393,38 @@ try {
   await page.unroute(/\/api\/lots\/[^/]+\/photos\/[^/]+\/(display|thumbnail)$/)
   ok('fotos: el detalle público muestra la foto; si la imagen falla, hay reemplazo y las condiciones siguen visibles')
 
+  await page.reload()
+  const thumbs = page.getByRole('button', { name: /^Ver foto \d$/ })
+  await thumbs.nth(1).waitFor()
+  assert.equal(await thumbs.count(), 2)
+  assert.equal(await thumbs.nth(0).getAttribute('aria-pressed'), 'true')
+  await thumbs.nth(1).click()
+  assert.equal(await thumbs.nth(1).getAttribute('aria-pressed'), 'true')
+  await page.getByRole('img', { name: /^Foto 2 de 2/ }).waitFor()
+  ok('galería: el detalle público muestra las dos fotos listas y permite elegir cada una')
+
+  // #96: el operador recupera sus lotes sin conocer su ID.
+  await refillUserQuota()
+  await page.goto(`${baseUrl}/operador/lotes`)
+  const photoRow = page.locator('.my-lot').filter({ has: page.locator(`a[href="/operador/lotes/${photoLot.id}"]`) })
+  await photoRow.getByText('Publicado', { exact: true }).waitFor()
+  await photoRow.getByText('0 de 12 packs reservados').waitFor()
+  const listed = (status) => page.waitForResponse((response) => response.url().endsWith(`/lots?status=${status}`))
+  const draftsListed = listed('draft')
+  await page.getByRole('link', { name: 'Borradores' }).click()
+  await draftsListed
+  await page.locator('section[aria-label="Lotes del establecimiento"][aria-busy="false"]').waitFor()
+  assert.equal(await page.locator(`.my-lot a[href="/operador/lotes/${photoLot.id}"]`).count(), 0)
+  assert.equal(await page.locator('.my-lot').filter({ hasText: 'Publicado' }).count(), 0)
+  const publishedListed = listed('published')
+  await page.getByRole('link', { name: 'Publicados' }).click()
+  await publishedListed
+  await page.locator('section[aria-label="Lotes del establecimiento"][aria-busy="false"]').waitFor()
+  await photoRow.getByRole('link', { name: 'Ver lote' }).click()
+  await page.waitForURL(`${baseUrl}/operador/lotes/${photoLot.id}`)
+  await page.getByRole('heading', { name: 'Lote publicado' }).waitFor()
+  ok('mis lotes: el publicado aparece con sus reservas, los filtros por estado funcionan y el enlace abre el lote')
+
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(rateLimited, [], 'la prueba no debe depender de respuestas 429')
   ok('ninguna respuesta 429 durante el recorrido')

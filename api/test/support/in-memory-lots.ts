@@ -62,6 +62,22 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
       const id = establishments.get(publicId)
       return id === undefined ? null : { id, publicId }
     },
+    async listByEstablishment(establishmentId, filter) {
+      const all = [...lots.values()]
+        .filter((lot) => lot.establishmentId === establishmentId && (!filter.status || lot.status === filter.status))
+        .sort((a, b) => (b.publishedAt ?? b.createdAt).getTime() - (a.publishedAt ?? a.createdAt).getTime())
+      const page = all.slice((filter.page - 1) * 20, filter.page * 20 + 1)
+      return {
+        hasNextPage: page.length > 20,
+        items: page.slice(0, 20).map((lot) => ({
+          publicId: lot.publicId, status: lot.status, version: lot.version,
+          description: lot.declaration.description, category: lot.declaration.category,
+          quantity: lot.declaration.quantity, reservedQuantity: 0,
+          pickupStartsAt: lot.declaration.pickupStartsAt, pickupEndsAt: lot.declaration.pickupEndsAt,
+          timeZone: lot.declaration.timeZone, createdAt: lot.createdAt, publishedAt: lot.publishedAt, photoId: null,
+        })),
+      }
+    },
     memberships,
     lots,
 

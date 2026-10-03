@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { LotPhoto } from '../components/lots/LotPhoto'
+import { Icon } from '../components/Icon'
+import { LotGallery } from '../components/lots/LotGallery'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -9,6 +10,7 @@ import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
 import { formatInstant } from '../lots/lot-time'
+import { lotTitle } from '../lots/lot-title'
 import { HttpError, uncertainReservation, discoveryError, getPublicLot, reserveLot,
   type PublicLot, type ReservationResponse } from '../services/discovery-service'
 
@@ -72,7 +74,7 @@ function LotDetail({ id }: { id: string }) {
   }
 
   return <main className="page-content"><div className="public-lot">
-    <Link className="public-lot__back" to={lotsPath}>← Volver a explorar lotes</Link>
+    <Link className="back-link" to={lotsPath}><Icon name="arrowLeft" />Volver a explorar lotes</Link>
     {loading && <Alert className="form-result" role="status">Cargando el lote…</Alert>}
     {loadError && <Alert className="form-result" tone="danger" role="alert">{loadError} <Button variant="secondary" onClick={() => { setLoading(true); setReload(value => value + 1) }}>Reintentar</Button></Alert>}
     {reservation && <div ref={confirmationRef} tabIndex={-1} className="reservation-confirmation">
@@ -84,26 +86,30 @@ function LotDetail({ id }: { id: string }) {
     </div>}
     {lot && <>
       <header className="public-lot__header">
-        <Badge>{lot.category}</Badge>
-        <h1>{lot.description}</h1>
-        <p>{lot.address}</p>
+        <Badge tone="success">{lot.category}</Badge>
+        <h1>{lotTitle(lot.description)}</h1>
+        <p className="public-lot__address"><Icon name="pin" />{lot.address}{lot.distanceKm !== null && ` · a ${lot.distanceKm} km`}</p>
       </header>
       <div className="public-lot__layout">
+        <LotGallery photos={lot.photos} title={lotTitle(lot.description)} />
         <article className="public-lot__information" aria-label="Información del lote">
-          <LotPhoto src={lot.photoUrl} description={`Fotografía del pack: ${lot.description}`} />
+          <section className="public-lot__section" aria-labelledby="contents-heading">
+            <h2 id="contents-heading">Qué incluye</h2>
+            <p className="public-lot__description">{lot.description}</p>
+            <p className="public-lot__hint"><Icon name="box" />{lot.quantity} {lot.quantity === 1 ? 'pack publicado' : 'packs publicados'} en este lote.</p>
+          </section>
           <section className="public-lot__section" aria-labelledby="pickup-heading">
             <h2 id="pickup-heading">Tu retiro</h2>
             <dl className="public-lot__facts">
-              <div><dt>Lugar de retiro</dt><dd>{lot.address}</dd></div>
-              <div><dt>Desde</dt><dd><time dateTime={lot.pickupStartsAt}>{formatInstant(lot.pickupStartsAt, lot.timeZone)}</time></dd></div>
-              <div><dt>Hasta</dt><dd><time dateTime={lot.pickupEndsAt}>{formatInstant(lot.pickupEndsAt, lot.timeZone)}</time></dd></div>
+              <div><dt><Icon name="pin" />Lugar de retiro</dt><dd>{lot.address}</dd></div>
+              <div><dt><Icon name="clock" />Desde</dt><dd><time dateTime={lot.pickupStartsAt}>{formatInstant(lot.pickupStartsAt, lot.timeZone)}</time></dd></div>
+              <div><dt><Icon name="clock" />Hasta</dt><dd><time dateTime={lot.pickupEndsAt}>{formatInstant(lot.pickupEndsAt, lot.timeZone)}</time></dd></div>
             </dl>
             <p className="public-lot__hint">Horario del lugar de retiro ({lot.timeZone}).</p>
           </section>
           <section className="public-lot__section" aria-labelledby="conditions-heading">
             <h2 id="conditions-heading">Condiciones del lote</h2>
             <p className="public-lot__conditions">{lot.conditions || 'Este lote no tiene condiciones adicionales indicadas.'}</p>
-            <p className="public-lot__hint">Cantidad publicada: {lot.quantity} {lot.quantity === 1 ? 'pack' : 'packs'}.</p>
           </section>
         </article>
         <Card as="section" className="reservation-panel" aria-label="Reserva de packs">

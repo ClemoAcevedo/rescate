@@ -13,7 +13,15 @@ export interface PublicLot {
   pickupEndsAt: Date
   /** Primera foto lista por posición; HTTP la representa como ruta de imagen. */
   photoId: string | null
+  /** Fotos listas en orden de posición. */
+  photos: PublicPhoto[]
   distanceKm: number | null
+}
+
+export interface PublicPhoto {
+  id: string
+  width: number
+  height: number
 }
 
 export interface SearchFilters {
