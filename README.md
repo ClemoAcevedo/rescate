@@ -173,7 +173,7 @@ docs/
     │   ├── informe-e1.pdf
     │   └── anexos-e1.pdf
     └── e2/
-        ├── presentacion-e2.pptx
+        ├── presentacion-e2.pdf
         └── estimaciones-e2.xlsx
 ```
 
