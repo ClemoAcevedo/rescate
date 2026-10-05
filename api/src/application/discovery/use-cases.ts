@@ -1,4 +1,4 @@
-import { lotNotFound, idempotencyConflict } from '../errors.js'
+import { lotNotFound, idempotencyConflict, InventoryDiscrepancyError } from '../errors.js'
 import type { DiscoveryRepository, SearchFilters } from './ports.js'
 import type { Actor } from '../lots/ports.js'
 import { requireDirectReservation, requireReservationQuantity } from '../../domain/reservations.js'
@@ -19,15 +19,17 @@ export function createDiscoveryUseCases(repository: DiscoveryRepository, now: ()
       // UUID es insensible a mayúsculas también para el bloqueo y la comparación.
       lotId = lotId.toLowerCase()
       idempotencyKey = idempotencyKey.toLowerCase()
-      return repository.withReservationTransaction(actor.userId, lotId, idempotencyKey, async ({ lot, existing, active }, writer) => {
+      return repository.withReservationTransaction(actor.userId, lotId, idempotencyKey, async (state, writer) => {
+        const { existing } = state
         if (existing) {
           if (existing.lotId !== lotId || existing.quantity !== quantity) throw idempotencyConflict()
           return existing
         }
-        if (!lot) throw lotNotFound()
-        const at = now()
-        requireDirectReservation(lot, quantity, active, at)
-        return writer.insert(quantity, at)
+        if (!state.lot) throw lotNotFound()
+        if (!state.reconciled) throw new InventoryDiscrepancyError(lotId)
+        // El instante viene de la base después del bloqueo, no del reloj del proceso.
+        requireDirectReservation(state.lot, quantity, state.active, state.now)
+        return writer.insert(quantity, state.now)
       })
     },
   }

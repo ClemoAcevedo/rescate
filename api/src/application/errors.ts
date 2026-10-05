@@ -12,6 +12,7 @@ export type ApplicationErrorCode =
   | "photo_upload_expired"
   | "photo_storage_unavailable"
   | "concurrent_photo_uploads"
+  | "inventory_discrepancy"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -54,5 +55,12 @@ export const photoStorageUnavailable = (): ApplicationError =>
 export class ConcurrentUploadsError extends ApplicationError {
   constructor(readonly retryAfter: number) {
     super("concurrent_photo_uploads", "El operador ya tiene el máximo de cargas simultáneas.")
+  }
+}
+
+/** Anexos B p. 4: contadores distintos de sus registros bloquean asignar y exigen revisión. */
+export class InventoryDiscrepancyError extends ApplicationError {
+  constructor(readonly lotId: string) {
+    super("inventory_discrepancy", "Los contadores del lote no coinciden con sus compromisos.")
   }
 }

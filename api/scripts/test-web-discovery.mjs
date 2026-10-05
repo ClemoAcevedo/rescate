@@ -34,8 +34,10 @@ try {
     RETURNING id`, [estate.rows[0].id, soldOutTitle])
   const soldOutUser = await db.query('INSERT INTO users(email) VALUES ($1) RETURNING id',
     [`sold-out-${randomUUID()}@example.invalid`])
-  await db.query(`INSERT INTO commitments (user_id, lot_id, quantity, status)
-    VALUES ($1, $2, 1, 'confirmed')`, [soldOutUser.rows[0].id, soldOut.rows[0].id])
+  // Fixture directo: la reserva y su movimiento F → R van juntos, como en la API.
+  await db.query(`WITH moved AS (UPDATE lots SET reserved_quantity = reserved_quantity + 1 WHERE id = $2 RETURNING id)
+    INSERT INTO commitments (user_id, lot_id, quantity, status)
+    SELECT $1, id, 1, 'confirmed' FROM moved`, [soldOutUser.rows[0].id, soldOut.rows[0].id])
   await page.goto(`${base}/lotes`)
   await page.getByText(title).waitFor()
   assert.equal(await page.getByText('Fotografía no disponible').count() > 0, true)
@@ -124,8 +126,9 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Quitar un pack' }).isDisabled(), true)
   // Otra persona consume un pack después de la lectura mostrada en pantalla.
   const another = await db.query('INSERT INTO users(email) VALUES ($1) RETURNING id', [`race-${randomUUID()}@example.invalid`])
-  await db.query(`INSERT INTO commitments (user_id, lot_id, quantity, status)
-    SELECT $1, id, 1, 'confirmed' FROM lots WHERE public_id=$2`, [another.rows[0].id, lotId])
+  await db.query(`WITH moved AS (UPDATE lots SET reserved_quantity = reserved_quantity + 1 WHERE public_id = $2 RETURNING id)
+    INSERT INTO commitments (user_id, lot_id, quantity, status)
+    SELECT $1, id, 1, 'confirmed' FROM moved`, [another.rows[0].id, lotId])
   const attempts = []
   await page.route(`**/public/lots/${lotId}/reservations`, async route => {
     attempts.push(route.request().postDataJSON())

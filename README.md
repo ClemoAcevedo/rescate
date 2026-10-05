@@ -255,7 +255,8 @@ lo cambia.
   Búsqueda pública paginada, filtros, zona manual, detalle con galería de fotos y
   reserva directa con API real (K016).
 - **API:** `/health`, identidad y sesiones (K008), borrador/publicación y listado de
-  lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
+  lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
+  protegido por la base (K021), carga, lectura y
   retiro de fotos (K014), según OpenAPI.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
   (K014).
