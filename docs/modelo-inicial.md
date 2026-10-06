@@ -391,14 +391,11 @@ define.
 - No hay cantidades en las otras tres entidades. No hay límite de dos packs
   (RF04 y corrección G p. 12), ni límite SQL de 100: H p. 18 lo presenta como
   supuesto de dimensionamiento, al igual que la ventana de 24 h.
-- **Requisito conocido pospuesto:** B p. 4 exige Q = F + O + R + E + X y contadores
-  no negativos (cero sí es válido para esos contadores). K003 conserva Q, pero
-  no crea inventario parcial ni cinco contadores que aún no tienen operaciones.
-  Incorporarlos, conciliarlos con compromisos y validar cantidad contra Q y
-  disponibilidad bajo bloqueo corresponde a la reserva transaccional posterior.
-  Los CHECK actuales no garantizan ausencia de sobreasignación entre filas.
-  ADR 0002 precisa que F → O y O → R mueven solo la cantidad ofrecida y aceptada;
-  Q no cambia y la demanda restante no constituye inventario ni prioridad residual.
+- **Inventario (B p. 4):** Q = F + O + R + E + X con contadores no negativos. K021
+  guarda O, R, E y X en el lote y deriva F; sus CHECK impiden la sobreasignación
+  ([ADR 0006](adr/0006-inventario-del-lote.md)). ADR 0002 precisa que F → O y O → R
+  mueven solo la cantidad ofrecida y aceptada; Q no cambia y la demanda restante no
+  constituye inventario ni prioridad residual.
 - UNIQUE: correo exacto, par de membresía y compromiso activo usuario/lote.
 - CHECK: cantidades, estados, ventana ordenada, coherencia de publicación,
   latitud [-90,90], longitud [-180,180], textos requeridos no vacíos y descripción

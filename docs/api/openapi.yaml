@@ -83,7 +83,7 @@ paths:
     post:
       operationId: "reservePublicLot"
       summary: "Reservar packs disponibles"
-      description: "Reserva directa bajo bloqueo del lote. Requiere sesión, Origin y CSRF. idempotencyKey es un UUID del cuerpo, con unicidad por actor durante el piloto. Tras confirmar, la misma clave y parámetros reproducen status 201 y cuerpo, incluso si el lote cerró; otros parámetros producen 409. Los errores no consumen la clave. 409 si cerró la ventana, faltan packs o ya hay reserva activa; 404 para lote inexistente o borrador. Cantidad entera positiva hasta 2147483647 (límite de almacenamiento), sin tope comercial por persona."
+      description: "Reserva directa bajo bloqueo del lote. Requiere sesión, Origin y CSRF. idempotencyKey es un UUID del cuerpo, con unicidad por actor durante el piloto. Tras confirmar, la misma clave y parámetros reproducen status 201 y cuerpo, incluso si el lote cerró; otros parámetros producen 409. Los errores no consumen la clave. 409 si cerró la ventana, faltan packs, ya hay reserva activa o el lote está en revisión por contadores distintos de sus reservas; 404 para lote inexistente o borrador. Cantidad entera positiva hasta 2147483647 (límite de almacenamiento), sin tope comercial por persona."
       tags: ["Discovery"]
       security: [{ SessionCookie: [] }]
       parameters:

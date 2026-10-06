@@ -129,19 +129,23 @@ La persona inicia sesión para reservar. El actor procede de K008, nunca del cue
 Application coordina la transacción mediante `withReservationTransaction`:
 
 1. Serializa la clave por actor y lee un resultado previo.
-2. Si no existe, bloquea el lote con `FOR UPDATE` y relee disponibilidad y compromiso activo.
+2. Si no existe, bloquea el lote con `FOR UPDATE`, lee el reloj de PostgreSQL y
+   relee disponibilidad y compromiso activo. Si los reservados del lote no
+   coinciden con sus reservas confirmadas, rechaza con 409 y registra
+   `inventory_discrepancy` para revisión.
 3. Domain exige packs enteros positivos, stock suficiente, ausencia de otro
    compromiso activo del mismo usuario/lote y un instante anterior al cierre.
-4. Inserta reserva y clave juntas. HTTP responde solo después del commit.
+4. Inserta reserva y clave y mueve la cantidad de libres a reservados (F → R), todo
+   junto. HTTP responde solo después del commit.
 
 La espera por cada bloqueo tiene un límite de 2 s. Si se supera, la transacción
 revierte y responde 503; el mismo intento se puede repetir sin consumir su clave.
 
 Se puede reservar antes del inicio del retiro. La cantidad publicada no cambia;
-la disponibilidad es `Q - SUM(commitments.quantity)` para reservas confirmadas.
-K015 no crea cola, ofertas, cancelaciones, códigos ni retiros. Al añadir esos
-estados, S04 debe ampliar este cálculo y atender prioridad FIFO bajo el mismo
-bloqueo; se conserva ADR 0002.
+la disponibilidad es F, la columna de libres del lote. Los CHECK de la base impiden
+que quede negativa ([ADR 0006](adr/0006-inventario-del-lote.md)). Aún no hay cola,
+ofertas, cancelaciones, códigos ni retiros: cada uno moverá sus contadores bajo el
+mismo bloqueo y la cola FIFO se atenderá según ADR 0002.
 
 La clave UUID viaja en `idempotencyKey`. Un resultado confirmado reproduce el
 mismo 201 y cuerpo con la misma clave y parámetros, incluso tras cerrar el lote.

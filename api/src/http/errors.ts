@@ -2,7 +2,7 @@
 import { IdentityError, PasswordHashingCapacityError } from "../application/identity/errors.js"
 import { TrafficLimitError, TrafficCapacityError } from "./rate-limits.js"
 import type { Response } from "express"
-import { ApplicationError, ConcurrentUploadsError } from "../application/errors.js"
+import { ApplicationError, ConcurrentUploadsError, InventoryDiscrepancyError } from "../application/errors.js"
 import { PhotoRuleError } from "../domain/photos.js"
 import { LotRuleError } from "../domain/lots.js"
 import { ReservationRuleError } from "../domain/reservations.js"
@@ -26,6 +26,7 @@ const errors = {
   photo_upload_expired: [409, "CONFLICT", "La carga venció o el lote cambió; vuelve a cargar la foto."],
   photo_storage_unavailable: [503, "SERVICE_UNAVAILABLE", "El servicio no está disponible temporalmente."],
   concurrent_photo_uploads: [429, "RATE_LIMITED", "Espera a que terminen tus cargas en curso."],
+  inventory_discrepancy: [409, "CONFLICT", "El lote está en revisión y no admite reservas por ahora."],
 } as const
 const conflicts = new Set(["lot_already_published", "published_lot_is_immutable"])
 const fields: Record<string, string> = {
@@ -61,6 +62,8 @@ export function handleError(error: unknown, response: Response, log: (error: unk
       ? "El lote ya tiene tres fotos." : "El estado del lote no permite cambiar sus fotos.")
   } else if (error instanceof ApplicationError) {
     if (error instanceof ConcurrentUploadsError) response.set("Retry-After", String(error.retryAfter))
+    // El registro es la señal de revisión; el lote sigue bloqueado hasta corregirlo.
+    if (error instanceof InventoryDiscrepancyError) log({ event: "inventory_discrepancy", lotId: error.lotId })
     const [status, code, message] = errors[error.code]
     sendError(response, status, code, message)
   } else if (error instanceof LotRuleError) {

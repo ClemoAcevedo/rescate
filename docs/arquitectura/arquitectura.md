@@ -80,7 +80,7 @@ servicios, las migraciones previas y el pipeline de producción.
 | Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de la aplicación. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../evidencia/k009.md) integra registro y sesión; [lotes](../lotes.md) el borrador, publicación, búsqueda pública y reserva directa. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
 | API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cuatro de operador, cuatro de fotos y tres de descubrimiento/reserva. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
-| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor. |
+| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor; K021 agrega los contadores de inventario del lote. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
 | Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createPhotoWorker` de Composition: valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Sin base o almacenamiento queda inactivo. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
 | Fotos | [Router](../../api/src/http/photos-router.ts), [casos de uso](../../api/src/application/photos/use-cases.ts), [reglas](../../api/src/domain/photos.ts), [repositorio](../../api/src/infrastructure/postgres/photo-repository.ts), adaptadores [S3](../../api/src/infrastructure/objects/s3-object-store.ts), [local](../../api/src/infrastructure/objects/local-object-store.ts) y [sharp](../../api/src/infrastructure/images/sharp-image-processor.ts). La [CLI K005](../../api/src/prototypes/photos/cli.ts) conserva el smoke del bucket. Ver [fotos](../fotos.md). |
@@ -105,9 +105,10 @@ manuales K009 y K004 queda como deuda en #98.
 
 La búsqueda y reserva K015 siguen los mismos límites: el router de descubrimiento
 consume Application y los DTO generados. Application define la unidad atómica de
-reserva y pasa un único instante leído después del bloqueo a Domain. Infrastructure
-serializa la clave del actor, bloquea el lote, relee stock y escribe la reserva con
-el mismo cliente PostgreSQL. El cuerpo público excluye usuario, claves e ID internos.
+reserva y pasa a Domain el instante de PostgreSQL leído después del bloqueo.
+Infrastructure serializa la clave del actor, bloquea el lote con el bloqueo común de
+[lot-lock.ts](../../api/src/infrastructure/postgres/lot-lock.ts), relee stock y
+escribe la reserva y el movimiento F → R con el mismo cliente PostgreSQL. El cuerpo público excluye usuario, claves e ID internos.
 Las reglas y el alcance están en [lotes](../lotes.md#búsqueda-y-reserva-directa).
 
 ## B. Arquitectura objetivo incremental para S02

@@ -149,8 +149,7 @@ export function createLotRepository(pool: Pool): LotRepository {
     async listByEstablishment(establishmentId, filter) {
       const { rows } = await pool.query<SummaryRow>(
         `SELECT l.public_id::text, l.status, l.version, l.description, l.category, l.quantity,
-           COALESCE((SELECT sum(c.quantity) FROM public.commitments c
-             WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)::integer AS reserved_quantity,
+           l.reserved_quantity,
            l.pickup_starts_at, l.pickup_ends_at, l.time_zone, l.created_at, l.published_at,
            (SELECT p.public_id::text FROM public.lot_photos p
              WHERE p.lot_id = l.id AND p.status = 'ready' ORDER BY p.position LIMIT 1) AS photo_id

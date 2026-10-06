@@ -76,7 +76,7 @@ function parseReservation(value: unknown): { quantity: number; idempotencyKey: s
 const id = (value: unknown) => typeof value === 'string' ? value : ''
 
 export function createDiscoveryRouter(cases: Cases, authenticate: Authenticate,
-  protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = console.error): Router {
+  protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = error => console.error(error)): Router {
   const router = Router()
   const route = (handler: (request: Request, response: Response) => Promise<void>) =>
     async (request: Request, response: Response) => {

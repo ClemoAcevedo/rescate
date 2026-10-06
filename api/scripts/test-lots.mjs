@@ -222,7 +222,7 @@ try {
   // Primero se revierte K008. Su precondición users vacío impide reaplicarla
   // sobre estos fixtures: el ciclo histórico apunta explícitamente hasta K010.
   const usersBeforeRollback = await query('SELECT id, email, created_at FROM users ORDER BY id')
-  run('down', '3') // K014, índice espacial y K015: vuelve al límite histórico K008.
+  run('down', '4') // K021, K014, índice espacial y K015: vuelve al límite histórico K008.
   run('down', '1')
   assert.deepEqual(await query('SELECT id, email, created_at FROM users ORDER BY id'), usersBeforeRollback)
   assert.deepEqual((await query('SELECT name FROM public.pgmigrations ORDER BY id')).map(r => r.name), [

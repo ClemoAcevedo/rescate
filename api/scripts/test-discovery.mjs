@@ -189,6 +189,7 @@ try {
     const rollbackKey = randomUUID()
     await assert.rejects(failing.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey), /fallo posterior/)
     assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE user_id=$1 AND idempotency_key=$2', [buyerId, rollbackKey])).rows[0].n, 0)
+    assert.equal((await database.query('SELECT reserved_quantity FROM lots WHERE public_id=$1', [nearIds[2]])).rows[0].reserved_quantity, 0)
     const cases = createDiscoveryUseCases(repository, () => new Date())
     const original = await cases.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey)
     const replayAfterRestart = createDiscoveryUseCases(createDiscoveryRepository(pool), () => new Date())
@@ -221,11 +222,80 @@ try {
     await database.query('ROLLBACK')
     await cases.reserve({ userId: buyerId }, nearIds[4], 1, timeoutKey)
     ok('bloqueo mayor a 2 s aborta sin consumir clave; se puede reintentar después')
+
+    // K021: ocho personas compiten por cinco packs y cada una reintenta tres veces
+    // en paralelo con su clave. Cada intención obtiene un único resultado.
+    const contested = await makeLot('Contienda K021', 5)
+    const people = []
+    for (let i = 0; i < 8; i++) {
+      const { rows } = await database.query('INSERT INTO users(email) VALUES ($1) RETURNING id::text', [`k021-${randomUUID()}@example.invalid`])
+      people.push({ userId: rows[0].id, key: randomUUID() })
+    }
+    const settle = promise => promise.then(value => ({ value }), error => ({ error }))
+    const attempts = await Promise.all(people.flatMap(person => [0, 1, 2].map(() =>
+      settle(cases.reserve({ userId: person.userId }, contested, 1, person.key)))))
+    const outcomes = people.map((_, i) => attempts.slice(i * 3, i * 3 + 3))
+    for (const tries of outcomes) {
+      const won = tries.filter(t => t.value)
+      if (won.length) {
+        // La intención confirmada se reproduce idéntica en todos sus reintentos exitosos.
+        assert.ok(won.every(t => t.value.id === won[0].value.id))
+        assert.ok(tries.every(t => t.value || t.error?.reason === 'unavailable'))
+      } else assert.ok(tries.every(t => t.error?.reason === 'unavailable'), JSON.stringify(tries))
+    }
+    const winners = outcomes.filter(tries => tries.some(t => t.value))
+    assert.equal(winners.length, 5)
+    const [counts] = (await database.query(`SELECT l.free_quantity, l.reserved_quantity,
+        (SELECT count(*)::int FROM commitments c WHERE c.lot_id = l.id) AS commitments
+      FROM lots l WHERE public_id = $1`, [contested])).rows
+    assert.deepEqual(counts, { free_quantity: 0, reserved_quantity: 5, commitments: 5 })
+    // Una respuesta perdida se recupera repitiendo la clave: mismo resultado, sin otra reserva.
+    for (const [i, tries] of outcomes.entries()) {
+      const original = tries.find(t => t.value)?.value
+      if (original) assert.deepEqual(await cases.reserve({ userId: people[i].userId }, contested, 1, people[i].key), original)
+    }
+    assert.equal((await database.query('SELECT reserved_quantity FROM lots WHERE public_id=$1', [contested])).rows[0].reserved_quantity, 5)
+    ok('reintentos concurrentes de 8 personas por 5 packs: un resultado por clave, sin sobreasignación')
+
+    // Si la regla fallara, la base igual rechaza dejar F negativo y revierte todo.
+    const blind = createDiscoveryUseCases({ ...repository,
+      withReservationTransaction: (user, lot, key, operate) => repository.withReservationTransaction(user, lot, key,
+        (state, writer) => operate(state.lot ? { ...state, lot: { ...state.lot, availableQuantity: 99 } } : state, writer)),
+    }, () => new Date())
+    const blindKey = randomUUID()
+    await assert.rejects(blind.reserve({ userId: buyerId }, contested, 1, blindKey), { constraint: 'lots_inventory_total_check' })
+    assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE idempotency_key=$1', [blindKey])).rows[0].n, 0)
+    ok('CHECK de inventario rechaza sobreasignación aunque Application no la detecte; clave sin consumir')
+
+    // Contadores distintos de sus registros: no se asigna y queda un registro para revisión.
+    const tampered = await makeLot('Discrepancia K021', 5)
+    await database.query('UPDATE lots SET reserved_quantity = 1 WHERE public_id = $1', [tampered])
+    const discrepancyKey = randomUUID()
+    await assert.rejects(cases.reserve({ userId: buyerId }, tampered, 1, discrepancyKey), { code: 'inventory_discrepancy', lotId: tampered })
+    const logged = []
+    const originalError = console.error
+    console.error = entry => logged.push(entry)
+    let refused
+    try { refused = await other('POST', `/public/lots/${tampered}/reservations`, { quantity: 1, idempotencyKey: randomUUID() }) }
+    finally { console.error = originalError }
+    assert.equal(refused.status, 409)
+    assert.ok(logged.some(entry => entry?.event === 'inventory_discrepancy' && entry.lotId === tampered), JSON.stringify(logged))
+    assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE lot_id=(SELECT id FROM lots WHERE public_id=$1)', [tampered])).rows[0].n, 0)
+    await database.query('UPDATE lots SET reserved_quantity = 0 WHERE public_id = $1', [tampered])
+    await cases.reserve({ userId: buyerId }, tampered, 1, discrepancyKey)
+    ok('discrepancia entre R y reservas bloquea nuevas asignaciones con 409 y registra revisión')
+
+    const unreconciled = await database.query(`SELECT l.public_id FROM lots l
+      WHERE l.reserved_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c
+        WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
+        OR l.free_quantity <> l.quantity - l.offered_quantity - l.reserved_quantity - l.delivered_quantity - l.expired_quantity`)
+    assert.deepEqual(unreconciled.rows, [])
+    ok('conciliación: R coincide con las reservas confirmadas en todos los lotes')
   } finally {
     await database.query('ROLLBACK')
     await pool.end()
   }
-  console.log(`PASS K015: ${checks} grupos de integración con PostgreSQL/PostGIS real`)
+  console.log(`PASS K015/K021: ${checks} grupos de integración con PostgreSQL/PostGIS real`)
 
 } finally {
   await database.end().catch(() => {})

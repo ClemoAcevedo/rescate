@@ -27,6 +27,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0003](adr/0003-arquitectura-incremental-s02.md) | Arquitectura incremental HTTP, Application, Domain e Infrastructure; Composition ensambla |
 | [0004](adr/0004-reserva-directa-idempotente.md) | Reserva directa e idempotencia por actor, resultado persistido y bloqueo de lote |
 | [0005](adr/0005-ciclo-de-fotos.md) | Fotos cargadas y leídas por la API, validadas por el worker; publicar exige fotos listas |
+| [0006](adr/0006-inventario-del-lote.md) | Inventario Q = F + O + R + E + X en el lote con CHECK, bloqueo común y reloj de la base |
 
 ## Entregas y evidencia
 

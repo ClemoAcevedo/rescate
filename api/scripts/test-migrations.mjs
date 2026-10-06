@@ -15,6 +15,7 @@ const migrations = [
   '1790620000000_public-reservations',
   '1790700000000_discovery-postgis',
   '1790800000000_lot-photos',
+  '1790900000000_lot-inventory',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -104,8 +105,9 @@ async function verifyModel(laterTables = []) {
 
   for (const [table, row] of [['lots', lot], ['commitments', commitment]]) {
     for (const value of [0, -1]) {
+      // Con K021 aplicada, Q negativa también queda bajo sus contadores en cero.
       await rejected(`${table}.quantity=${value}`, `UPDATE ${table} SET quantity=$1 WHERE id=$2`,
-        [value, row.id], '23514', `${table}_quantity_check`)
+        [value, row.id], '23514', [`${table}_quantity_check`, ...(table === 'lots' ? ['lots_inventory_total_check'] : [])])
     }
     await rejected(`${table}.quantity=NULL`, `UPDATE ${table} SET quantity=NULL WHERE id=$1`, [row.id], '23502')
     await rejected(`${table}.quantity=1.5 (parámetro)`, `UPDATE ${table} SET quantity=$1 WHERE id=$2`,
@@ -143,8 +145,11 @@ async function verifyModel(laterTables = []) {
 
   for (const [table, row] of [['users', user], ['establishments', establishment], ['memberships', membership],
     ['lots', lot], ['commitments', commitment]]) {
-    await rejected(`PK duplicada ${table}`, `INSERT INTO ${table} OVERRIDING SYSTEM VALUE
-      SELECT * FROM ${table} WHERE id=$1`, [row.id], '23505', `${table}_pkey`)
+    // Las columnas generadas (F de K021) no se copian; el resto choca con la PK.
+    const [{ list }] = await query(`SELECT string_agg(quote_ident(column_name), ',' ORDER BY ordinal_position) AS list
+      FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND is_generated='NEVER'`, [table])
+    await rejected(`PK duplicada ${table}`, `INSERT INTO ${table}(${list}) OVERRIDING SYSTEM VALUE
+      SELECT ${list} FROM ${table} WHERE id=$1`, [row.id], '23505', `${table}_pkey`)
   }
   for (const [table, row] of [['users', user], ['establishments', establishment], ['lots', lot]]) {
     await rejected(`borrado de ${table} referenciado`, `DELETE FROM ${table} WHERE id=$1`, [row.id], '23503')
@@ -209,6 +214,29 @@ try {
   assert.deepEqual(reservationColumns.map(row => row.column_name), ['idempotency_key', 'public_id'])
   assert.equal((await query('SELECT count(*)::int AS count FROM commitments WHERE public_id IS NULL'))[0].count, 0)
   ok('K015 agrega IDs de reserva e idempotencia sin perder compromisos existentes')
+  const inventory = () => query(`SELECT l.id, l.quantity, l.free_quantity, l.offered_quantity, l.reserved_quantity,
+      l.delivered_quantity, l.expired_quantity,
+      COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)::int AS confirmed
+    FROM lots l ORDER BY l.id`)
+  const counted = await inventory()
+  assert.ok(counted.some(row => row.confirmed > 0))
+  for (const row of counted) {
+    assert.equal(row.reserved_quantity, row.confirmed)
+    assert.equal(row.offered_quantity + row.delivered_quantity + row.expired_quantity, 0)
+    assert.equal(row.free_quantity, row.quantity - row.confirmed)
+  }
+  ok('K021 rellena R con las reservas confirmadas y deriva F = Q - O - R - E - X')
+  const [full] = counted.filter(row => row.free_quantity === 0)
+  await rejected('reservados sobre Q', 'UPDATE lots SET reserved_quantity = reserved_quantity + 1 WHERE id = $1',
+    [full.id], '23514', 'lots_inventory_total_check')
+  await rejected('Q bajo lo comprometido', 'UPDATE lots SET quantity = quantity - 1 WHERE id = $1',
+    [full.id], '23514', 'lots_inventory_total_check')
+  for (const column of ['offered_quantity', 'reserved_quantity', 'delivered_quantity', 'expired_quantity']) {
+    await rejected(`${column} negativo`, `UPDATE lots SET ${column} = -1 WHERE id = $1`,
+      [full.id], '23514', 'lots_inventory_counters_check')
+  }
+  await rejected('F escrito a mano', 'UPDATE lots SET free_quantity = 1 WHERE id = $1', [full.id], '428C9')
+  assert.deepEqual(await inventory(), counted)
   // K014 solo agrega lot_photos: las tablas previas conservan OID.
   const withPhotos = await snapshot()
   assert.deepEqual(withPhotos.filter(row => row.relname !== 'lot_photos'), before)
@@ -226,6 +254,12 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='lots' AND column_name LIKE '%\\_quantity'`), [])
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  assert.deepEqual(await snapshot(), withPhotos)
+  ok('rollback K021 retira solo los contadores y conserva lotes y compromisos')
   run('down', '1')
   assert.deepEqual(await snapshot(), before)
   ok('rollback K014 retira solo lot_photos')
