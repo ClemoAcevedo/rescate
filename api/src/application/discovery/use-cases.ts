@@ -1,9 +1,10 @@
 import { lotNotFound, idempotencyConflict, InventoryDiscrepancyError } from '../errors.js'
 import type { DiscoveryRepository, SearchFilters } from './ports.js'
 import type { Actor } from '../lots/ports.js'
+import type { PickupCodes } from '../reservations/ports.js'
 import { requireDirectReservation, requireReservationQuantity } from '../../domain/reservations.js'
 
-export function createDiscoveryUseCases(repository: DiscoveryRepository, now: () => Date) {
+export function createDiscoveryUseCases(repository: DiscoveryRepository, codes: PickupCodes, now: () => Date) {
   return {
     async search(filters: SearchFilters) {
       const result = await repository.search(filters, now())
@@ -29,7 +30,8 @@ export function createDiscoveryUseCases(repository: DiscoveryRepository, now: ()
         if (!state.reconciled) throw new InventoryDiscrepancyError(lotId)
         // El instante viene de la base después del bloqueo, no del reloj del proceso.
         requireDirectReservation(state.lot, quantity, state.active, state.now)
-        return writer.insert(quantity, state.now)
+        // Una reserva confirmada nace con su código de retiro (RF06); cada reserva recibe uno nuevo.
+        return writer.insert(quantity, state.now, codes.issue())
       })
     },
   }

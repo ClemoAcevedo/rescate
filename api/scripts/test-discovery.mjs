@@ -6,6 +6,7 @@ import { assertContract } from '../test/support/openapi.ts'
 import { createDiscoveryRepository } from '../dist/infrastructure/postgres/discovery-repository.js'
 import { createDiscoveryUseCases } from '../dist/application/discovery/use-cases.js'
 import { createPool } from '../dist/infrastructure/postgres/pool.js'
+import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 import { createApi } from '../dist/composition.js'
 
 const connectionString = process.env.DATABASE_URL
@@ -13,7 +14,7 @@ assert.ok(connectionString && /^rescate_(k015_test_|web_test_)/.test(new URL(con
   'Se requiere base de prueba aislada K015 o web')
 const database = new pg.Client({ connectionString })
 const api = createApi({ ...process.env, RESCATE_ALLOWED_ORIGINS: 'https://localhost:5173',
-  CSRF_SIGNING_KEY: randomBytes(32).toString('base64') })
+  CSRF_SIGNING_KEY: randomBytes(32).toString('base64'), PICKUP_CODE_KEY: randomBytes(32).toString('base64') })
 const server = api.app.listen(0, '127.0.0.1')
 await new Promise(resolve => server.once('listening', resolve))
 let checks = 0
@@ -180,19 +181,20 @@ try {
   const repository = createDiscoveryRepository(pool)
   const buyerId = (await database.query('SELECT id::text FROM users WHERE email=$1', [email])).rows[0].id
   try {
+    const codes = createPickupCodes(randomBytes(32))
     const failing = createDiscoveryUseCases({ ...repository,
       withReservationTransaction: (user, lot, key, operate) => repository.withReservationTransaction(user, lot, key,
         (state, writer) => operate(state, { insert: async (...args) => {
           await writer.insert(...args); throw new Error('fallo posterior a inserción')
         } })),
-    }, () => new Date())
+    }, codes, () => new Date())
     const rollbackKey = randomUUID()
     await assert.rejects(failing.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey), /fallo posterior/)
     assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE user_id=$1 AND idempotency_key=$2', [buyerId, rollbackKey])).rows[0].n, 0)
     assert.equal((await database.query('SELECT reserved_quantity FROM lots WHERE public_id=$1', [nearIds[2]])).rows[0].reserved_quantity, 0)
-    const cases = createDiscoveryUseCases(repository, () => new Date())
+    const cases = createDiscoveryUseCases(repository, codes, () => new Date())
     const original = await cases.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey)
-    const replayAfterRestart = createDiscoveryUseCases(createDiscoveryRepository(pool), () => new Date())
+    const replayAfterRestart = createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date())
     assert.deepEqual(await replayAfterRestart.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey), original)
     ok('rollback de reserva y clave juntos; relectura desde otra instancia conserva el resultado')
 
@@ -261,7 +263,7 @@ try {
     const blind = createDiscoveryUseCases({ ...repository,
       withReservationTransaction: (user, lot, key, operate) => repository.withReservationTransaction(user, lot, key,
         (state, writer) => operate(state.lot ? { ...state, lot: { ...state.lot, availableQuantity: 99 } } : state, writer)),
-    }, () => new Date())
+    }, codes, () => new Date())
     const blindKey = randomUUID()
     await assert.rejects(blind.reserve({ userId: buyerId }, contested, 1, blindKey), { constraint: 'lots_inventory_total_check' })
     assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE idempotency_key=$1', [blindKey])).rows[0].n, 0)

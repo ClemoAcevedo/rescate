@@ -1,8 +1,9 @@
 # Contrato HTTP de S02
 
 [openapi.yaml](openapi.yaml) es la fuente de verdad HTTP para identidad,
-publicación, búsqueda pública y reserva directa. Usa OpenAPI 3.1.0 en un solo
-archivo. [Lotes](../lotes.md) describe las reglas de RF02–RF04 y
+publicación, búsqueda pública, reserva directa, cancelación y retiro. Usa
+OpenAPI 3.1.0 en un solo archivo. [Lotes](../lotes.md) describe las reglas de
+RF02–RF04, [reservas](../reservas.md) las de RF05, RF06 y RF08, y
 [ADR 0004](../adr/0004-reserva-directa-idempotente.md) define la idempotencia.
 
 OpenAPI define transporte, seguridad, requests, responses y errores. Las
@@ -88,6 +89,11 @@ cuerpo JSON `400`, `413`, `415`, `422`; no sustituyen errores de autorización.
 | `uploadLotPhoto` · POST `/lots/{lotId}/photos` | Sesión y permiso; lote en borrador | C | 202, 400, 401, 403, 404, 409, 413 (5 MiB), 415, 422, G | RF02 / K014 |
 | `removeLotPhoto` · DELETE `/lots/{lotId}/photos/{photoId}` | Sesión y permiso; lote en borrador | C | 204, 401, 403, 404, 409, G | RF02 / K014 |
 | `getLotPhotoImage` · GET `/lots/{lotId}/photos/{photoId}/{variant}` | Pública si el lote está publicado; si no, sesión y permiso | No, lectura | 200 (WebP), 404, G | RF02, RF03 / K014 |
+| `listReservations` · GET `/reservations` | Sesión; solo las propias | No, lectura | 200, 401, 422, G | RF05, RF06 / K022 |
+| `getReservation` · GET `/reservations/{reservationId}` | Sesión; titular | No, lectura | 200, 401, 404, G | RF06 / K022 |
+| `cancelReservation` · POST `/reservations/{reservationId}/cancel` | Sesión; titular | C | 200, 401, 403, 404, 409, J, G | RF05 / K022 |
+| `reviewPickupCode` · POST `/lots/{lotId}/pickup-reviews` | Sesión y permiso sobre establecimiento del lote | C | 200, 401, 403, 404, J, G | RF06 / K022 |
+| `confirmPickup` · POST `/lots/{lotId}/pickups` | Sesión y permiso sobre establecimiento del lote | C | 201, 401, 403, 404, 409, J, G | RF06, RF08 / K022 |
 
 RF01/RF02 provienen de anexos A p. 1; las tarjetas se relacionan en el
 [modelo inicial](../modelo-inicial.md), sección Fuera de K003, y en la planificación
@@ -97,6 +103,14 @@ Las operaciones `searchPublicLots` y `getPublicLot` son públicas y no usan sesi
 `reservePublicLot` exige actor autenticado, Origin y CSRF; su ruta pública describe
 el recurso, no un permiso anónimo para escribir. La cantidad y clave viajan en
 JSON, y los reintentos reproducen 201 con el mismo cuerpo.
+
+Las operaciones de [reservas](../reservas.md) devuelven el estado vigente al
+responder: una confirmada cuyo lote cerró se informa `expired`. El código de retiro
+solo aparece en `getReservation` y solo se envía en cuerpos JSON, por eso revisarlo
+usa POST aunque no cambie estado. Una reserva ajena responde 404, igual que una
+inexistente; un código inexistente, mal escrito o de otro lote también. `confirmPickup`
+lleva `idempotencyKey` por operador ([ADR 0007](../adr/0007-codigo-de-retiro-y-transiciones.md));
+cancelar es idempotente por efecto y no necesita clave.
 
 ## Sesión, establecimientos y CSRF
 

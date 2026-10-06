@@ -82,28 +82,31 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
         if (!locked || !lot) return operate({ existing: null, lot: null }, {
           insert: async () => { throw new Error('No se reserva sin lote publicado') },
         })
-        // R se contrasta con las reservas confirmadas que lo respaldan (anexos B p. 4).
+        // R y E se contrastan con las reservas confirmadas y las entregas que los respaldan (anexos B p. 4).
         const found = await client.query<{ active: boolean; reconciled: boolean }>(
           `SELECT EXISTS (SELECT 1 FROM public.commitments
              WHERE user_id = $1 AND lot_id = l.id AND status = 'confirmed') AS active,
            l.reserved_quantity = COALESCE((SELECT sum(c.quantity) FROM public.commitments c
-             WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0) AS reconciled
+             WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
+           AND l.delivered_quantity = COALESCE((SELECT sum(d.quantity) FROM public.deliveries d
+             JOIN public.commitments c ON c.id = d.commitment_id WHERE c.lot_id = l.id), 0) AS reconciled
            FROM public.lots l WHERE l.id = $2`,
           [userId, locked.lotId],
         )
         const { active, reconciled } = found.rows[0]!
         return operate({ existing: null, lot, active, reconciled, now: locked.at }, {
-          insert: async (quantity, at) => {
+          insert: async (quantity, at, code) => {
             // F → R en la misma transacción: los CHECK del lote rechazan sobreasignación.
             await client.query(
               'UPDATE public.lots SET reserved_quantity = reserved_quantity + $2 WHERE id = $1',
               [locked.lotId, quantity],
             )
             const inserted = await client.query<ReservationRow>(
-              `INSERT INTO public.commitments (user_id, lot_id, quantity, status, created_at, idempotency_key)
-               VALUES ($1, $2, $3, 'confirmed', $4, $5)
+              `INSERT INTO public.commitments (user_id, lot_id, quantity, status, created_at, idempotency_key,
+                 pickup_code_ciphertext, pickup_code_fingerprint)
+               VALUES ($1, $2, $3, 'confirmed', $4, $5, $7, $8)
                RETURNING public_id::text AS id, $6::text AS lot_id, quantity, created_at`,
-              [userId, locked.lotId, quantity, at, key, lotId],
+              [userId, locked.lotId, quantity, at, key, lotId, Buffer.from(code.ciphertext), Buffer.from(code.fingerprint)],
             )
             return toReservation(inserted.rows[0]!)
           },

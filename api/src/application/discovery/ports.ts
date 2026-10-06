@@ -1,3 +1,5 @@
+import type { IssuedPickupCode } from '../reservations/ports.js'
+
 export interface PublicLot {
   id: string
   description: string
@@ -41,8 +43,8 @@ export interface Reservation {
 }
 
 export interface ReservationWriter {
-  /** Crea la reserva y mueve la misma cantidad de libres a reservados (F → R). */
-  insert(quantity: number, at: Date): Promise<Reservation>
+  /** Crea la reserva con su código y mueve la misma cantidad de libres a reservados (F → R). */
+  insert(quantity: number, at: Date, code: IssuedPickupCode): Promise<Reservation>
 }
 
 /** Resultado previo de la clave, o el lote releído bajo bloqueo con el reloj de la base. */

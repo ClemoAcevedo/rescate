@@ -10,6 +10,8 @@ K015 añade identidad pública y clave de reserva, más PostGIS e índice geogr�
 GiST sobre coordenadas existentes. La migración espacial instala PostGIS si falta;
 su rollback retira solo el índice, conserva la extensión compartida. El rol de
 migración debe poder instalarla o un administrador debe provisionarla antes.
+K014 añade `lot_photos`, K021 los contadores de inventario del lote y K022 los
+estados terminales de la reserva, el código de retiro cifrado y `deliveries`.
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003
@@ -37,9 +39,10 @@ No ejecutar primero `db:migrate` sobre esa base de prueba: debe empezar vacía.
 
 El job Compose existente ejecuta la misma suite en CI. No hay migración automática
 al arrancar la API. Para migrar una base normal siguen vigentes `db:migrate` y
-`db:rollback`; este último revierte una migración: actualmente retira el índice geográfico. Revertir la migración anterior
-elimina los ID públicos y claves de reserva; no hacerlo sobre reservas que deban
-conservar su identidad o idempotencia. Retroceder hasta K003 elimina sus tablas y datos. No usarlo en una base con datos que deban conservarse.
+`db:rollback`; este último revierte una migración. La más reciente (K022) borra
+entregas y códigos de retiro y falla si quedan reservas canceladas, vencidas o
+retiradas. Revertir K015 elimina los ID públicos y claves de reserva; no hacerlo
+sobre reservas que deban conservar su identidad o idempotencia. Retroceder hasta K003 elimina sus tablas y datos. No usarlo en una base con datos que deban conservarse.
 Ver [resultados K003](evidencia/k003.md). La sección de aceptación K002 de abajo
 describe la versión histórica del script, reemplazada por esta prueba integrada.
 

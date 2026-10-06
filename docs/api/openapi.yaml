@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública y reserva directa, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -21,6 +21,9 @@ tags:
   -
     name: "Discovery"
     description: "RF03/RF04: exploración pública y reserva directa."
+  -
+    name: "Reservations"
+    description: "RF05/RF06/RF08: reservas del titular, cancelación, código de retiro y entrega acreditada por el operador."
 paths:
   "/public/lots":
     get:
@@ -107,6 +110,152 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations":
+    get:
+      operationId: "listReservations"
+      summary: "Listar las reservas propias"
+      description: "Reservas del actor de la sesión, vigentes y terminadas, por creación descendente en páginas de 20. No incluye códigos de retiro. status es el estado vigente al leer: una confirmada cuyo lote cerró se informa expired aunque el trabajador aún no lo haya registrado."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de reservas propias."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations/{reservationId}":
+    parameters:
+      - $ref: "#/components/parameters/ReservationId"
+    get:
+      operationId: "getReservation"
+      summary: "Consultar una reserva propia y su código"
+      description: "Solo el titular. Una reserva ajena o inexistente responde 404 sin distinguirlas. pickupCode solo aparece mientras la reserva está confirmada y su lote no cerró; cancelada, vencida o retirada devuelve null y el código ya no sirve en el backend. Una reserva confirmada antes de existir códigos recibe el suyo en esta consulta."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Reserva del titular."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations/{reservationId}/cancel":
+    parameters:
+      - $ref: "#/components/parameters/ReservationId"
+    post:
+      operationId: "cancelReservation"
+      summary: "Cancelar una reserva propia"
+      description: "Solo el titular cancela una reserva confirmada antes del cierre del lote. Bajo bloqueo del lote invalida el código y devuelve los packs a libres en la misma transacción. Repetir sobre una cancelada responde 200 con el mismo estado y no libera de nuevo. 409 si ya fue retirada o venció; 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CancelReservationRequest" }
+      responses:
+        "200":
+          description: "Reserva cancelada, sin código."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/pickup-reviews":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "reviewPickupCode"
+      summary: "Revisar un código de retiro"
+      description: "Operador con membership actual sobre el establecimiento del lote. El código va en el cuerpo, nunca en la ruta. Muestra la reserva del lote con ese código, también si fue cancelada, venció o ya se retiró; no consume el código ni garantiza la entrega. Mayúsculas, espacios y guiones no importan; I/L se leen como 1 y O como 0. Un código inexistente, mal formado o de otro lote responde 404 sin más información. Usa POST porque el código no puede ir en la URL; no cambia estado."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PickupReviewRequest" }
+      responses:
+        "200":
+          description: "Reserva correspondiente al código y si hoy podría confirmarse."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PickupReview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/pickups":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "confirmPickup"
+      summary: "Confirmar el retiro de una reserva"
+      description: "Operador con membership actual. Bajo bloqueo del lote vuelve a comprobar permiso, reserva, código y ventana aunque la revisión previa haya sido válida: se retira desde el inicio de la ventana y antes de su cierre. Registra una única entrega completa, consume el código y mueve los packs de reservados a retirados en la misma transacción. idempotencyKey es un UUID por operador: repetir la misma clave y parámetros reproduce 201 y el cuerpo original; con otros parámetros responde 409. Otro intento sobre una reserva ya retirada responde 409. Los errores no consumen la clave. 409 también si fue cancelada, venció o la ventana aún no comienza; 404 si el código no corresponde a esa reserva del lote."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmPickupRequest" }
+      responses:
+        "201":
+          description: "Entrega registrada o reproducción del resultado original con la misma clave."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PickupResponse" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
@@ -858,6 +1007,14 @@ components:
       schema:
         $ref: "#/components/schemas/PublicId"
       example: "lot_demo_R4q"
+    ReservationId:
+      name: "reservationId"
+      in: "path"
+      required: true
+      description: "Identificador público de la reserva; no es el código de retiro ni concede acceso."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "res_demo_K9w"
   headers:
     NoStore:
       description: "Todas las respuestas de estas operaciones llevan Cache-Control: no-store."
@@ -926,7 +1083,7 @@ components:
               code: "FORBIDDEN"
               message: "No se permite esta operación."
     NotFound:
-      description: "NOT_FOUND: El establecimiento o lote solicitado no existe."
+      description: "NOT_FOUND: El establecimiento, lote o reserva solicitado no existe o no es del actor, o el código no corresponde a una reserva del lote."
       headers:
         Cache-Control:
           $ref: "#/components/headers/NoStore"
@@ -939,7 +1096,7 @@ components:
               code: "NOT_FOUND"
               message: "Recurso inexistente."
     Conflict:
-      description: "CONFLICT: Conflicto con el estado actual: correo ya registrado, versión obsoleta o lote que ya no es borrador, según la operación."
+      description: "CONFLICT: Conflicto con el estado actual: correo ya registrado, versión obsoleta, lote que ya no es borrador, clave usada con otros parámetros o reserva cancelada, vencida, ya retirada o fuera de la ventana, según la operación."
       headers:
         Cache-Control:
           $ref: "#/components/headers/NoStore"
@@ -1144,8 +1301,125 @@ components:
         id: { $ref: "#/components/schemas/PublicId" }
         lotId: { $ref: "#/components/schemas/PublicId" }
         quantity: { type: integer, minimum: 1, maximum: 2147483647 }
-        status: { type: string, const: confirmed }
+        status: { type: string, const: confirmed, description: "Resultado de la creación. Un reintento con la misma clave lo reproduce aunque la reserva haya terminado; el estado vigente y el código se consultan en GET /reservations/{reservationId}." }
         createdAt: { $ref: "#/components/schemas/Instant" }
+    ReservationStatus:
+      type: string
+      enum: [confirmed, cancelled, expired, delivered]
+      description: "Estado vigente al responder. confirmed: vigente; cancelled: cancelada por su titular; expired: el lote cerró sin retiro, aunque el trabajador aún no lo haya registrado; delivered: retiro acreditado. Los tres últimos son terminales."
+    ReservationLot:
+      type: object
+      additionalProperties: false
+      required: [id, description, conditions, address, latitude, longitude, timeZone, pickupStartsAt, pickupEndsAt]
+      description: "Lote de la reserva para su titular: contenido, lugar y plazo publicados."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+        conditions: { $ref: "#/components/schemas/Conditions" }
+        address: { $ref: "#/components/schemas/Address" }
+        latitude: { $ref: "#/components/schemas/Latitude" }
+        longitude: { $ref: "#/components/schemas/Longitude" }
+        timeZone: { $ref: "#/components/schemas/TimeZone" }
+        pickupStartsAt: { $ref: "#/components/schemas/Instant" }
+        pickupEndsAt: { $ref: "#/components/schemas/Instant" }
+    ReservationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, quantity, status, createdAt, endedAt, lot]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/ReservationStatus" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time, description: "Instante en que terminó; null mientras está confirmada. Una reserva vencida terminó al cierre del lote." }
+        lot: { $ref: "#/components/schemas/ReservationLot" }
+    ReservationDetail:
+      type: object
+      additionalProperties: false
+      required: [id, quantity, status, createdAt, endedAt, lot, pickupCode]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/ReservationStatus" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time, description: "Instante en que terminó; null mientras está confirmada." }
+        lot: { $ref: "#/components/schemas/ReservationLot" }
+        pickupCode: { type: [string, "null"], pattern: "^[0-9A-HJKMNP-TV-Z]{8}$", description: "Código de retiro: credencial de ocho caracteres para mostrar al operador. Solo mientras status es confirmed; si no, null. No guardarlo en URL, historial, logs ni almacenamiento persistente del navegador." }
+      example:
+        id: "res_demo_K9w"
+        quantity: 2
+        status: "confirmed"
+        createdAt: "2030-01-15T12:00:00Z"
+        endedAt: null
+        lot:
+          id: "lot_demo_R4q"
+          description: "Pack de cuatro panes surtidos."
+          conditions: null
+          address: "Dirección ficticia 123"
+          latitude: -33.45
+          longitude: -70.66
+          timeZone: "America/Santiago"
+          pickupStartsAt: "2030-01-15T18:00:00Z"
+          pickupEndsAt: "2030-01-15T21:00:00Z"
+        pickupCode: "7KQ2M9XA"
+    ReservationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ReservationSummary" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+    CancelReservationRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: "Objeto vacío: la reserva sale de la ruta y el actor de la sesión."
+    PickupCode:
+      type: string
+      minLength: 1
+      maxLength: 32
+      description: "Código tal como lo dicta la persona; el servidor ignora espacios, guiones y mayúsculas. Nunca en URL ni logs."
+    PickupReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { $ref: "#/components/schemas/PickupCode" }
+    ReviewedReservation:
+      type: object
+      additionalProperties: false
+      required: [id, quantity, status, createdAt, endedAt]
+      description: "Reserva vista por el operador: sin datos del titular ni el código."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/ReservationStatus" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time }
+    PickupReview:
+      type: object
+      additionalProperties: false
+      required: [reservation, canConfirm]
+      properties:
+        reservation: { $ref: "#/components/schemas/ReviewedReservation" }
+        canConfirm: { type: boolean, description: "true si la reserva está confirmada y la ventana ya comenzó. Es orientativo: confirmar vuelve a validar todo bajo bloqueo. false con status confirmed significa que la ventana aún no comienza." }
+    ConfirmPickupRequest:
+      type: object
+      additionalProperties: false
+      required: [reservationId, code, idempotencyKey]
+      properties:
+        reservationId: { type: string, format: uuid, description: "Reserva mostrada por la revisión." }
+        code: { $ref: "#/components/schemas/PickupCode" }
+        idempotencyKey: { type: string, format: uuid, description: "UUID generado por el cliente para esta confirmación; único por operador." }
+    PickupResponse:
+      type: object
+      additionalProperties: false
+      required: [reservationId, quantity, deliveredAt]
+      properties:
+        reservationId: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs entregados: la reserva completa." }
+        deliveredAt: { $ref: "#/components/schemas/Instant" }
     PublicId:
       type: "string"
     LotPhoto:

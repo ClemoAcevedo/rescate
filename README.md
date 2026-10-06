@@ -103,9 +103,9 @@ npm ci
 npm run dev
 ```
 
-La API necesita `DATABASE_URL`, `RESCATE_ALLOWED_ORIGINS`, `CSRF_SIGNING_KEY` y
-un esquema ya migrado. Copia `api/.env.example` a `api/.env`, configura una clave
-propia y aplica las migraciones antes de iniciarla. K008 exige `users` vacío al
+La API necesita `DATABASE_URL`, `RESCATE_ALLOWED_ORIGINS`, `CSRF_SIGNING_KEY`,
+`PICKUP_CODE_KEY` y un esquema ya migrado. Copia `api/.env.example` a `api/.env`,
+configura claves propias y aplica las migraciones antes de iniciarla. K008 exige `users` vacío al
 aplicar su migración: si hay filas, aborta sin modificarlas. Configuración HTTPS,
 pruebas y explicación de seguridad en [K008](docs/k008-identidad.md).
 
@@ -256,8 +256,9 @@ lo cambia.
   reserva directa con API real (K016).
 - **API:** `/health`, identidad y sesiones (K008), borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
-  protegido por la base (K021), carga, lectura y
-  retiro de fotos (K014), según OpenAPI.
+  protegido por la base (K021), reservas del titular con código de retiro, cancelación,
+  revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
+  retiro de fotos (K014), según OpenAPI. Las pantallas de reserva y retiro son K023/K024.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
   (K014).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);

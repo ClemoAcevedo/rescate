@@ -13,6 +13,8 @@ export type ApplicationErrorCode =
   | "photo_storage_unavailable"
   | "concurrent_photo_uploads"
   | "inventory_discrepancy"
+  | "reservation_not_found"
+  | "pickup_code_not_found"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -37,7 +39,15 @@ export const versionConflict = (): ApplicationError =>
   new ApplicationError("version_conflict", "El lote cambió desde su última lectura.")
 
 export const idempotencyConflict = (): ApplicationError =>
-  new ApplicationError("idempotency_conflict", "La reserva no puede confirmarse con el estado actual.")
+  new ApplicationError("idempotency_conflict", "La clave ya se usó con otros parámetros.")
+
+/** Inexistente o de otra persona: no se distingue para no revelar reservas ajenas. */
+export const reservationNotFound = (): ApplicationError =>
+  new ApplicationError("reservation_not_found", "La reserva no existe.")
+
+/** Código inexistente, mal formado o de otro lote: no expone información. */
+export const pickupCodeNotFound = (): ApplicationError =>
+  new ApplicationError("pickup_code_not_found", "El código no corresponde a una reserva del lote.")
 
 export const establishmentNotFound = (): ApplicationError =>
   new ApplicationError("establishment_not_found", "El establecimiento no existe.")

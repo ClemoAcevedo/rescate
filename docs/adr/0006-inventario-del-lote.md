@@ -34,10 +34,11 @@ del proceso, así que plazos y estado se evalúan con lo vigente tras la espera.
 fijan `lock_timeout` en 2 s (anexos H p. 20).
 
 Bajo el bloqueo, antes de asignar, el comando contrasta cada contador con los
-registros que lo respaldan; hoy R con la suma de reservas confirmadas. Si difieren,
+registros que lo respaldan: R con la suma de reservas confirmadas y E con la de
+entregas ([ADR 0007](0007-codigo-de-retiro-y-transiciones.md)). Si difieren,
 Application rechaza la asignación (409) y HTTP registra `inventory_discrepancy` con
 el lote para revisión. Reproducir una clave ya confirmada no asigna y sigue
-funcionando. O, E y X sumarán su contraste cuando existan sus registros.
+funcionando. O y X sumarán su contraste cuando existan sus registros.
 
 ## Alternativas descartadas
 
