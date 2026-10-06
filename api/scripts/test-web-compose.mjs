@@ -53,6 +53,7 @@ try {
   const photoEnv = { PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: join(dir, 'photos') }
   children.push(spawn(process.execPath, ['dist/index.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'], env: {
     ...env, ...photoEnv, PORT: String(apiPort), RESCATE_ALLOWED_ORIGINS: webUrl, CSRF_SIGNING_KEY: randomBytes(32).toString('base64'),
+    PICKUP_CODE_KEY: randomBytes(32).toString('base64'),
   } }))
   children.push(spawn(process.execPath, ['dist/worker.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'], env: { ...env, ...photoEnv } }))
   children.push(spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', '5174', '--strictPort'], {
@@ -67,7 +68,7 @@ try {
   }
   if (!up) throw new Error('API o Vite no respondieron')
 
-  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'test:web:discovery']) {
+  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery']) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }
   console.log(`Base de prueba conservada: ${database}. No se alteró la base de desarrollo.`)

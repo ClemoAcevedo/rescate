@@ -35,6 +35,8 @@
     "test:web:discovery": "node --env-file-if-exists=.env scripts/test-web-discovery.mjs",
     "test:web:compose": "npm run build && node scripts/test-web-compose.mjs",
     "db:test:discovery:compose": "node scripts/test-discovery-compose.mjs",
+    "db:test:reservations": "npm run build && node --import tsx scripts/test-reservations.mjs",
+    "db:test:reservations:compose": "node scripts/test-reservations-compose.mjs",
     "db:test:photos": "npm run build && node --import tsx scripts/test-photos.mjs",
     "db:test:photos:compose": "node scripts/test-photos-compose.mjs"
   },

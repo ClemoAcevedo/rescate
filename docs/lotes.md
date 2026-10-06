@@ -130,22 +130,23 @@ Application coordina la transacción mediante `withReservationTransaction`:
 
 1. Serializa la clave por actor y lee un resultado previo.
 2. Si no existe, bloquea el lote con `FOR UPDATE`, lee el reloj de PostgreSQL y
-   relee disponibilidad y compromiso activo. Si los reservados del lote no
-   coinciden con sus reservas confirmadas, rechaza con 409 y registra
-   `inventory_discrepancy` para revisión.
+   relee disponibilidad y compromiso activo. Si los reservados o retirados del
+   lote no coinciden con sus reservas confirmadas o entregas, rechaza con 409 y
+   registra `inventory_discrepancy` para revisión.
 3. Domain exige packs enteros positivos, stock suficiente, ausencia de otro
    compromiso activo del mismo usuario/lote y un instante anterior al cierre.
-4. Inserta reserva y clave y mueve la cantidad de libres a reservados (F → R), todo
-   junto. HTTP responde solo después del commit.
+4. Inserta reserva, clave y código de retiro cifrado y mueve la cantidad de libres a
+   reservados (F → R), todo junto. HTTP responde solo después del commit.
 
 La espera por cada bloqueo tiene un límite de 2 s. Si se supera, la transacción
 revierte y responde 503; el mismo intento se puede repetir sin consumir su clave.
 
 Se puede reservar antes del inicio del retiro. La cantidad publicada no cambia;
 la disponibilidad es F, la columna de libres del lote. Los CHECK de la base impiden
-que quede negativa ([ADR 0006](adr/0006-inventario-del-lote.md)). Aún no hay cola,
-ofertas, cancelaciones, códigos ni retiros: cada uno moverá sus contadores bajo el
-mismo bloqueo y la cola FIFO se atenderá según ADR 0002.
+que quede negativa ([ADR 0006](adr/0006-inventario-del-lote.md)). Cada reserva nace
+con su código de retiro; cancelarla, retirarla o vencerla se describe en
+[reservas](reservas.md). La cola FIFO y las ofertas se atenderán según ADR 0002
+bajo el mismo bloqueo.
 
 La clave UUID viaja en `idempotencyKey`. Un resultado confirmado reproduce el
 mismo 201 y cuerpo con la misma clave y parámetros, incluso tras cerrar el lote.

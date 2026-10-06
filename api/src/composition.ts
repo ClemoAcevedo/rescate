@@ -5,6 +5,9 @@ import { createDiscoveryUseCases } from "./application/discovery/use-cases.js"
 import { createIdentityUseCases } from "./application/identity/use-cases.js"
 import { createLotRepository } from "./infrastructure/postgres/lot-repository.js"
 import { createDiscoveryRepository } from "./infrastructure/postgres/discovery-repository.js"
+import { createReservationUseCases } from "./application/reservations/use-cases.js"
+import { createReservationRepository } from "./infrastructure/postgres/reservation-repository.js"
+import { createPickupCodes } from "./infrastructure/crypto/pickup-codes.js"
 import { createEmailCanonicalizer, createIdentityRepository } from "./infrastructure/postgres/identity-repository.js"
 import { createSessionRepository } from "./infrastructure/postgres/session-repository.js"
 import { createLoginSecurityRepository } from "./infrastructure/postgres/login-security-repository.js"
@@ -22,6 +25,7 @@ import { createApp } from "./app.js"
 import { createPhotosRouter } from "./http/photos-router.js"
 import { createLotsRouter } from "./http/lots-router.js"
 import { createDiscoveryRouter } from "./http/discovery-router.js"
+import { createReservationsRouter } from "./http/reservations-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { createTrafficLimits } from "./http/rate-limits.js"
@@ -45,6 +49,19 @@ export function readAuthConfiguration(environment: NodeJS.ProcessEnv) {
   const key = Buffer.from(encoded, "base64")
   if (key.length < 32 || key.toString("base64") !== encoded) throw new Error("CSRF_SIGNING_KEY requiere al menos 32 bytes aleatorios en base64 canónico")
   return { origins: new Set(values), key }
+}
+/**
+ * PICKUP_CODE_KEY cifra los códigos de retiro y deriva su huella (anexos H p. 21).
+ * Vive fuera de la base; perderla deja ilegibles los códigos vigentes.
+ */
+export function readPickupCodeKey(environment: NodeJS.ProcessEnv): Uint8Array {
+  const encoded = environment.PICKUP_CODE_KEY ?? ""
+  if (environment.NODE_ENV === "production" && encoded === "cmVzY2F0ZS1kZXYtb25seS1waWNrdXAtY29kZS1rZXk=") {
+    throw new Error("La clave ficticia de Compose no es válida en producción")
+  }
+  const key = Buffer.from(encoded, "base64")
+  if (key.length < 32 || key.toString("base64") !== encoded) throw new Error("PICKUP_CODE_KEY requiere al menos 32 bytes aleatorios en base64 canónico")
+  return key
 }
 /**
  * PHOTO_STORAGE elige el almacenamiento de fotos: `s3` (bucket privado B2) o
@@ -92,9 +109,13 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
     images: null, now: () => new Date(), log: event => console.error(event) })
   const photosRouter = createPhotosRouter({ useCases: photos, authenticate: authentication.authenticate,
     protectCommand: authentication.protectCommand })
-  const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), () => new Date()),
+  const codes = createPickupCodes(readPickupCodeKey(environment))
+  const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date()),
     authentication.authenticate, authentication.protectCommand)
-  return { app: createApp({ lotsRouter, discoveryRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
+  const reservationsRouter = createReservationsRouter(
+    createReservationUseCases(createReservationRepository(pool), codes, () => new Date()),
+    authentication.authenticate, authentication.protectCommand)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
       try { limits.ip(req.ip ?? req.socket.remoteAddress ?? "unknown"); next() }

@@ -19,6 +19,7 @@ import { createSharpImageProcessor } from '../dist/infrastructure/images/sharp-i
 import { createLotUseCases } from '../dist/application/lots/use-cases.js'
 import { createPhotoUseCases, PROCESSING_LEASE_MS } from '../dist/application/photos/use-cases.js'
 import { createDiscoveryUseCases } from '../dist/application/discovery/use-cases.js'
+import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 import { photoObjectKeys } from '../dist/domain/photos.js'
 import { createApi } from '../dist/composition.js'
 import { assertContract } from '../test/support/openapi.ts'
@@ -212,7 +213,7 @@ try {
   const publicPhoto = await photos.read(null, second.publicId, a.publicId, 'display')
   assert.equal(publicPhoto.published, true)
   assert.equal((await sharp(publicPhoto.bytes).metadata()).format, 'webp')
-  const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), now)
+  const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), createPickupCodes(randomBytes(32)), now)
   const detail = await discovery.get(second.publicId)
   const [cover] = await query(`SELECT public_id::text FROM lot_photos WHERE status = 'ready'
     AND lot_id = (SELECT id FROM lots WHERE public_id = $1) ORDER BY position LIMIT 1`, [second.publicId])
@@ -268,7 +269,8 @@ try {
   // HTTP real: sesión K008, Origin/CSRF, cuerpo binario y respuestas contra OpenAPI.
   const origin = 'https://localhost:3443'
   const api = createApi({ DATABASE_URL: process.env.DATABASE_URL, RESCATE_ALLOWED_ORIGINS: origin,
-    CSRF_SIGNING_KEY: randomBytes(32).toString('base64'), PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: storage })
+    CSRF_SIGNING_KEY: randomBytes(32).toString('base64'), PICKUP_CODE_KEY: randomBytes(32).toString('base64'),
+    PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: storage })
   const httpServer = api.app.listen(0, '127.0.0.1')
   await once(httpServer, 'listening')
   const base = `http://127.0.0.1:${httpServer.address().port}`

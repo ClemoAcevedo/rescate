@@ -34,13 +34,17 @@ restricciones existentes y calcula disponibilidad después de bloquear el lote.
 Ver [lotes](lotes.md#búsqueda-y-reserva-directa) y [ADR 0004](adr/0004-reserva-directa-idempotente.md).
 K014 agrega `lot_photos`: lote, autor, posición 1–3, estado, plazo de carga, formato,
 tamaño, dimensiones y motivo de rechazo. Ver [fotos](fotos.md).
+K021 agrega los contadores O, R, E y X del lote. K022 amplía `commitments.status`
+a cancelada, vencida y retirada con `ended_at`, guarda el código de retiro cifrado y
+su huella, y crea `deliveries` con una entrega por reserva. Ver [reservas](reservas.md)
+y [ADR 0007](adr/0007-codigo-de-retiro-y-transiciones.md).
 
 **Modelo conceptual E2 (K013, 2026-09-21):** las secciones
 [Modelo conceptual E2](#modelo-conceptual-e2-k013) y posteriores describen el
 dominio que deben cubrir los siguientes casos de uso. No son una ampliación del
 SQL K003/K010 ni prueban una funcionalidad integrada: solicitudes, ofertas,
-códigos, entregas, conversaciones e incidencias siguen fuera de la persistencia y
-de las rutas actuales. Conservan las reglas E1 que no fueron modificadas y aplican
+conversaciones e incidencias siguen fuera de la persistencia y de las rutas
+actuales; reserva, código y entrega se implementan en K015, K021 y K022. Conservan las reglas E1 que no fueron modificadas y aplican
 la excepción de oferta parcial de [ADR 0002](adr/0002-ofertas-parciales.md).
 
 ## Fuentes y clasificación
@@ -197,8 +201,8 @@ Los términos se usan así:
 | Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Existe como borrador/publicado; no guarda fotos ni contadores. |
 | Foto de lote | Ser una imagen opcional que ayuda a describir un lote publicado. Sólo una foto lista y autorizada puede hacerse visible; el conjunto queda fijo al publicar. | Cada foto pertenece a exactamente un lote; un lote tiene de 0 a 3 según anexo I p. 25. | `lot_photos` (K014) guarda referencias y estado; los bytes están en objetos privados. Ver [fotos](fotos.md). |
 | Compromiso | Conservar la intención del usuario sobre una cantidad y, si corresponde, su reserva confirmada. Debe distinguir cantidad solicitada, ofrecida y confirmada. | Pertenece a un usuario y un lote; puede originar 0..N ofertas sucesivas sólo si las reglas futuras lo permiten; una reserva confirmada puede tener el código y la entrega que correspondan. | Sólo existe la reserva confirmada, sin solicitud/oferta ni cantidades separadas. |
-| Código de retiro | Presentar la credencial de una reserva confirmada para que su titular la consulte y un operador autorizado la revise antes de confirmar el retiro completo. No es un identificador público ni una autorización por sí solo. | Una reserva confirmada tiene un código de ocho caracteres; una solicitud en espera no lo tiene. Se consume al acreditar la única entrega completa. | No existe. Anexos A p. 2 y G pp. 13 y 16 lo definen; no se inventan rotaciones ni códigos alternativos. |
-| Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | No existe. |
+| Código de retiro | Presentar la credencial de una reserva confirmada para que su titular la consulte y un operador autorizado la revise antes de confirmar el retiro completo. No es un identificador público ni una autorización por sí solo. | Una reserva confirmada tiene un código de ocho caracteres; una solicitud en espera no lo tiene. Se consume al acreditar la única entrega completa. | K022: cifrado y huella en `commitments`; un estado terminal borra el cifrado. Sin rotaciones ni códigos alternativos. |
+| Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | K022: `deliveries`, única por reserva, con operador, cantidad, instante y clave de intención. |
 | Incidencia (RF11) | Registrar un problema descubierto sobre un lote, antes o después de entregar, con motivo e instrucciones, y comunicarlo a todos los vinculados sin reescribir entregas. | Pertenece a un lote; un lote tiene 0..N incidencias. Tiene un usuario autor, versiones publicadas por un operador miembro o administración, y 0..N destinatarios únicos por incidencia, versión y usuario. | No existe. Anexo I p. 26 define reporte, publicación, destinatarios, estados y cierre por incidencia; S08 (K043–K046) lo implementa. |
 | Conversación y mensaje | Mantener el intercambio asociado al compromiso cuando aplique; no sustituye estados ni autorización. | Una conversación corresponde a un compromiso; contiene 1..N mensajes, cada uno de un usuario participante. | E1 menciona chat, pero no hay implementación ni detalle suficiente para definir participantes adicionales o retención. |
 

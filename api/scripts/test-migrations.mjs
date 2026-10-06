@@ -16,6 +16,7 @@ const migrations = [
   '1790700000000_discovery-postgis',
   '1790800000000_lot-photos',
   '1790900000000_lot-inventory',
+  '1791000000000_reservation-transitions',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -129,8 +130,10 @@ async function verifyModel(laterTables = []) {
     await rejected(`${table}.${field}=NULL`, `UPDATE ${table} SET ${field}=NULL WHERE id=$1`, [row.id], '23502')
   }
   for (const [table, row] of [['lots', lot], ['commitments', commitment]]) {
+    // Con K022 aplicada, un estado distinto de confirmed también exige instante de término.
     await rejected(`${table}.status inválido`, `UPDATE ${table} SET status='inventado' WHERE id=$1`,
-      [row.id], '23514', table === 'lots' ? ['lots_status_check', 'lots_publication_check'] : 'commitments_status_check')
+      [row.id], '23514', table === 'lots' ? ['lots_status_check', 'lots_publication_check']
+        : ['commitments_status_check', 'commitments_ended_at_check'])
     await rejected(`${table}.status=NULL`, `UPDATE ${table} SET status=NULL WHERE id=$1`, [row.id], '23502')
   }
   await rejected('correo duplicado', 'INSERT INTO users(email) VALUES ($1)', [user.email], '23505', 'users_email_key')
@@ -237,14 +240,47 @@ try {
   }
   await rejected('F escrito a mano', 'UPDATE lots SET free_quantity = 1 WHERE id = $1', [full.id], '428C9')
   assert.deepEqual(await inventory(), counted)
-  // K014 solo agrega lot_photos: las tablas previas conservan OID.
-  const withPhotos = await snapshot()
+
+  // K022: los compromisos existentes siguen confirmados, sin término ni código.
+  const [held, second] = await query("SELECT id FROM commitments WHERE status = 'confirmed' ORDER BY id LIMIT 2")
+  assert.deepEqual(await query(`SELECT count(*)::int AS n FROM commitments WHERE ended_at IS NOT NULL
+    OR pickup_code_ciphertext IS NOT NULL OR pickup_code_fingerprint IS NOT NULL`), [{ n: 0 }])
+  await rejected('estado de reserva inventado', "UPDATE commitments SET status = 'usada', ended_at = now() WHERE id = $1",
+    [held.id], '23514', 'commitments_status_check')
+  await rejected('terminal sin instante de término', "UPDATE commitments SET status = 'cancelled' WHERE id = $1",
+    [held.id], '23514', 'commitments_ended_at_check')
+  await rejected('confirmada con término', 'UPDATE commitments SET ended_at = now() WHERE id = $1',
+    [held.id], '23514', 'commitments_ended_at_check')
+  await rejected('código cifrado sin huella', "UPDATE commitments SET pickup_code_ciphertext = '\\x01' WHERE id = $1",
+    [held.id], '23514', 'commitments_pickup_code_check')
+  await rejected('código legible en reserva terminada', `UPDATE commitments SET status = 'delivered', ended_at = now(),
+    pickup_code_ciphertext = '\\x01', pickup_code_fingerprint = '\\x02' WHERE id = $1`,
+    [held.id], '23514', 'commitments_pickup_code_check')
+  await query("UPDATE commitments SET pickup_code_ciphertext = '\\x01', pickup_code_fingerprint = '\\x02' WHERE id = $1", [held.id])
+  await rejected('huella de código repetida', "UPDATE commitments SET pickup_code_fingerprint = '\\x02' WHERE id = $1",
+    [second.id], '23505', 'commitments_pickup_code_fingerprint_key')
+  const delivery = `INSERT INTO deliveries (commitment_id, operator_user_id, quantity, delivered_at, idempotency_key)
+    SELECT $1, user_id, $2, now(), $3 FROM commitments WHERE id = $1`
+  const deliveryKey = '00000000-0000-4000-8000-000000000022'
+  await query(delivery, [held.id, 1, deliveryKey])
+  await rejected('segunda entrega de una reserva', delivery, [held.id, 1, '00000000-0000-4000-8000-000000000023'],
+    '23505', 'deliveries_commitment_key')
+  await rejected('entrega sin packs', delivery, [second.id, 0, '00000000-0000-4000-8000-000000000024'],
+    '23514', 'deliveries_quantity_check')
+  await query('DELETE FROM deliveries')
+  await query('UPDATE commitments SET pickup_code_ciphertext = NULL, pickup_code_fingerprint = NULL WHERE id = $1', [held.id])
+  ok('K022: estados terminales con instante, código cifrado solo en confirmadas, huella única y una entrega por reserva')
+
+  // K014 y K022 solo agregan tablas: las previas conservan OID.
+  const latest = await snapshot()
+  const withPhotos = latest.filter(row => row.relname !== 'deliveries')
   assert.deepEqual(withPhotos.filter(row => row.relname !== 'lot_photos'), before)
   assert.ok(withPhotos.some(row => row.relname === 'lot_photos'))
-  ok('K014 agrega lot_photos sin recrear tablas existentes')
+  assert.ok(latest.some(row => row.relname === 'deliveries'))
+  ok('K014 y K022 agregan lot_photos y deliveries sin recrear tablas existentes')
   run('up')
   assert.deepEqual(await history(), applied)
-  assert.deepEqual(await snapshot(), withPhotos)
+  assert.deepEqual(await snapshot(), latest)
   assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
   assert.equal(migrations.filter(name => !applied.some(row => row.name === name)).length, 0)
   ok('segunda ejecución: 0 pendientes; historial, OID de tablas y datos intactos')
@@ -254,6 +290,13 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='commitments'
+      AND (column_name = 'ended_at' OR column_name LIKE 'pickup\\_code%')`), [])
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  assert.deepEqual(await snapshot(), withPhotos)
+  ok('rollback K022 retira entregas y columnas del código y conserva compromisos')
   run('down', '1')
   assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
     WHERE table_schema='public' AND table_name='lots' AND column_name LIKE '%\\_quantity'`), [])
@@ -318,7 +361,7 @@ try {
   assert.deepEqual((await history()).map(row => row.name), migrations)
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
-  await verifyModel(['lot_photos'])
+  await verifyModel(['lot_photos', 'deliveries'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

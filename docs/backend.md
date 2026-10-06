@@ -13,7 +13,9 @@ sesiones persistentes, cookies, origen/CSRF y Actor real. No hay actor temporal
 en runtime. K015 añade búsqueda PostGIS y reserva directa bajo bloqueo;
 [ADR 0004](adr/0004-reserva-directa-idempotente.md) define sus reintentos.
 K014 agrega carga, lectura y retiro de [fotos](fotos.md); el [worker](../api/src/worker.ts)
-las valida y limpia objetos con los mismos casos de uso de Application.
+las valida y limpia objetos con los mismos casos de uso de Application. K022 agrega
+[reservas](reservas.md): consulta del titular, cancelación, código de retiro, entrega
+y vencimiento ([ADR 0007](adr/0007-codigo-de-retiro-y-transiciones.md)).
 
 ## Documentación vigente por tarea
 
@@ -22,6 +24,7 @@ las valida y limpia objetos con los mismos casos de uso de Application.
 | Entender estado actual y arquitectura objetivo | [Arquitectura](arquitectura/arquitectura.md) y [ADR 0003](adr/0003-arquitectura-incremental-s02.md) |
 | Implementar o consumir contratos HTTP S02 | [Guía HTTP](api/README.md) y [OpenAPI](api/openapi.yaml) |
 | Trabajar en lotes | [Lotes](lotes.md) |
+| Trabajar en cancelación, código de retiro o entregas | [Reservas](reservas.md) |
 | Entender identidad, atomicidad y seguridad | [K008](k008-identidad.md) |
 | Levantar el entorno y ejecutar checks | [Entorno local y CI](desarrollo-local.md) |
 | Desplegar web/API y operar releases | [Railway, Vercel y CD](despliegue.md) |

@@ -81,6 +81,14 @@ export type LotResponse = {
    */
   publishedAt: string | null
 }
+/**
+ * Estado vigente al responder. confirmed: vigente; cancelled: cancelada por su titular; expired: el lote cerró sin retiro, aunque el trabajador aún no lo haya registrado; delivered: retiro acreditado. Los tres últimos son terminales.
+ */
+export type ReservationStatus = "confirmed" | "cancelled" | "expired" | "delivered"
+/**
+ * Código tal como lo dicta la persona; el servidor ignora espacios, guiones y mayúsculas. Nunca en URL ni logs.
+ */
+export type PickupCode = string
 
 export interface HttpSchemas {
   LoginRequest: LoginRequest
@@ -99,6 +107,14 @@ export interface HttpSchemas {
   OperatorLotPage: OperatorLotPage
   ReserveLotRequest: ReserveLotRequest
   ReservationResponse: ReservationResponse
+  ReservationLot: ReservationLot
+  ReservationSummary: ReservationSummary
+  ReservationDetail: ReservationDetail
+  ReservationPage: ReservationPage
+  PickupReviewRequest: PickupReviewRequest
+  PickupReview: PickupReview
+  ConfirmPickupRequest: ConfirmPickupRequest
+  PickupResponse: PickupResponse
   LotPhoto: LotPhoto
   LotPhotoList: LotPhotoList
   ErrorResponse: ErrorResponse
@@ -292,8 +308,98 @@ export interface ReservationResponse {
   id: PublicId
   lotId: PublicId
   quantity: number
+  /**
+   * Resultado de la creación. Un reintento con la misma clave lo reproduce aunque la reserva haya terminado; el estado vigente y el código se consultan en GET /reservations/{reservationId}.
+   */
   status: "confirmed"
   createdAt: Instant
+}
+/**
+ * Lote de la reserva para su titular: contenido, lugar y plazo publicados.
+ */
+export interface ReservationLot {
+  id: PublicId
+  description: LotDescription
+  conditions: Conditions
+  address: Address
+  latitude: Latitude
+  longitude: Longitude
+  timeZone: TimeZone
+  pickupStartsAt: Instant
+  pickupEndsAt: Instant
+}
+export interface ReservationSummary {
+  id: PublicId
+  quantity: number
+  status: ReservationStatus
+  createdAt: Instant
+  /**
+   * Instante en que terminó; null mientras está confirmada. Una reserva vencida terminó al cierre del lote.
+   */
+  endedAt: string | null
+  lot: ReservationLot
+}
+export interface ReservationDetail {
+  id: PublicId
+  quantity: number
+  status: ReservationStatus
+  createdAt: Instant
+  /**
+   * Instante en que terminó; null mientras está confirmada.
+   */
+  endedAt: string | null
+  lot: ReservationLot
+  /**
+   * Código de retiro: credencial de ocho caracteres para mostrar al operador. Solo mientras status es confirmed; si no, null. No guardarlo en URL, historial, logs ni almacenamiento persistente del navegador.
+   */
+  pickupCode: string | null
+}
+export interface ReservationPage {
+  /**
+   * @maxItems 20
+   */
+  items: ReservationSummary[]
+  page: number
+  hasNextPage: boolean
+}
+export interface PickupReviewRequest {
+  code: PickupCode
+}
+export interface PickupReview {
+  reservation: ReviewedReservation
+  /**
+   * true si la reserva está confirmada y la ventana ya comenzó. Es orientativo: confirmar vuelve a validar todo bajo bloqueo. false con status confirmed significa que la ventana aún no comienza.
+   */
+  canConfirm: boolean
+}
+/**
+ * Reserva vista por el operador: sin datos del titular ni el código.
+ */
+export interface ReviewedReservation {
+  id: PublicId
+  quantity: number
+  status: ReservationStatus
+  createdAt: Instant
+  endedAt: string | null
+}
+export interface ConfirmPickupRequest {
+  /**
+   * Reserva mostrada por la revisión.
+   */
+  reservationId: string
+  code: PickupCode
+  /**
+   * UUID generado por el cliente para esta confirmación; único por operador.
+   */
+  idempotencyKey: string
+}
+export interface PickupResponse {
+  reservationId: PublicId
+  /**
+   * Packs entregados: la reserva completa.
+   */
+  quantity: number
+  deliveredAt: Instant
 }
 /**
  * Foto de un lote para su operador. Sin claves de objeto, tamaño original ni autor interno.

@@ -117,7 +117,7 @@ jobs:
         run: npm --prefix api run db:test:auth:compose
       - name: Install web dependencies for browser flows
         run: npm --prefix web ci
-      - name: K009 auth, K011 lot form and K015 discovery/reservation over Vite HTTPS
+      - name: K009 auth, K011 lot form, K015 discovery/reservation and K022 cancellation/pickup
         run: npm --prefix api run test:web:compose
       - name: Worker
         run: |

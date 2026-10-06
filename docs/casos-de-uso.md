@@ -172,8 +172,9 @@ verifica que siga cancelable, cambia su estado a Cancelada y aplica la conciliac
 de inventario que corresponda.
 
 **Alternativos y errores.** Una reserva entregada, vencida, ajena o ya cancelada
-no se vuelve a cancelar ni libera packs dos veces. El plazo de cancelación y el
-destino preciso de `R` no se fijan aquí porque deben confirmarse contra RF05.
+no se vuelve a cancelar ni libera packs dos veces. RF05 (anexos A p. 2) permite
+cancelar hasta el cierre del lote; antes del cierre `R` vuelve a `F` y después la
+reserva ya venció ([reservas](reservas.md)).
 
 **Postcondiciones.** Reserva Cancelada o ningún cambio. No se recrea una solicitud
 FIFO ni se modifica una entrega histórica.

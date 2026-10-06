@@ -51,6 +51,7 @@ Variables del `.env` raíz (leídas por Compose):
 | `POSTGRES_PASSWORD` | `rescate_dev_only` | Contraseña pública, solo local |
 | `RESCATE_ALLOWED_ORIGINS` | `https://localhost:3443` | Orígenes HTTPS exactos para comandos |
 | `CSRF_SIGNING_KEY` | Clave ficticia del ejemplo | Sustituir por 32 bytes aleatorios en base64 para uso real |
+| `PICKUP_CODE_KEY` | Clave ficticia del ejemplo | Cifra los códigos de retiro; otra clave de 32 bytes para uso real |
 
 Compose tiene los mismos valores por defecto que el ejemplo. Si un puerto está
 ocupado, cámbialo en `.env` y ajusta las URLs de comprobación. Los puertos internos
@@ -159,7 +160,7 @@ API en paralelo y después Compose:
 - `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud, identidad, seguridad y lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reinicio de API y Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reinicio de API, Chromium HTTPS y reservas, cancelación y retiro K022 con PostgreSQL real, verifica worker y siempre recoge logs y limpia.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay

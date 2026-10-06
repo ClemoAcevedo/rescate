@@ -14,6 +14,11 @@ export function assertContract(method: string, path: string, response: Response,
   path = path.split("?")[0]!
   const route = path === "/public/lots" ? path
     : path.startsWith("/public/lots/") ? (path.endsWith("/reservations") ? "/public/lots/{lotId}/reservations" : "/public/lots/{lotId}")
+    : path === "/reservations" ? path
+    : /^\/reservations\/[^/]+\/cancel$/.test(path) ? "/reservations/{reservationId}/cancel"
+    : path.startsWith("/reservations/") ? "/reservations/{reservationId}"
+    : /^\/lots\/[^/]+\/pickup-reviews$/.test(path) ? "/lots/{lotId}/pickup-reviews"
+    : /^\/lots\/[^/]+\/pickups$/.test(path) ? "/lots/{lotId}/pickups"
     : path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
     : path.endsWith("/publish") ? "/lots/{lotId}/publish"
     : /^\/lots\/[^/]+\/photos\/[^/]+\/[^/]+$/.test(path) ? "/lots/{lotId}/photos/{photoId}/{variant}"

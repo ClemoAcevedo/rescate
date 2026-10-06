@@ -26,8 +26,9 @@ estos valores antes del primer upload. Los uploads de Actions usan
 `railway up api --path-as-root`, por lo que el Dockerfile queda en la raíz del
 archivo enviado; el servicio no debe agregar otro prefijo `/api` al contexto.
 
-La API recibe `NODE_ENV=production`, una `CSRF_SIGNING_KEY` generada con
-`openssl rand -base64 32` y la referencia privada:
+La API recibe `NODE_ENV=production`, una `CSRF_SIGNING_KEY` y una
+`PICKUP_CODE_KEY` distintas, cada una generada con `openssl rand -base64 32`, y la
+referencia privada:
 
 ```text
 DATABASE_URL=postgresql://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{postgres.POSTGRES_DB}}
@@ -38,7 +39,9 @@ API y worker reciben además `NODE_ENV=production`, ese mismo `DATABASE_URL`,
 ([fotos](fotos.md#configuración)). Sin `PHOTO_STORAGE`, cargar fotos responde 503,
 el worker queda inactivo y el resto del sitio funciona.
 
-Conservar la clave CSRF al reiniciar. Los secretos quedan en Railway, nunca en
+Conservar ambas claves al reiniciar. Sin `PICKUP_CODE_KEY` la API no inicia y el
+healthcheck detiene el despliegue; cambiarla deja los códigos de retiro vigentes sin
+poder mostrarse ni verificarse ([reservas](reservas.md)). Los secretos quedan en Railway, nunca en
 variables `VITE_`. API y worker no están conectados al autodeploy de GitHub en
 Railway; el proyecto Vercel tampoco tiene un autodeploy Git independiente.
 

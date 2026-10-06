@@ -28,13 +28,14 @@ let child, browser, port
 let count = 0
 const ok = label => console.log(`OK ${++count}: ${label}`)
 const key = randomBytes(32).toString('base64')
+const pickupKey = randomBytes(32).toString('base64')
 const password = 'Contraseña ficticia K008 segura'
 const secretName = '__Host-rescate_session', csrfName = '__Host-rescate_csrf'
 const certPath = join(dir, 'cert.pem'), keyPath = join(dir, 'key.pem')
 let cert
 async function start() {
   child = fork(new URL('./test-auth-server.mjs', import.meta.url), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-    env: { ...process.env, CSRF_SIGNING_KEY: key, TEST_CERT: certPath, TEST_KEY: keyPath, TEST_PORT: String(port ?? 0) } })
+    env: { ...process.env, CSRF_SIGNING_KEY: key, PICKUP_CODE_KEY: pickupKey, TEST_CERT: certPath, TEST_KEY: keyPath, TEST_PORT: String(port ?? 0) } })
   const [message] = await Promise.race([once(child, 'message'), once(child, 'exit').then(() => { throw new Error('API de prueba terminó antes de escuchar') })])
   port = message.port
 }

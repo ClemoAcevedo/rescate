@@ -6,6 +6,7 @@ export interface AppDependencies {
   /** Entradas opcionales para pruebas; Composition monta K008 y K010. */
   lotsRouter?: Router
   discoveryRouter?: Router
+  reservationsRouter?: Router
   photosRouter?: Router
   authRouter?: Router
   traffic?: express.RequestHandler
@@ -27,6 +28,7 @@ export function createApp(dependencies: AppDependencies = {}): express.Express {
 
   if (dependencies.authRouter) app.use(dependencies.authRouter)
   if (dependencies.discoveryRouter) app.use(dependencies.discoveryRouter)
+  if (dependencies.reservationsRouter) app.use(dependencies.reservationsRouter)
   // Fotos: cuerpo binario con su propio límite; express.json ignora image/*.
   if (dependencies.photosRouter) app.use(dependencies.photosRouter)
 
