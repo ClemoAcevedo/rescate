@@ -1,3 +1,4 @@
+import './reservations.css'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -63,7 +64,7 @@ function History() {
 }
 export function ReservationDetailPage() {
   const { id = '' } = useParams()
-  return <main className="page-content"><div className="reservations"><Link className="back-link" to="/reservas">Volver a mis reservas</Link><h1>Detalle de reserva</h1><SessionGate><Detail key={id} id={id} /></SessionGate></div></main>
+  return <main className="page-content"><div className="reservations reservation-detail-view"><Link className="back-link" to="/reservas">Volver a mis reservas</Link><h1>Detalle de reserva</h1><SessionGate><Detail key={id} id={id} /></SessionGate></div></main>
 }
 function Detail({ id }: { id: string }) {
   const { csrfToken, refreshSession } = useAuth()
@@ -119,21 +120,31 @@ function Detail({ id }: { id: string }) {
   }
   const closed = reservation ? Date.parse(reservation.lot.pickupEndsAt) <= now : false
   const current = reservation?.status === 'confirmed' && !closed
-  return <section aria-busy={loading || cancelling}>
+  return <section className="reservation-detail-content" aria-busy={loading || cancelling}>
     {loading && <Alert role="status">Consultando estado vigente…</Alert>}
     <div ref={resultRef} tabIndex={-1}>{message && <Alert tone={reservation?.status === 'cancelled' && !uncertain ? 'success' : 'warning'} role="status">{message}</Alert>}</div>
     {reservation && <Card className="reservation-detail">
       <Badge tone={current && !uncertain ? 'success' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && reservation.status === 'confirmed' ? 'Ventana finalizada' : labels[reservation.status]}</Badge>
-      <h2>{lotTitle(reservation.lot.description)}</h2><p>{reservation.lot.description}</p><Facts reservation={reservation} />
-      <p>{reservation.lot.conditions ?? 'Sin condiciones adicionales.'}</p>
+      <header className="reservation-detail__heading">
+        <h2>{lotTitle(reservation.lot.description)}</h2>
+        {reservation.lot.description !== lotTitle(reservation.lot.description) && <p>{reservation.lot.description}</p>}
+      </header>
+      <dl className="reservation-detail__facts">
+        <div><dt>Cantidad reservada</dt><dd>{reservation.quantity} {reservation.quantity === 1 ? 'pack' : 'packs'}</dd></div>
+        <div><dt>Lugar de retiro</dt><dd>{reservation.lot.address}</dd></div>
+        <div className="reservation-detail__window"><dt>Ventana de retiro</dt><dd>{formatWindow(reservation.lot.pickupStartsAt, reservation.lot.pickupEndsAt, reservation.lot.timeZone)}<span className="reservation-detail__zone">{reservation.lot.timeZone}</span></dd></div>
+        <div><dt>Fecha de creación</dt><dd>{formatInstant(reservation.createdAt, reservation.lot.timeZone)}</dd></div>
+        {reservation.endedAt && <div><dt>Fecha de término</dt><dd>{formatInstant(reservation.endedAt, reservation.lot.timeZone)}</dd></div>}
+      </dl>
+      <div className="reservation-detail__conditions"><h3>Condiciones de retiro</h3><p>{reservation.lot.conditions ?? 'Sin condiciones adicionales.'}</p></div>
       {current && !loading && !uncertain && reservation.pickupCode && <div className="pickup-code"><h3>Código de retiro</h3><p>{reservation.pickupCode}</p><span>Muéstralo al operador durante la ventana de retiro.</span></div>}
       {closed && reservation.status === 'confirmed' && <Alert>La ventana terminó. Consulta el estado actualizado; el código ya no se muestra.</Alert>}
-      {current && !loading && !uncertain && !confirming && <Button variant="danger" disabled={!csrfToken} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
+      {current && !loading && !uncertain && !confirming && <Button className="reservation-detail__cancel" variant="danger" disabled={!csrfToken} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
       {(confirming || uncertain) && <Alert tone="warning"><p>{uncertain ? 'El código se oculta hasta comprobar el resultado.' : '¿Cancelar esta reserva? Los packs quedarán disponibles y el código dejará de servir.'}</p>
         <Button variant="danger" loading={cancelling} disabled={!csrfToken || loading} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
         {!uncertain && <Button variant="secondary" onClick={() => setConfirming(false)}>Conservar reserva</Button>}
       </Alert>}
     </Card>}
-    <Button variant="secondary" disabled={loading || cancelling} onClick={() => { void load() }}>Consultar estado actualizado</Button>
+    <Button className="reservation-detail__refresh" variant="secondary" disabled={loading || cancelling} onClick={() => { void load() }}>Consultar estado actualizado</Button>
   </section>
 }

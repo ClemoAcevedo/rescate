@@ -1,0 +1,66 @@
+/* Presentación exclusiva del aviso y detalle de K023. */
+.reservation-notice > .ui-alert {
+  display: grid;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-5);
+  padding: var(--sp-4);
+}
+.reservation-notice__copy { min-width: 0; }
+.reservation-notice__copy h2 { font-size: var(--fs-title-lg); }
+.reservation-notice .reservation-notice__action {
+  justify-self: start;
+  text-decoration: none;
+  color: var(--text-inverse);
+}
+.reservation-notice .reservation-confirmation__id {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+.reservation-notice .reservation-confirmation__id span { font-family: var(--font-mono); }
+.reservation-pending { display: grid; gap: var(--sp-3); }
+.reservation-pending > p { margin: 0; }
+.reservation-detail-view { gap: var(--sp-3); }
+.reservation-detail-view .reservation-detail-content { display: grid; gap: var(--sp-3); min-width: 0; }
+.reservation-detail-view .reservation-detail {
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reservation-detail-view .reservation-detail > .ui-badge { justify-self: start; }
+.reservation-detail-view .reservation-detail p { margin: 0; }
+.reservation-detail__heading { display: grid; gap: var(--sp-2); }
+.reservation-detail__heading h2 { font-size: var(--fs-title-lg); }
+.reservation-detail__heading p { color: var(--text-muted); }
+.reservation-detail__facts { display: grid; gap: var(--sp-4); margin: 0; }
+.reservation-detail__facts div { min-width: 0; }
+.reservation-detail__facts dt,
+.reservation-detail__conditions h3 {
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+  letter-spacing: normal;
+}
+.reservation-detail__facts dd { margin: var(--sp-1) 0 0; }
+.reservation-detail__zone { display: block; color: var(--text-muted); font-size: var(--fs-meta); }
+.reservation-detail__conditions { display: grid; gap: var(--sp-1); }
+.reservation-detail-view .pickup-code {
+  display: grid;
+  gap: var(--sp-2);
+  border: var(--border-width) solid var(--border-subtle);
+}
+.reservation-detail-view .pickup-code h3 { font-size: var(--fs-body); }
+.reservation-detail-view .pickup-code p { font-weight: var(--fw-bold); line-height: var(--lh-title); }
+.reservation-detail-view .pickup-code span { font-size: var(--fs-meta); color: var(--text-muted); }
+.reservation-detail-view .reservation-detail__cancel { justify-self: start; }
+.reservation-detail-view .reservation-detail__refresh { justify-self: start; }
+@media (min-width: 48rem) {
+  .reservation-notice > .ui-alert { grid-template-columns: minmax(0, 1fr) auto; }
+  .reservation-detail__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reservation-detail__window { grid-column: 1 / -1; }
+}

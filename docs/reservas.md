@@ -51,7 +51,9 @@ el estado que provocó un 409 al confirmar.
 `/reservas` muestra las reservas propias, incluidas canceladas, retiradas y vencidas,
 en páginas de 20. `/reservas/:id` consulta el estado vigente y muestra cantidad,
 lugar, condiciones, ventana en la zona del lote e instantes de creación y término.
-Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
+El detalle organiza los datos con etiquetas y destaca el código en un bloque propio.
+El aviso de solicitud registrada enlaza al detalle vigente y mantiene el identificador
+como dato secundario. Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
 URLs ni almacenamiento del navegador.
 
 El detalle muestra el código únicamente con una respuesta válida y confirmada,

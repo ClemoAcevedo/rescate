@@ -1,3 +1,4 @@
+import './reservations.css'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -88,16 +89,16 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
     <Link className="back-link" to={lotsPath}><Icon name="arrowLeft" />Volver a explorar lotes</Link>
     {loading && <Alert className="form-result" role="status">Cargando el lote…</Alert>}
     {loadError && <Alert className="form-result" tone="danger" role="alert">{loadError} <Button variant="secondary" onClick={() => { setLoading(true); setReload(value => value + 1) }}>Reintentar</Button></Alert>}
-    {reservation && <div ref={confirmationRef} tabIndex={-1} className="reservation-confirmation">
+    {reservation && <div ref={confirmationRef} tabIndex={-1} className="reservation-confirmation reservation-notice">
       <Alert tone="info" role="status">
-        <h2>Solicitud registrada por {reservation.quantity} {reservation.quantity === 1 ? 'pack' : 'packs'}</h2>
-        <p>Consulta el estado vigente, el horario y el código de retiro en el detalle.</p>
-        <Link className="ui-button ui-button--primary" to={`/reservas/${encodeURIComponent(reservation.id)}`}>Ver mi reserva</Link>
+        <div className="reservation-notice__copy"><h2>Solicitud registrada por {reservation.quantity} {reservation.quantity === 1 ? 'pack' : 'packs'}</h2>
+        <p>Consulta el estado vigente, el horario y el código de retiro en el detalle.</p></div>
+        <Link className="ui-button ui-button--primary reservation-notice__action" to={`/reservas/${encodeURIComponent(reservation.id)}`}>Ver mi reserva</Link>
         <p className="reservation-confirmation__id">Identificador de reserva: <span>{reservation.id}</span></p>
       </Alert>
     </div>}
-    {!lot && uncertain && <Card><Alert tone="warning">Hay una solicitud pendiente de comprobar, aunque el lote ya no esté disponible.</Alert>
-      <p>Cantidad solicitada: {quantity} packs.</p>{reserveError && <Alert role="alert">{reserveError}</Alert>}
+    {!lot && uncertain && <Card className="reservation-pending"><Alert tone="warning">Hay una solicitud pendiente de comprobar, aunque el lote ya no esté disponible.</Alert>
+      <p>Cantidad solicitada: {quantity} packs.</p>{reserveError && <Alert tone="warning" role="alert">{reserveError}</Alert>}
       {status === 'authenticated' && csrfToken && <form onSubmit={submit}><Button type="submit" loading={submitting}>Comprobar la misma solicitud</Button></form>}
     </Card>}
     {lot && <>
