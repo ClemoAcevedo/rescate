@@ -64,3 +64,18 @@
   .reservation-detail__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reservation-detail__window { grid-column: 1 / -1; }
 }
+
+/* Confirmación en línea y resultado de la misma operación de K023. */
+.reservation-result:empty { display: none; }
+.reservation-detail-view .reservation-cancel { display: grid; gap: var(--sp-4); }
+.reservation-cancel__actions { display: flex; flex-direction: column; gap: var(--sp-3); }
+.reservation-cancel__actions .ui-button { min-width: 0; }
+.reservation-cancel__confirm:not(:disabled) {
+  background: var(--text-danger);
+  border-color: var(--text-danger);
+  color: var(--text-inverse);
+}
+.reservation-cancel__confirm:hover:not(:disabled) { box-shadow: var(--shadow-xs); }
+@media (min-width: 48rem) {
+  .reservation-cancel__actions { flex-direction: row; flex-wrap: wrap; align-items: start; }
+}

@@ -62,7 +62,9 @@ ventana lo oculta y ofrece consultar el estado; vuelve a consultar al regresar a
 la pestaña y cada quince segundos mientras está visible. Un resultado de creación
 reproducido por idempotencia lleva al detalle para conocer el estado actual, pues puede corresponder a una reserva ya terminada.
 
-Cancelar pide confirmación y bloquea envíos simultáneos. No anuncia cancelación
+Cancelar pide confirmación en un bloque de advertencia dentro de la tarjeta y
+bloquea envíos simultáneos. La acción destructiva y la opción de conservar la reserva
+se separan y se apilan en móvil. No anuncia cancelación
 hasta recibir el estado `cancelled`. Ante una respuesta perdida oculta el código
 y permite consultar el estado o repetir la cancelación de la misma reserva. Un
 conflicto conserva el aviso hasta consultar el resultado vigente. El registro
