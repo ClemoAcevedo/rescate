@@ -253,12 +253,13 @@ lo cambia.
   con carga, validación y retiro de fotos (K017) y «Mis lotes» con borradores y
   publicados (#96).
   Búsqueda pública paginada, filtros, zona manual, detalle con galería de fotos y
-  reserva directa con API real (K016).
+  reserva directa con API real (K016); historial, detalle vigente, código de retiro
+  y cancelación con resultado comprobado (K023).
 - **API:** `/health`, identidad y sesiones (K008), borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
-  retiro de fotos (K014), según OpenAPI. Las pantallas de reserva y retiro son K023/K024.
+  retiro de fotos (K014), según OpenAPI. La pantalla de retiro corresponde a K024.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
   (K014).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);

@@ -578,3 +578,9 @@ code, kbd, samp { font-family: var(--font-mono); }
 
   .ui-button:active:not(:disabled) { transform: none; }
 }
+
+.reservations { max-width: var(--content-max); margin-inline: auto; display: grid; gap: var(--sp-4); }
+.reservations__list { list-style: none; padding: 0; display: grid; gap: var(--sp-4); }
+.reservation-detail { display: grid; gap: var(--sp-3); margin-block: var(--sp-4); }
+.pickup-code { padding: var(--sp-4); background: var(--surface-brand-soft); border-radius: var(--radius-md); }
+.pickup-code p { font-family: var(--font-mono); font-size: var(--fs-display-md); letter-spacing: var(--ls-caps); overflow-wrap: anywhere; }
