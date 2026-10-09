@@ -59,17 +59,20 @@ try {
   ok('canonicalización delegada a SQL y lectura de cuentas sin credencial')
 
   const credential = await passwords.hash('Contraseña exclusivamente de fixture K008')
+  const consent = { policyVersion: '2026-10', grantedAt: new Date() }
   await assert.rejects(identities.createUserWithCredential('atomic@example.invalid', {
     ...credential, hash: credential.hash.slice(0, 63),
-  }), error => error.code === '23514')
-  assert.equal(await identities.findByEmail('atomic@example.invalid'), null, 'falló segunda escritura: no queda usuario huérfano')
+  }, consent), error => error.code === '23514')
+  await assert.rejects(identities.createUserWithCredential('atomic@example.invalid', credential,
+    { ...consent, policyVersion: ' ' }), error => error.constraint === 'user_consents_policy_version_check')
+  assert.equal(await identities.findByEmail('atomic@example.invalid'), null, 'falló la credencial o el consentimiento: no queda usuario huérfano')
   const races = await Promise.all([
-    identities.createUserWithCredential('atomic@example.invalid', credential),
-    identities.createUserWithCredential('atomic@example.invalid', credential),
+    identities.createUserWithCredential('atomic@example.invalid', credential, consent),
+    identities.createUserWithCredential('atomic@example.invalid', credential, consent),
   ])
   assert.deepEqual(races.map(result => result.kind).sort(), ['created', 'email_exists'])
   const user = races.find(result => result.kind === 'created').user
-  const otherResult = await identities.createUserWithCredential('other@example.invalid', credential)
+  const otherResult = await identities.createUserWithCredential('other@example.invalid', credential, consent)
   assert.equal(otherResult.kind, 'created')
   const other = otherResult.user
   const account = await identities.findByEmail(user.email)
@@ -78,6 +81,7 @@ try {
   assert.deepEqual(await identities.findUserById(user.id), user)
   assert.equal(await identities.findUserById('-1'), null)
   assert.equal((await query('SELECT count(*)::int AS n FROM user_credentials WHERE user_id=$1', [user.id]))[0].n, 1)
+  assert.equal((await query("SELECT count(*)::int AS n FROM user_consents WHERE user_id=$1 AND purpose='account_email'", [user.id]))[0].n, 1)
   assert.deepEqual(await query('SELECT * FROM memberships WHERE user_id=$1', [user.id]), [])
   assert.deepEqual(await query('SELECT * FROM sessions WHERE user_id=$1', [user.id]), [])
   ok('usuario+credencial atómicos, rollback SQL y registro concurrente sin duplicados; sin sesión/membership automática')

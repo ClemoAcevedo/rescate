@@ -54,6 +54,7 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Crear cuenta' }).isEnabled(), true)
   await page.locator('input[name="email"]').fill(`temprano-${email}`)
   await page.locator('input[name="password"]').fill(password)
+  await page.getByRole('checkbox').check()
   const earlyRegister = await waitForApiResponse(page, '/api/auth/register', () => page.getByRole('button', { name: 'Crear cuenta' }).click())
   assert.equal(earlyRegister.status(), 201)
   await page.unroute('**/api/auth/session')
@@ -64,6 +65,7 @@ try {
   assert.equal(anonymousSession.session, null)
   await page.locator('input[name="email"]').fill(email)
   await page.locator('input[name="password"]').fill(password)
+  await page.getByRole('checkbox').check()
   const registerResponse = await waitForApiResponse(page, '/api/auth/register', () => page.getByRole('button', { name: 'Crear cuenta' }).click())
   await assertJson(registerResponse, 201, ['user'])
   const registerResult = page.getByRole('status')
@@ -96,7 +98,7 @@ try {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'invalid' },
-      body: JSON.stringify({ email: 'forbidden@example.com', password: 'K009-authentication-test-password' }),
+      body: JSON.stringify({ email: 'forbidden@example.com', password: 'K009-authentication-test-password', privacyConsent: true }),
     })
     const body = await response.json()
     return { status: response.status, contentType: response.headers.get('content-type'), keys: Object.keys(body), code: body.error?.code }

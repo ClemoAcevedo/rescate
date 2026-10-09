@@ -18,7 +18,7 @@ type AuthContextValue = {
   csrfToken: string | null
   error: string | null
   refreshSession: () => Promise<void>
-  register: (input: { email: string; password: string }) => Promise<RegisterResponse>
+  register: (input: { email: string; password: string; privacyConsent: boolean }) => Promise<RegisterResponse>
   login: (input: { email: string; password: string }) => Promise<void>
   logout: () => Promise<void>
 }
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return tokenRef.current
   }
 
-  const register = async (input: { email: string; password: string }) => identityService.register(input, await requireCsrf())
+  const register = async (input: { email: string; password: string; privacyConsent: boolean }) => identityService.register(input, await requireCsrf())
 
   const login = async (input: { email: string; password: string }) => {
     const result: LoginResponse = await identityService.login(input, await requireCsrf())

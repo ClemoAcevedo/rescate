@@ -23,22 +23,22 @@ un prototipo de objetos aislado. Las operaciones restantes son objetivo de domin
 
 ## CU-RF02-01 — Publicar lote con fotos
 
-**Objetivo.** Dejar disponible un lote declarado por un operador y fijar su
+**Objetivo.** Dejar disponible un lote creado por un operador y fijar su
 contenido descriptivo, incluidas las fotos opcionales que estén listas.
 
 **Actores y permisos.** Un usuario con membresía del establecimiento es el
 operador. Nadie obtiene este permiso por registrarse ni por conocer un ID público.
 
 **Precondiciones.** El lote pertenece al establecimiento operado, está en
-Borrador, su declaración es válida, la ventana aún no finaliza y la versión sigue
+Borrador, su descripción es válida, la ventana aún no finaliza y la versión sigue
 vigente. Si hay fotos, pertenecen al lote y están listas para ser visibles. Cero
 fotos es válido.
 
 **Flujo principal.**
 
-1. El operador revisa la declaración y las fotos asociadas.
+1. El operador revisa la descripción y las fotos asociadas.
 2. El sistema autentica al actor, verifica su membresía y bloquea/relee el lote.
-3. Valida versión, estado, declaración y ventana; comprueba las asociaciones de
+3. Valida versión, estado, descripción y ventana; comprueba las asociaciones de
    fotos sin hacer llamadas externas bajo el bloqueo.
 4. Publica el lote, registra el instante y deja fijos cantidad, contenido, lugar,
    plazo y conjunto de fotos.
@@ -74,7 +74,7 @@ El detalle muestra pack, cantidad, lugar y plazo antes de solicitar (G p. 12).
 
 1. La persona solicita un lote o resultado de descubrimiento.
 2. El sistema comprueba la visibilidad, estado y vigencia que aplique.
-3. Devuelve declaración, ventana y sólo fotos asociadas listas/autorizadas.
+3. Devuelve descripción, ventana y sólo fotos asociadas listas/autorizadas.
 4. Muestra disponibilidad como condición derivada, nunca como sinónimo de `Q`.
 
 **Alternativos y errores.** Lote no visible, retirado o inexistente no revela

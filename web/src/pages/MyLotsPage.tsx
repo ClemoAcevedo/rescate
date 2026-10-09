@@ -10,6 +10,7 @@ import { Card } from '../components/ui/Card'
 import { Select } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
 import { formatWindow } from '../lots/lot-time'
+import { lotStatusBadges } from '../lots/lot-status'
 import { lotTitle } from '../lots/lot-title'
 import type { OperableEstablishment } from '../services/identity-service'
 import { ConnectionError, LotRequestError, listEstablishmentLots, type OperatorLotPage, type OperatorLotSummary } from '../services/lots-service'
@@ -30,19 +31,20 @@ function loadError(error: unknown): string {
 function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
   const title = lotTitle(lot.description)
   const ended = Date.parse(lot.pickupEndsAt) <= now
+  const badge = lotStatusBadges[lot.status]
   const editorPath = `/operador/lotes/${encodeURIComponent(lot.id)}`
   return (
     <li className="my-lot">
       <div className="my-lot__media"><LotPhoto src={lot.photoUrl} description={`Fotografía del pack: ${title}`} /></div>
       <div className="my-lot__body">
         <div className="my-lot__labels">
-          {lot.status === 'draft' ? <Badge tone="info">Borrador</Badge> : ended ? <Badge>Retiro finalizado</Badge> : <Badge tone="success">Publicado</Badge>}
+          {lot.status === 'published' && ended ? <Badge>Retiro finalizado</Badge> : <Badge tone={badge.tone}>{badge.label}</Badge>}
           <span className="my-lot__category">{lot.category}</span>
         </div>
         <h2><Link to={editorPath}>{title}</Link></h2>
         <ul className="lot-meta">
           <li><Icon name="clock" /><span>{formatWindow(lot.pickupStartsAt, lot.pickupEndsAt, lot.timeZone)}</span></li>
-          <li><Icon name="box" /><span>{lot.status === 'published'
+          <li><Icon name="box" /><span>{lot.status !== 'draft'
             ? `${lot.reservedQuantity} de ${lot.quantity} ${lot.quantity === 1 ? 'pack reservado' : 'packs reservados'}`
             : `${lot.quantity} ${lot.quantity === 1 ? 'pack' : 'packs'} · sin publicar`}</span></li>
         </ul>

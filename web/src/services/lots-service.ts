@@ -44,6 +44,12 @@ const errorCodes = new Set<LotErrorCode>([
   'INTERNAL_ERROR', 'SERVICE_UNAVAILABLE',
 ])
 
+const lotStatuses: readonly string[] = ['draft', 'published', 'expired', 'withdrawn'] satisfies LotResponse['status'][]
+
+function isLotStatus(value: unknown): value is LotResponse['status'] {
+  return typeof value === 'string' && lotStatuses.includes(value)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -61,11 +67,11 @@ function requireNumber(value: Record<string, unknown>, key: string): number {
 const parseLotResponse: ResponseParser<LotResponse> = (value) => {
   if (!isRecord(value)) throw new Error('La respuesta del lote no tiene el formato esperado.')
   const status = value.status
-  if (status !== 'draft' && status !== 'published') throw new Error('La respuesta del lote no contiene un estado válido.')
+  if (!isLotStatus(status)) throw new Error('La respuesta del lote no contiene un estado válido.')
   const conditions = value.conditions
   if (conditions !== null && typeof conditions !== 'string') throw new Error('La respuesta del lote no contiene condiciones válidas.')
   const publishedAt = value.publishedAt
-  // OpenAPI: publishedAt es null en borrador y un instante en publicado.
+  // OpenAPI: publishedAt es null en borrador y un instante en los demás estados.
   if (status === 'draft' ? publishedAt !== null : typeof publishedAt !== 'string') {
     throw new Error('La respuesta del lote no es coherente con su estado de publicación.')
   }
@@ -124,7 +130,7 @@ const parsePhotoList: ResponseParser<LotPhotoList> = (value) => {
 }
 
 function parseSummary(value: unknown): OperatorLotSummary {
-  if (!isRecord(value) || typeof value.id !== 'string' || (value.status !== 'draft' && value.status !== 'published')
+  if (!isRecord(value) || typeof value.id !== 'string' || !isLotStatus(value.status)
     || typeof value.description !== 'string' || typeof value.category !== 'string'
     || !Number.isInteger(value.quantity) || !Number.isInteger(value.reservedQuantity) || !Number.isInteger(value.version)
     || typeof value.pickupStartsAt !== 'string' || typeof value.pickupEndsAt !== 'string' || typeof value.timeZone !== 'string'
@@ -186,7 +192,7 @@ export function publishLotDraft(lotId: string, body: PublishLotDraftRequest, csr
   return sendLot(`${lotPath(lotId)}/publish`, 'POST', { body, csrfToken })
 }
 
-export async function listEstablishmentLots(establishmentId: string, query: { status?: 'draft' | 'published'; page?: number }, signal?: AbortSignal): Promise<OperatorLotPage> {
+export async function listEstablishmentLots(establishmentId: string, query: { status?: LotResponse['status']; page?: number }, signal?: AbortSignal): Promise<OperatorLotPage> {
   const params = new URLSearchParams()
   if (query.status) params.set('status', query.status)
   if (query.page && query.page > 1) params.set('page', String(query.page))

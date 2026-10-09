@@ -39,7 +39,7 @@ el código como sustituto de los requisitos E1.
 
 | Recorrido | Coherencia comprobada | Límite visible |
 | --- | --- | --- |
-| Publicar con fotos, reservar y acreditar | CU-RF02-01 fija la declaración/fotos; CU-RF04-01 y CU-RF07-01 separan solicitud, oferta y reserva; CU-RF06-01 crea una entrega única `R → E`. | La carga y validación de fotos están en la API (K014); el código y la entrega, en K022. Publicar con cero fotos continúa válido. |
+| Publicar con fotos, reservar y acreditar | CU-RF02-01 fija la descripción/fotos; CU-RF04-01 y CU-RF07-01 separan solicitud, oferta y reserva; CU-RF06-01 crea una entrega única `R → E`. | La carga y validación de fotos están en la API (K014); el código y la entrega, en K022. Publicar con cero fotos continúa válido. |
 | Código inválido, fuera de ventana o usado | El modelo no altera reserva, entrega ni inventario por un código que no valide; uno usado nunca crea segunda entrega. | El código se consume al acreditar; no se define rotación ni vencimiento independiente de la reserva. |
 | Reportar, publicar y resolver incidencia | CU-RF11-01 registra el reporte sin efectos; CU-RF11-02 fija destinatarios bajo bloqueo; CU-RF11-03 versiona la resolución y, si se decide, cierra el lote conservando entregas. | La idempotencia de incidencias sigue en D-08. |
 | Operación sin permiso | Membresía contextual protege gestión de lote, acreditación y acceso operativo; usuario sólo actúa sobre sus compromisos/entregas. | K008 integra sesión y Actor con K010; K022 aplica titularidad y membresía a cancelar, revisar y retirar. Sigue pendiente la administración/revocación de membresías. |

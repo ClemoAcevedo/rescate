@@ -8,14 +8,17 @@ import type { createTrafficLimits } from "./rate-limits.js"
 import { handleError, sendError } from "./errors.js"
 import type { HttpSchemas } from "./openapi.js"
 
-function credentials(value: unknown): HttpSchemas["LoginRequest"] {
+function credentials(value: unknown, operation: "register" | "login") {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new IdentityError("invalid_input", [""])
   const body = value as Record<string, unknown>
-  const invalid = Object.keys(body).filter(k => k !== "email" && k !== "password")
+  const fields = operation === "register" ? ["email", "password", "privacyConsent"] : ["email", "password"]
+  const invalid = Object.keys(body).filter(k => !fields.includes(k))
   if (typeof body.email !== "string" || !body.email.length) invalid.push("email")
   if (typeof body.password !== "string") invalid.push("password")
+  // Application decide si falta el consentimiento; aquí solo se exige el tipo.
+  if (operation === "register" && typeof body.privacyConsent !== "boolean") invalid.push("privacyConsent")
   if (invalid.length) throw new IdentityError("invalid_input", invalid)
-  return { email: body.email as string, password: body.password as string }
+  return { email: body.email as string, password: body.password as string, privacyConsent: body.privacyConsent === true }
 }
 export function createAuthRouter(useCases: IdentityUseCases, auth: Authentication, limits: ReturnType<typeof createTrafficLimits>) {
   const router = Router()
@@ -33,9 +36,9 @@ export function createAuthRouter(useCases: IdentityUseCases, auth: Authenticatio
     if (operation === "login") limits.login(req.ip ?? req.socket.remoteAddress ?? "unknown")
     auth.requireCsrf(req, await auth.resolve(req))
     if (!req.is("application/json")) { sendError(res, 415, "UNSUPPORTED_MEDIA_TYPE", "Se requiere application/json."); return }
-    const { email, password } = credentials(req.body)
+    const { email, password, privacyConsent } = credentials(req.body, operation)
     if (operation === "register") {
-      const user = await useCases.register(email, password)
+      const user = await useCases.register(email, password, privacyConsent)
       const body: HttpSchemas["RegisterResponse"] = { user: { id: user.publicId, email: user.email } }
       res.status(201).json(body)
     } else {

@@ -10,9 +10,10 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import {
-  buildDeclaration, changedFields, emptyLotValues, fieldErrorsFromIssues, hasUnsavedChanges, lotValues,
+  buildDescription, changedFields, emptyLotValues, fieldErrorsFromIssues, hasUnsavedChanges, lotValues,
   type LotField, type LotFieldErrors, type LotFormValues,
 } from '../lots/lot-form'
+import { lotStatusBadges } from '../lots/lot-status'
 import { DEFAULT_TIME_ZONE } from '../lots/lot-time'
 import { isSettled, useLotPhotos } from '../lots/use-lot-photos'
 import type { OperableEstablishment } from '../services/identity-service'
@@ -144,21 +145,21 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
     event.preventDefault()
     void run('save', async () => {
       setResult(null); setConfirmingPublish(false)
-      const built = buildDeclaration(values)
+      const built = buildDescription(values)
       const clientErrors: LotFieldErrors = 'errors' in built ? { ...built.errors } : {}
       if (!lot && !establishmentId) clientErrors.establishmentId = 'Selecciona el establecimiento del lote.'
-      if (Object.keys(clientErrors).length > 0 || !('declaration' in built)) {
+      if (Object.keys(clientErrors).length > 0 || !('description' in built)) {
         setErrors(clientErrors); setResult({ tone: 'danger', message: 'Revisa los campos indicados.' })
         return
       }
       setErrors({})
       try {
         if (!lot) {
-          const created = await createLotDraft(establishmentId, built.declaration, csrfToken)
+          const created = await createLotDraft(establishmentId, built.description, csrfToken)
           navigate(`/operador/lotes/${encodeURIComponent(created.id)}`, { state: { notice: 'created' } })
           return
         }
-        const changes = changedFields(built.declaration, lot)
+        const changes = changedFields(built.description, lot)
         if (Object.keys(changes).length === 0) {
           setValues(lotValues(lot)); setResult({ tone: 'info', message: 'No hay cambios para guardar.' })
           return
@@ -205,17 +206,18 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
     )
   }
 
-  if (lot?.status === 'published') {
+  if (lot && lot.status !== 'draft') {
+    const badge = lotStatusBadges[lot.status]
     return (
       <Card as="section" className="content-card lot-card" aria-labelledby="lot-title">
         <p className="eyebrow">Operación</p>
-        <div className="lot-card__title"><h1 id="lot-title">Lote publicado</h1><Badge tone="success">Publicado</Badge></div>
+        <div className="lot-card__title"><h1 id="lot-title">Lote publicado</h1><Badge tone={badge.tone}>{badge.label}</Badge></div>
         <p>La cantidad, el contenido, el lugar y el plazo quedaron fijos al publicar.</p>
         {result && <ResultAlert result={result} {...reloadButton} />}
         <LotSummary lot={lot} establishmentName={establishmentName(lot.establishmentId)} />
         <LotPhotos photos={photos.photos} loadFailed={photos.loadFailed} notice={photos.notice} editable={false} onRetry={() => { void photos.refresh() }} />
         <div className="lot-actions lot-actions--footer">
-          {Date.parse(lot.pickupEndsAt) > openedAt && (
+          {lot.status === 'published' && Date.parse(lot.pickupEndsAt) > openedAt && (
             <Link className="ui-button ui-button--primary" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Ver como rescatista</Link>
           )}
           <Link className="ui-button ui-button--secondary" to="/operador/lotes">Volver a mis lotes</Link>
@@ -240,8 +242,8 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
       </div>
       <p>
         {lot
-          ? `Establecimiento: ${establishmentName(lot.establishmentId)}. Guarda los cambios y publica cuando la declaración esté lista.`
-          : 'Completa la declaración del lote. Se guardará como borrador y podrás revisarlo antes de publicar.'}
+          ? `Establecimiento: ${establishmentName(lot.establishmentId)}. Guarda los cambios y publica cuando la descripción esté lista.`
+          : 'Completa la descripción del lote. Se guardará como borrador y podrás revisarlo antes de publicar.'}
       </p>
       {result && <ResultAlert result={result} {...reloadButton} />}
       <form ref={form} className="lot-form" noValidate onSubmit={save} aria-busy={locked}>

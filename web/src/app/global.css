@@ -214,6 +214,9 @@ code, kbd, samp { font-family: var(--font-mono); }
 .auth-card h1 { font-size: var(--fs-display-md); }
 .auth-card > p:not(.eyebrow) { margin-top: var(--sp-3); }
 .auth-form { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+.consent-field { display: grid; gap: var(--sp-1); }
+.consent-check { display: flex; gap: var(--sp-2); align-items: flex-start; font-size: var(--fs-meta); color: var(--text-body); }
+.consent-check input { margin-top: 0.2em; accent-color: var(--text-brand); }
 .form-result { margin-top: var(--sp-4); }
 .auth-switch { margin-top: var(--sp-5); color: var(--text-muted); }
 

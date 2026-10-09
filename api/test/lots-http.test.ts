@@ -24,7 +24,7 @@ const OTHER_OPERATOR = "2"
 const ESTABLISHMENT = "11111111-1111-4111-8111-111111111111"
 const OTHER_ESTABLISHMENT = "22222222-2222-4222-8222-222222222222"
 
-const declaration = (overrides: Record<string, unknown> = {}) => ({
+const description = (overrides: Record<string, unknown> = {}) => ({
   description: "Pack ficticio de verduras",
   category: "Verduras",
   quantity: 3,
@@ -97,7 +97,7 @@ test("crea un borrador y lo publica", async (t) => {
   t.after(() => api.close())
 
   const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-    body: { ...declaration({ conditions: "Retirar con bolsa propia" }) },
+    body: { ...description({ conditions: "Retirar con bolsa propia" }) },
   })
   assert.equal(created.status, 201)
   assert.equal(created.body.status, "draft")
@@ -136,7 +136,7 @@ test("rechaza cantidades, ventanas y datos inválidos", async (t) => {
 
   for (const [label, override, violation] of cases) {
     const response = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-      body: { ...declaration(override) },
+      body: { ...description(override) },
     })
     assert.equal(response.status, 422, label)
     assert.equal(response.body.error.code, "VALIDATION_ERROR", label)
@@ -151,9 +151,9 @@ test("rechaza cuerpos con forma inesperada antes de aplicar reglas", async (t) =
   t.after(() => api.close())
 
   for (const [label, body, field] of [
-    ["cantidad como texto", { ...declaration({ quantity: "3" }) }, "quantity"],
-    ["fecha sin zona", { ...declaration({ pickupStartsAt: "2026-10-01T15:00" }) }, "pickupStartsAt"],
-    ["campo desconocido", { ...declaration(), status: "published" }, "status"],
+    ["cantidad como texto", { ...description({ quantity: "3" }) }, "quantity"],
+    ["fecha sin zona", { ...description({ pickupStartsAt: "2026-10-01T15:00" }) }, "pickupStartsAt"],
+    ["campo desconocido", { ...description(), status: "published" }, "status"],
   ] as const) {
     const response = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body })
     assert.equal(response.status, 422, label)
@@ -167,13 +167,13 @@ test("un operador ajeno no consulta, edita ni publica el lote", async (t) => {
   t.after(() => api.close())
 
   const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-    body: { ...declaration() },
+    body: { ...description() },
   })
   const id = created.body.id
 
   for (const [method, path, body] of [
     ["GET", `/lots/${id}`, undefined],
-    ["PATCH", `/lots/${id}`, { version: 1, ...declaration({ quantity: 99 }) }],
+    ["PATCH", `/lots/${id}`, { version: 1, ...description({ quantity: 99 }) }],
     ["POST", `/lots/${id}/publish`, { version: 1 }],
   ] as const) {
     const response = await api.request(method, path, { body, actor: OTHER_OPERATOR })
@@ -182,7 +182,7 @@ test("un operador ajeno no consulta, edita ni publica el lote", async (t) => {
     assert.equal(response.body.error.code, "FORBIDDEN")
   }
 
-  assert.equal(api.lots.lots.get(id)?.declaration.quantity, 3, "el lote ajeno no cambió")
+  assert.equal(api.lots.lots.get(id)?.description.quantity, 3, "el lote ajeno no cambió")
   assert.equal(api.lots.lots.get(id)?.status, "draft")
 })
 
@@ -191,7 +191,7 @@ test("sin sesión válida ninguna operación procede", async (t) => {
   t.after(() => api.close())
 
   const response = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-    body: { ...declaration() },
+    body: { ...description() },
   })
   assert.equal(response.status, 401)
   assert.equal(response.body.error.code, "UNAUTHENTICATED")
@@ -202,7 +202,7 @@ test("la versión optimista protege la edición concurrente del borrador", async
   t.after(() => api.close())
 
   const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-    body: { ...declaration() },
+    body: { ...description() },
   })
   const id = created.body.id
 
@@ -217,11 +217,11 @@ test("la versión optimista protege la edición concurrente del borrador", async
 
   // Segunda edición con la versión ya superada: se rechaza sin sobrescribir.
   const stale = await api.request("PATCH", `/lots/${id}`, {
-    body: { version: 1, ...declaration({ quantity: 9 }) },
+    body: { version: 1, ...description({ quantity: 9 }) },
   })
   assert.equal(stale.status, 409)
   assert.equal(stale.body.error.code, "CONFLICT")
-  assert.equal(api.lots.lots.get(id)?.declaration.quantity, 5)
+  assert.equal(api.lots.lots.get(id)?.description.quantity, 5)
 })
 
 test("un lote publicado no se edita ni se vuelve a publicar", async (t) => {
@@ -229,13 +229,13 @@ test("un lote publicado no se edita ni se vuelve a publicar", async (t) => {
   t.after(() => api.close())
 
   const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-    body: { ...declaration() },
+    body: { ...description() },
   })
   const id = created.body.id
   await api.request("POST", `/lots/${id}/publish`, { body: { version: 1 } })
 
   const edit = await api.request("PATCH", `/lots/${id}`, {
-    body: { version: 2, ...declaration({ quantity: 99 }) },
+    body: { version: 2, ...description({ quantity: 99 }) },
   })
   assert.equal(edit.status, 409)
   assert.equal(edit.body.error.code, "CONFLICT")
@@ -245,7 +245,7 @@ test("un lote publicado no se edita ni se vuelve a publicar", async (t) => {
   assert.equal(again.body.error.code, "CONFLICT")
 
   const lot = api.lots.lots.get(id)
-  assert.equal(lot?.declaration.quantity, 3)
+  assert.equal(lot?.description.quantity, 3)
   assert.equal(lot?.version, 2)
 })
 
@@ -254,7 +254,7 @@ test("no se publica un lote cuya ventana ya terminó", async (t) => {
   t.after(() => api.close())
 
   const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, {
-    body: { ...declaration() },
+    body: { ...description() },
   })
   const response = await api.request("POST", `/lots/${created.body.id}/publish`, {
     body: { version: 1 },
@@ -279,19 +279,19 @@ test("un lote inexistente responde 404 y un identificador inválido no filtra de
 test("creación exige ID público existente y membership; consulta propia", async (t) => {
   const api = await startApi()
   t.after(() => api.close())
-  const forbidden = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration(), actor: OTHER_OPERATOR })
+  const forbidden = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: description(), actor: OTHER_OPERATOR })
   assert.equal(forbidden.status, 403)
   for (const id of ["10", "33333333-3333-4333-8333-333333333333"]) {
-    assert.equal((await api.request("POST", `/establishments/${id}/lots`, { body: declaration() })).status, 404)
+    assert.equal((await api.request("POST", `/establishments/${id}/lots`, { body: description() })).status, 404)
   }
-  const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration() })
+  const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: description() })
   assert.deepEqual((await api.request("GET", `/lots/${created.body.id}`)).body, created.body)
 })
 
 test("PATCH distingue omitido/null, revalida ventana y rechaza propiedades extra", async (t) => {
   const api = await startApi()
   t.after(() => api.close())
-  const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration({ conditions: "Bolsa" }) })
+  const created = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: description({ conditions: "Bolsa" }) })
   const path = `/lots/${created.body.id}`
   const edited = await api.request("PATCH", path, { body: { version: 1, quantity: 4 } })
   assert.equal(edited.body.conditions, "Bolsa")
@@ -309,7 +309,7 @@ test("PATCH distingue omitido/null, revalida ventana y rechaza propiedades extra
   ]) assert.equal((await api.request("PATCH", path, { body })).status, 422)
   assert.equal((await api.request("POST", `${path}/publish`, { body: { version: 4, quantity: 9 } })).status, 422)
   assert.deepEqual((await api.request("GET", path)).body, noOp.body)
-  assert.equal((await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration({ id: "owned" }) })).status, 422)
+  assert.equal((await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: description({ id: "owned" }) })).status, 422)
 })
 
 test("transporte: JSON ilegible, tamaño, media type y tipos semánticos", async (t) => {
@@ -318,7 +318,7 @@ test("transporte: JSON ilegible, tamaño, media type y tipos semánticos", async
   const path = `/establishments/${ESTABLISHMENT}/lots`
   for (const [raw, contentType, status, code] of [
     ["{", "application/json", 400, "MALFORMED_REQUEST"],
-    [JSON.stringify(declaration({ description: "x".repeat(17000) })), "application/json", 413, "PAYLOAD_TOO_LARGE"],
+    [JSON.stringify(description({ description: "x".repeat(17000) })), "application/json", 413, "PAYLOAD_TOO_LARGE"],
     ["{}", "text/plain", 415, "UNSUPPORTED_MEDIA_TYPE"],
     ["null", "application/json", 422, "VALIDATION_ERROR"],
   ] as const) {
@@ -353,10 +353,10 @@ test("lista los lotes del establecimiento solo a su operador", async (t) => {
   const api = await startApi()
   t.after(() => api.close())
 
-  const draft = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration() })
-  const toPublish = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: declaration({ category: "Panadería" }) })
+  const draft = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: description() })
+  const toPublish = await api.request("POST", `/establishments/${ESTABLISHMENT}/lots`, { body: description({ category: "Panadería" }) })
   await api.request("POST", `/lots/${toPublish.body.id}/publish`, { body: { version: 1 } })
-  await api.request("POST", `/establishments/${OTHER_ESTABLISHMENT}/lots`, { body: declaration(), actor: OTHER_OPERATOR })
+  await api.request("POST", `/establishments/${OTHER_ESTABLISHMENT}/lots`, { body: description(), actor: OTHER_OPERATOR })
 
   const all = await api.request("GET", `/establishments/${ESTABLISHMENT}/lots`)
   assert.equal(all.status, 200)

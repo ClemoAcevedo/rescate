@@ -49,7 +49,7 @@ export function createIdentityRepository(pool: Pool): IdentityRepository {
       const { rows } = await pool.query<AccountRow>("SELECT id::text, public_id::text, email FROM public.users WHERE id=$1", [userId])
       return rows[0] ? toUser(rows[0]) : null
     },
-    async createUserWithCredential(email, credential) {
+    async createUserWithCredential(email, credential, consent) {
       try {
         return await withTransaction(pool, async client => {
           const { rows } = await client.query<AccountRow>(
@@ -59,6 +59,8 @@ export function createIdentityRepository(pool: Pool): IdentityRepository {
             (user_id,password_hash,password_salt,scrypt_n,scrypt_r,scrypt_p) VALUES ($1,$2,$3,$4,$5,$6)`,
           [user.id, Buffer.from(credential.hash), Buffer.from(credential.salt),
             credential.parameters.N, credential.parameters.r, credential.parameters.p])
+          await client.query(`INSERT INTO public.user_consents (user_id, purpose, policy_version, granted_at)
+            VALUES ($1, 'account_email', $2, $3)`, [user.id, consent.policyVersion, consent.grantedAt])
           return { kind: "created" as const, user }
         })
       } catch (error) {

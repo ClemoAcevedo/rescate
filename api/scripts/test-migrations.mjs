@@ -17,6 +17,8 @@ const migrations = [
   '1790800000000_lot-photos',
   '1790900000000_lot-inventory',
   '1791000000000_reservation-transitions',
+  '1791100000000_lot-status-enum',
+  '1791100000001_user-consents',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -129,11 +131,15 @@ async function verifyModel(laterTables = []) {
       [row.id], '23503', `${table}_${field}_fkey`)
     await rejected(`${table}.${field}=NULL`, `UPDATE ${table} SET ${field}=NULL WHERE id=$1`, [row.id], '23502')
   }
+  // Con el enum de lotes aplicado, un estado inventado ni siquiera es un valor del tipo.
+  const [{ data_type: lotStatusType }] = await query(`SELECT data_type FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='lots' AND column_name='status'`)
+  await rejected('lots.status inválido', "UPDATE lots SET status='inventado' WHERE id=$1", [lot.id],
+    ...(lotStatusType === 'USER-DEFINED' ? ['22P02'] : ['23514', ['lots_status_check', 'lots_publication_check']]))
+  // Con K022 aplicada, un estado distinto de confirmed también exige instante de término.
+  await rejected('commitments.status inválido', "UPDATE commitments SET status='inventado' WHERE id=$1",
+    [commitment.id], '23514', ['commitments_status_check', 'commitments_ended_at_check'])
   for (const [table, row] of [['lots', lot], ['commitments', commitment]]) {
-    // Con K022 aplicada, un estado distinto de confirmed también exige instante de término.
-    await rejected(`${table}.status inválido`, `UPDATE ${table} SET status='inventado' WHERE id=$1`,
-      [row.id], '23514', table === 'lots' ? ['lots_status_check', 'lots_publication_check']
-        : ['commitments_status_check', 'commitments_ended_at_check'])
     await rejected(`${table}.status=NULL`, `UPDATE ${table} SET status=NULL WHERE id=$1`, [row.id], '23502')
   }
   await rejected('correo duplicado', 'INSERT INTO users(email) VALUES ($1)', [user.email], '23505', 'users_email_key')
@@ -271,13 +277,51 @@ try {
   await query('UPDATE commitments SET pickup_code_ciphertext = NULL, pickup_code_fingerprint = NULL WHERE id = $1', [held.id])
   ok('K022: estados terminales con instante, código cifrado solo en confirmadas, huella única y una entrega por reserva')
 
-  // K014 y K022 solo agregan tablas: las previas conservan OID.
+  // Feedback E2: estado del lote como enum y cierre lógico con closed_at.
+  const [closing] = await query("SELECT id FROM lots WHERE status = 'published' ORDER BY id LIMIT 1")
+  assert.deepEqual(await query("SELECT udt_name FROM information_schema.columns WHERE table_name='lots' AND column_name='status'"),
+    [{ udt_name: 'lot_status' }])
+  await rejected('estado de lote inventado', "UPDATE lots SET status = 'eliminado' WHERE id = $1", [closing.id], '22P02')
+  await rejected('cierre sin closed_at', "UPDATE lots SET status = 'withdrawn' WHERE id = $1",
+    [closing.id], '23514', 'lots_closed_check')
+  await rejected('publicado con closed_at', 'UPDATE lots SET closed_at = now() WHERE id = $1',
+    [closing.id], '23514', 'lots_closed_check')
+  await rejected('cerrado sin publicar', "UPDATE lots SET status = 'expired', closed_at = now(), published_at = NULL WHERE id = $1",
+    [closing.id], '23514', 'lots_publication_check')
+  for (const status of ['expired', 'withdrawn']) {
+    await query('UPDATE lots SET status = $2, closed_at = now() WHERE id = $1', [closing.id, status])
+  }
+  assert.deepEqual(await query("SELECT count(*)::int AS n FROM lots WHERE id = $1", [closing.id]), [{ n: 1 }])
+  await query("UPDATE lots SET status = 'published', closed_at = NULL WHERE id = $1", [closing.id])
+  for (const index of ['lots_public_search_idx', 'lots_public_location_idx']) {
+    assert.ok((await query('SELECT to_regclass($1) AS name', [`public.${index}`]))[0].name, index)
+  }
+  ok('lots.status es enum; vencido y retirado conservan la fila con closed_at; índices públicos recreados')
+
+  const consent = `INSERT INTO user_consents (user_id, purpose, policy_version, granted_at)
+    SELECT id, 'account_email', $2, now() FROM users WHERE id = $1 RETURNING id`
+  const [{ id: consentUser }] = await query('SELECT id FROM users ORDER BY id LIMIT 1')
+  const [granted] = await query(consent, [consentUser, '2026-10'])
+  await rejected('dos consentimientos vigentes', consent, [consentUser, '2026-11'], '23505', 'user_consents_active_key')
+  await rejected('versión de texto vacía', consent, [consentUser, ' '], '23514', 'user_consents_policy_version_check')
+  await rejected('revocado antes de otorgarse', "UPDATE user_consents SET revoked_at = granted_at - interval '1 second' WHERE id = $1",
+    [granted.id], '23514', 'user_consents_revoked_at_check')
+  await query('UPDATE user_consents SET revoked_at = now() WHERE id = $1', [granted.id])
+  await query(consent, [consentUser, '2026-11'])
+  assert.deepEqual(await query('SELECT policy_version, revoked_at IS NULL AS active FROM user_consents ORDER BY id'),
+    [{ policy_version: '2026-10', active: false }, { policy_version: '2026-11', active: true }])
+  await query('DELETE FROM user_consents')
+  ok('consentimientos: uno vigente por propósito, revocados como historial y versión obligatoria')
+
+  // K014, K022 y los consentimientos solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const withPhotos = latest.filter(row => row.relname !== 'deliveries')
+  const withDeliveries = latest.filter(row => row.relname !== 'user_consents')
+  const withPhotos = withDeliveries.filter(row => row.relname !== 'deliveries')
   assert.deepEqual(withPhotos.filter(row => row.relname !== 'lot_photos'), before)
   assert.ok(withPhotos.some(row => row.relname === 'lot_photos'))
   assert.ok(latest.some(row => row.relname === 'deliveries'))
-  ok('K014 y K022 agregan lot_photos y deliveries sin recrear tablas existentes')
+  assert.ok(latest.some(row => row.relname === 'user_consents'))
+  ok('K014, K022 y consentimientos agregan tablas sin recrear las existentes; el enum no recrea lots')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), latest)
@@ -290,6 +334,20 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.user_consents') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), withDeliveries)
+  ok('rollback de consentimientos retira solo user_consents')
+  const lotsBeforeEnumDown = await query('SELECT id, status, published_at FROM lots ORDER BY id')
+  run('down', '1')
+  assert.deepEqual(await query(`SELECT data_type FROM information_schema.columns WHERE table_schema='public'
+    AND table_name='lots' AND column_name IN ('status', 'closed_at')`), [{ data_type: 'text' }])
+  assert.deepEqual(await query('SELECT id, status, published_at FROM lots ORDER BY id'), lotsBeforeEnumDown)
+  for (const index of ['lots_public_search_idx', 'lots_public_location_idx']) {
+    assert.ok((await query('SELECT to_regclass($1) AS name', [`public.${index}`]))[0].name, index)
+  }
+  assert.deepEqual(await snapshot(), withDeliveries)
+  ok('rollback del enum vuelve a text con CHECK, conserva lotes e índices')
   run('down', '1')
   assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
     WHERE table_schema='public' AND table_name='commitments'
@@ -361,7 +419,7 @@ try {
   assert.deepEqual((await history()).map(row => row.name), migrations)
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
-  await verifyModel(['lot_photos', 'deliveries'])
+  await verifyModel(['lot_photos', 'deliveries', 'user_consents'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

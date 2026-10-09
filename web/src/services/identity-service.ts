@@ -115,7 +115,7 @@ async function command<T>(path: string, body: unknown, csrfToken: string, parse:
 
 export interface IdentityService {
   getSession(signal?: AbortSignal): Promise<SessionResponse>
-  register(input: { email: string; password: string }, csrfToken: string): Promise<RegisterResponse>
+  register(input: { email: string; password: string; privacyConsent: boolean }, csrfToken: string): Promise<RegisterResponse>
   login(input: { email: string; password: string }, csrfToken: string): Promise<LoginResponse>
   logout(csrfToken: string): Promise<void>
 }

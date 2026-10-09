@@ -145,23 +145,33 @@ try {
   const anonymous = ana.csrf
   assert.equal((await ana.call('GET', '/auth/session')).body.csrfToken, anonymous)
   for (const origin of [undefined, 'null', 'https://evil.invalid', `https://localhost:${port}/`]) {
-    assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password }, { origin })).status, 403)
+    assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password, privacyConsent: true }, { origin })).status, 403)
   }
-  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password }, { 'x-csrf-token': 'forged' })).status, 403)
-  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password, role: 'admin' })).status, 422)
-  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password: '😀'.repeat(6) })).status, 422)
+  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password, privacyConsent: true }, { 'x-csrf-token': 'forged' })).status, 403)
+  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password, privacyConsent: true, role: 'admin' })).status, 422)
+  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password: '😀'.repeat(6), privacyConsent: true })).status, 422)
   assert.equal((await ana.call('POST', '/auth/register', '{')).status, 400)
-  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password: 'x'.repeat(17000) })).status, 413)
+  assert.equal((await ana.call('POST', '/auth/register', { email: 'Ana@Example.com', password: 'x'.repeat(17000), privacyConsent: true })).status, 413)
   assert.equal((await ana.call('POST', '/auth/register', '{}', { 'content-type': 'text/plain' })).status, 415)
-  const registered = await ana.call('POST', '/auth/register', { email: '\u00a0Ana@Example.com\ufeff', password })
+  // Sin consentimiento no hay cuenta: ausente, false o con otro tipo responde 422 y no guarda nada.
+  for (const body of [{ email: 'Ana@Example.com', password }, { email: 'Ana@Example.com', password, privacyConsent: false },
+    { email: 'Ana@Example.com', password, privacyConsent: 'true' }]) {
+    const refused = await ana.call('POST', '/auth/register', body)
+    assert.equal(refused.status, 422); assert.deepEqual(refused.body.error.details.issues.map(issue => issue.path), ['/privacyConsent'])
+  }
+  assert.equal((await db.query("SELECT * FROM users WHERE email = 'ana@example.com'")).rowCount, 0)
+  const registered = await ana.call('POST', '/auth/register', { email: '\u00a0Ana@Example.com\ufeff', password, privacyConsent: true })
   assert.equal(registered.status, 201); assert.equal(registered.body.user.email, 'ana@example.com')
   assert.match(registered.body.user.id, /^[0-9a-f-]{36}$/)
   assert.equal(ana.jar.has(secretName), false)
   assert.equal((await db.query(`SELECT m.* FROM memberships m JOIN users u ON u.id=m.user_id
     WHERE u.public_id=$1`, [registered.body.user.id])).rowCount, 0)
   assert.equal((await db.query('SELECT * FROM sessions')).rowCount, 0)
-  assert.equal((await ana.call('POST', '/auth/register', { email: 'ANA@example.com', password })).status, 409)
-  ok('bootstrap, origen/CSRF, DTO y registro canónico sin sesión ni membership; respuestas OpenAPI')
+  const consents = await db.query(`SELECT c.purpose, c.policy_version, c.revoked_at FROM user_consents c
+    JOIN users u ON u.id=c.user_id WHERE u.public_id=$1`, [registered.body.user.id])
+  assert.deepEqual(consents.rows, [{ purpose: 'account_email', policy_version: '2026-10', revoked_at: null }])
+  assert.equal((await ana.call('POST', '/auth/register', { email: 'ANA@example.com', password, privacyConsent: true })).status, 409)
+  ok('bootstrap, origen/CSRF, DTO, consentimiento obligatorio y registro canónico sin sesión ni membership; respuestas OpenAPI')
 
   const bad = await ana.call('POST', '/auth/login', { email: 'ana@example.com', password: 'incorrecta suficientemente larga' })
   const missing = await ana.call('POST', '/auth/login', { email: 'missing@example.com', password })
@@ -246,7 +256,8 @@ try {
     const identities = createIdentityRepository(concurrentPool)
     const security = createLoginSecurityRepository(concurrentPool)
     const realPasswords = createPasswordHasher()
-    const account = await identities.createUserWithCredential('concurrent@example.com', await realPasswords.hash(password))
+    const account = await identities.createUserWithCredential('concurrent@example.com', await realPasswords.hash(password),
+      { policyVersion: '2026-10', grantedAt: new Date() })
     assert.equal(account.kind, 'created')
     let started, release
     const verifying = new Promise(resolve => { started = resolve })
@@ -279,7 +290,7 @@ try {
       return { status: res.status, body: await res.json() }
     }
     const bootstrap = await request('/auth/session')
-    const register = await request('/auth/register', { email: 'browser@example.com', password }, bootstrap.body.csrfToken)
+    const register = await request('/auth/register', { email: 'browser@example.com', password, privacyConsent: true }, bootstrap.body.csrfToken)
     const login = await request('/auth/login', { email: 'browser@example.com', password }, bootstrap.body.csrfToken)
     const session = await request('/auth/session')
     return { statuses: [register.status, login.status, session.status], login: login.body, session: session.body, visibleCookies: document.cookie, foreignLotStatus: (await fetch(lotPath)).status }

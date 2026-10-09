@@ -5,10 +5,12 @@
 import { allPhotosReady } from "./photos.js"
 import type { PhotoStatus } from "./photos.js"
 
-export type LotStatus = "draft" | "published"
+/** Vencido y retirado cierran el lote sin borrarlo (ADR 0008); conserva fotos, reservas e inventario. */
+export const LOT_STATUSES = ["draft", "published", "expired", "withdrawn"] as const
+export type LotStatus = (typeof LOT_STATUSES)[number]
 
-/** Datos declarados por el operador. Son los campos que describen la oferta. */
-export interface LotDeclaration {
+/** Descripción del lote: los campos que el operador completa para la oferta. */
+export interface LotDescription {
   description: string
   category: string
   quantity: number
@@ -28,13 +30,13 @@ export interface Lot {
   establishmentPublicId: string
   status: LotStatus
   version: number
-  declaration: LotDeclaration
+  description: LotDescription
   createdAt: Date
   updatedAt: Date
   publishedAt: Date | null
 }
 
-/** Motivos por los que una declaración o una transición no es válida. */
+/** Motivos por los que una descripción o una transición no es válida. */
 export type LotRuleViolation =
   | "description_required"
   | "description_too_long"
@@ -86,55 +88,55 @@ function isUsableDate(value: Date): boolean {
 }
 
 /**
- * Normaliza una declaración recortando espacios. No decide si es válida:
- * `checkDeclaration` responde eso por separado.
+ * Normaliza una descripción recortando espacios. No decide si es válida:
+ * `checkDescription` responde eso por separado.
  */
-export function normalizeDeclaration(declaration: LotDeclaration): LotDeclaration {
-  const conditions = declaration.conditions === null ? null : declaration.conditions.trim()
+export function normalizeDescription(description: LotDescription): LotDescription {
+  const conditions = description.conditions === null ? null : description.conditions.trim()
   return {
-    ...declaration,
-    description: declaration.description.trim(),
-    category: declaration.category.trim(),
-    address: declaration.address.trim(),
-    timeZone: declaration.timeZone.trim(),
+    ...description,
+    description: description.description.trim(),
+    category: description.category.trim(),
+    address: description.address.trim(),
+    timeZone: description.timeZone.trim(),
     // Condiciones vacías equivalen a no declararlas (modelo K003: NULL).
     conditions: conditions === null || conditions === "" ? null : conditions,
   }
 }
 
-/** Devuelve todas las reglas incumplidas por una declaración ya normalizada. */
-export function checkDeclaration(declaration: LotDeclaration): LotRuleViolation[] {
+/** Devuelve todas las reglas incumplidas por una descripción ya normalizada. */
+export function checkDescription(description: LotDescription): LotRuleViolation[] {
   const violations: LotRuleViolation[] = []
 
-  if (isBlank(declaration.description)) violations.push("description_required")
-  else if ([...declaration.description].length > DESCRIPTION_MAX_LENGTH) violations.push("description_too_long")
+  if (isBlank(description.description)) violations.push("description_required")
+  else if ([...description.description].length > DESCRIPTION_MAX_LENGTH) violations.push("description_too_long")
 
-  if (isBlank(declaration.category)) {
+  if (isBlank(description.category)) {
     violations.push("category_required")
   }
 
-  if (!Number.isInteger(declaration.quantity)) violations.push("quantity_not_integer")
-  else if (declaration.quantity < 1 || declaration.quantity > QUANTITY_MAX) violations.push("quantity_out_of_range")
+  if (!Number.isInteger(description.quantity)) violations.push("quantity_not_integer")
+  else if (description.quantity < 1 || description.quantity > QUANTITY_MAX) violations.push("quantity_out_of_range")
 
 
-  if (isBlank(declaration.address)) {
+  if (isBlank(description.address)) {
     violations.push("address_required")
   }
 
-  if (!Number.isFinite(declaration.latitude) || declaration.latitude < -90 || declaration.latitude > 90) {
+  if (!Number.isFinite(description.latitude) || description.latitude < -90 || description.latitude > 90) {
     violations.push("latitude_out_of_range")
   }
 
-  if (!Number.isFinite(declaration.longitude) || declaration.longitude < -180 || declaration.longitude > 180) {
+  if (!Number.isFinite(description.longitude) || description.longitude < -180 || description.longitude > 180) {
     violations.push("longitude_out_of_range")
   }
 
-  if (!isValidTimeZone(declaration.timeZone)) violations.push("time_zone_invalid")
+  if (!isValidTimeZone(description.timeZone)) violations.push("time_zone_invalid")
 
   if (
-    !isUsableDate(declaration.pickupStartsAt) ||
-    !isUsableDate(declaration.pickupEndsAt) ||
-    declaration.pickupEndsAt.getTime() <= declaration.pickupStartsAt.getTime()
+    !isUsableDate(description.pickupStartsAt) ||
+    !isUsableDate(description.pickupEndsAt) ||
+    description.pickupEndsAt.getTime() <= description.pickupStartsAt.getTime()
   ) {
     violations.push("pickup_window_invalid")
   }
@@ -142,10 +144,10 @@ export function checkDeclaration(declaration: LotDeclaration): LotRuleViolation[
   return violations
 }
 
-/** Normaliza y exige que la declaración cumpla todas las reglas. */
-export function declareLot(declaration: LotDeclaration): LotDeclaration {
-  const normalized = normalizeDeclaration(declaration)
-  const violations = checkDeclaration(normalized)
+/** Normaliza y exige que la descripción cumpla todas las reglas. */
+export function describeLot(description: LotDescription): LotDescription {
+  const normalized = normalizeDescription(description)
+  const violations = checkDescription(normalized)
   if (violations.length > 0) throw new LotRuleError(violations)
   return normalized
 }
@@ -154,9 +156,9 @@ export function declareLot(declaration: LotDeclaration): LotDeclaration {
  * RF02: publicado el lote no cambian cantidad, contenido, lugar ni plazo. Para
  * corregirlos se retira y se crea otro. Editar solo es posible en borrador.
  */
-export function declareDraftEdit(lot: Lot, declaration: LotDeclaration): LotDeclaration {
+export function describeDraftEdit(lot: Lot, description: LotDescription): LotDescription {
   if (lot.status !== "draft") throw new LotRuleError(["published_lot_is_immutable"])
-  return declareLot(declaration)
+  return describeLot(description)
 }
 
 /**
@@ -165,9 +167,9 @@ export function declareDraftEdit(lot: Lot, declaration: LotDeclaration): LotDecl
  */
 export function checkPublication(lot: Lot, now: Date, photos: readonly PhotoStatus[] = []): LotRuleViolation[] {
   const violations: LotRuleViolation[] = []
-  if (lot.status === "published") violations.push("lot_already_published")
-  violations.push(...checkDeclaration(lot.declaration))
-  if (lot.declaration.pickupEndsAt.getTime() <= now.getTime()) violations.push("pickup_window_already_ended")
+  if (lot.status !== "draft") violations.push("lot_already_published")
+  violations.push(...checkDescription(lot.description))
+  if (lot.description.pickupEndsAt.getTime() <= now.getTime()) violations.push("pickup_window_already_ended")
   // Cero fotos es válido. Una foto en carga, validación o rechazada impide publicar:
   // las fotos quedan fijas y omitirlas cambiaría lo que el operador revisó (D-05).
   if (!allPhotosReady(photos)) violations.push("photo_not_ready")

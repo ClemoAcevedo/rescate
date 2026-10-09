@@ -9,7 +9,7 @@ Las mediciones originales de scrypt se conservan en la [guía HTTP](api/README.m
 
 | Operación | Resultado |
 | --- | --- |
-| POST `/auth/register` | Usuario + credencial atómicos; 201. No inicia sesión ni agrega membership. Duplicado canónico: 409. |
+| POST `/auth/register` | Usuario, credencial y consentimiento atómicos; 201. Exige `privacyConsent: true` (422 si falta o es false). No inicia sesión ni agrega membership. Duplicado canónico: 409. |
 | POST `/auth/login` | Scrypt, protección de intentos y sesión persistente de 12 horas. Cookie opaca; JSON sin secreto. |
 | GET `/auth/session` | Sesión pública o null, establecimientos actuales y CSRF. No renueva la sesión. |
 | POST `/auth/logout` | Revoca solo la sesión presentada; elimina ambas cookies; 204 sin cuerpo. Reintento: 401. |
@@ -58,8 +58,10 @@ Las pruebas de rollback histórico K010 fijan la versión que están verificando
 
 `user_credentials` separa identidad de capacidad de autenticar. Guarda sal de 16
 bytes, hash scrypt de 64 y N/r/p explícitos. No se fabrican credenciales para cuentas
-sin ellas. El registro confirma usuario y credencial en la misma transacción; si
-falla la segunda inserción, no queda usuario huérfano. UNIQUE resuelve también dos
+sin ellas. El registro confirma usuario, credencial y consentimiento en la misma
+transacción; si falla cualquiera, no queda usuario huérfano. El consentimiento se
+guarda en `user_consents` con la versión del texto aceptado; ver
+[ADR 0009](adr/0009-consentimiento-del-correo.md). UNIQUE resuelve también dos
 registros concurrentes con el mismo correo.
 
 La canonicalización reside únicamente en PostgreSQL (`canonicalize_email`, ICU raíz,

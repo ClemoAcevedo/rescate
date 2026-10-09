@@ -17,7 +17,7 @@ export type LotFormValues = {
 
 export type LotField = keyof LotFormValues
 export type LotFieldErrors = Partial<Record<LotField | 'establishmentId', string>>
-type Declaration = Omit<CreateLotDraftRequest, 'conditions'> & { conditions: string | null }
+type Description = Omit<CreateLotDraftRequest, 'conditions'> & { conditions: string | null }
 
 export function emptyLotValues(timeZone: string): LotFormValues {
   return {
@@ -58,10 +58,10 @@ export function acceptDecimal(value: string): string | null {
 }
 
 /**
- * Arma la declaración completa del contrato. Estas comprobaciones solo evitan envíos que
+ * Arma la descripción completa del contrato. Estas comprobaciones solo evitan envíos que
  * la API rechazaría; la validación que decide sigue siendo la del servidor.
  */
-export function buildDeclaration(values: LotFormValues): { declaration: Declaration } | { errors: LotFieldErrors } {
+export function buildDescription(values: LotFormValues): { description: Description } | { errors: LotFieldErrors } {
   const errors: LotFieldErrors = {}
   for (const field of ['description', 'category', 'address'] as const) {
     if (blank(values[field])) errors[field] = 'Completa este campo; no puede contener solo espacios.'
@@ -89,7 +89,7 @@ export function buildDeclaration(values: LotFormValues): { declaration: Declarat
 
   if (Object.keys(errors).length > 0 || !pickupStartsAt || !pickupEndsAt) return { errors }
   return {
-    declaration: {
+    description: {
       description: values.description,
       category: values.category,
       quantity,
@@ -105,19 +105,19 @@ export function buildDeclaration(values: LotFormValues): { declaration: Declarat
 }
 
 /** Solo los campos modificados; los instantes se comparan por valor, no por texto. */
-export function changedFields(declaration: Declaration, lot: LotResponse): Omit<UpdateLotDraftRequest, 'version'> {
+export function changedFields(description: Description, lot: LotResponse): Omit<UpdateLotDraftRequest, 'version'> {
   const changes: Omit<UpdateLotDraftRequest, 'version'> = {}
   const sameInstant = (a: string, b: string) => Date.parse(a) === Date.parse(b)
-  if (declaration.description !== lot.description) changes.description = declaration.description
-  if (declaration.category !== lot.category) changes.category = declaration.category
-  if (declaration.quantity !== lot.quantity) changes.quantity = declaration.quantity
-  if (declaration.conditions !== lot.conditions) changes.conditions = declaration.conditions
-  if (declaration.address !== lot.address) changes.address = declaration.address
-  if (declaration.latitude !== lot.latitude) changes.latitude = declaration.latitude
-  if (declaration.longitude !== lot.longitude) changes.longitude = declaration.longitude
-  if (declaration.timeZone !== lot.timeZone) changes.timeZone = declaration.timeZone
-  if (!sameInstant(declaration.pickupStartsAt, lot.pickupStartsAt)) changes.pickupStartsAt = declaration.pickupStartsAt
-  if (!sameInstant(declaration.pickupEndsAt, lot.pickupEndsAt)) changes.pickupEndsAt = declaration.pickupEndsAt
+  if (description.description !== lot.description) changes.description = description.description
+  if (description.category !== lot.category) changes.category = description.category
+  if (description.quantity !== lot.quantity) changes.quantity = description.quantity
+  if (description.conditions !== lot.conditions) changes.conditions = description.conditions
+  if (description.address !== lot.address) changes.address = description.address
+  if (description.latitude !== lot.latitude) changes.latitude = description.latitude
+  if (description.longitude !== lot.longitude) changes.longitude = description.longitude
+  if (description.timeZone !== lot.timeZone) changes.timeZone = description.timeZone
+  if (!sameInstant(description.pickupStartsAt, lot.pickupStartsAt)) changes.pickupStartsAt = description.pickupStartsAt
+  if (!sameInstant(description.pickupEndsAt, lot.pickupEndsAt)) changes.pickupEndsAt = description.pickupEndsAt
   return changes
 }
 
