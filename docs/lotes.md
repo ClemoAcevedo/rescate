@@ -157,7 +157,9 @@ El navegador espera hasta 10 s por intento y reintenta fallos inciertos hasta tr
 veces a 1, 2 y 4 s, conservando clave y cantidad. Mientras envía o queda un resultado
 incierto, bloquea el cambio de cantidad. No convierte un timeout en una reserva
 fallida ni inicia otra intención en silencio. Esto incluye un 5xx del proxy aunque
-su cuerpo no sea JSON. Tras confirmar, vuelve a consultar la disponibilidad para
+su cuerpo no sea JSON. La intención se conserva en la misma pestaña al recargar, y el resultado de
+creación enlaza al [detalle vigente de la reserva](reservas.md#vista-del-titular).
+Tras recibirlo, vuelve a consultar la disponibilidad para
 incluir reservas de otras personas.
 
 Recorrido: [router](../api/src/http/discovery-router.ts) →

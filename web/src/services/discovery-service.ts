@@ -34,8 +34,8 @@ function parsePage(value: unknown): PublicLotPage {
   return { items: value.items.map(parseLot), page: value.page as number, hasNextPage: value.hasNextPage }
 }
 function parseReservation(value: unknown): ReservationResponse {
-  if (!record(value) || typeof value.id !== 'string' || typeof value.lotId !== 'string'
-    || !Number.isInteger(value.quantity) || value.status !== 'confirmed' || typeof value.createdAt !== 'string') {
+  if (!record(value) || typeof value.id !== 'string' || !value.id || typeof value.lotId !== 'string' || !value.lotId
+    || !Number.isSafeInteger(value.quantity) || (value.quantity as number) < 1 || value.status !== 'confirmed' || typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt))) {
     throw new Error('La reserva tiene un formato inesperado.')
   }
   return value as unknown as ReservationResponse
@@ -62,9 +62,16 @@ export async function reserveLot(lotId: string, body: ReserveLotRequest, csrfTok
   // E1 H: hasta 10 s por intento y tres reintentos a 1, 2 y 4 s, misma intención.
   for (let attempt = 0; ; attempt++) {
     try {
-      return await send(`/public/lots/${encodeURIComponent(lotId)}/reservations`, parseReservation,
+      return await send(`/public/lots/${encodeURIComponent(lotId)}/reservations`, value => {
+        const result = parseReservation(value)
+        if (result.lotId !== lotId || result.quantity !== body.quantity) throw new Error('Resultado distinto de la solicitud.')
+        return result
+      },
         { method: 'POST', body, csrfToken, signal: AbortSignal.timeout(10000) })
     } catch (error) {
+      if (!uncertainReservation(error) && attempt > 0) {
+        throw new UnexpectedResponseError('Un intento anterior pudo confirmar la reserva. Comprueba la misma solicitud.', error)
+      }
       if (attempt === 3 || !uncertainReservation(error)) throw error
       await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt))
     }
