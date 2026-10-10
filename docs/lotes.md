@@ -38,16 +38,19 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
 Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. La búsqueda pública usa rutas separadas.
 
 - El listado exige membership actual sobre el establecimiento (403 para otro
-  operador, 404 si el establecimiento no existe). Incluye borradores y publicados,
+  operador, 404 si el establecimiento no existe). Incluye todos los estados,
   también con la ventana vencida, ordenados por publicación o creación descendente,
-  en páginas de 20. Filtra con `status=draft|published`; un filtro desconocido
+  en páginas de 20. Filtra con `status=draft|published|expired|withdrawn`; un filtro desconocido
   responde 422. Cada resumen trae los packs reservados y la miniatura de la primera
   foto lista.
 
 - PATCH recibe `version` y al menos un campo. Omitir un campo lo conserva;
-  `conditions: null` lo borra. Application combina el patch con la declaración
+  `conditions: null` lo borra. Application combina el patch con la descripción
   leída bajo bloqueo y Domain valida el resultado completo.
 - Publicar recibe solo `{ "version": N }`.
+- Vencido (`expired`) y retirado (`withdrawn`) son cierres lógicos: el lote no se
+  borra, deja de aparecer en la búsqueda pública y queda con `closed_at`. Ningún
+  comando los asigna todavía; ver [ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md).
 - Se rechazan propiedades desconocidas, cambio de establecimiento y campos del
   servidor. Las fechas son RFC 3339 con zona explícita; las respuestas usan UTC.
 - Las respuestas exponen solo `LotResponse`, con `Cache-Control: no-store`. Los
@@ -78,7 +81,7 @@ identifica un establecimiento y responde 404.
 
 | Ruta | Qué hace |
 | --- | --- |
-| `/operador/lotes` | «Mis lotes»: borradores y publicados del establecimiento, con filtros Todos/Borradores/Publicados, reservas y acceso a la vista pública. Con varios establecimientos se elige uno. |
+| `/operador/lotes` | «Mis lotes»: lotes del establecimiento con su estado (borrador, publicado, vencido o retirado), filtros Todos/Borradores/Publicados, reservas y acceso a la vista pública. Con varios establecimientos se elige uno. |
 | `/operador/lotes/nuevo` | Formulario completo; «Guardar borrador» crea el lote y navega a su ruta. |
 | `/operador/lotes/:lotId` | Carga, edita y publica el borrador; un lote publicado se muestra en solo lectura. |
 

@@ -30,6 +30,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0005](adr/0005-ciclo-de-fotos.md) | Fotos cargadas y leídas por la API, validadas por el worker; publicar exige fotos listas |
 | [0006](adr/0006-inventario-del-lote.md) | Inventario Q = F + O + R + E + X en el lote con CHECK, bloqueo común y reloj de la base |
 | [0007](adr/0007-codigo-de-retiro-y-transiciones.md) | Código de retiro cifrado con huella; cancelar, retirar y vencer como una sola transición terminal |
+| [0008](adr/0008-estado-del-lote-y-cierre-logico.md) | Estado del lote como enum; vencido y retirado son cierres lógicos con `closed_at` |
+| [0009](adr/0009-consentimiento-del-correo.md) | Consentimiento del correo en `user_consents`, obligatorio al registrarse y revocable |
 
 ## Entregas y evidencia
 

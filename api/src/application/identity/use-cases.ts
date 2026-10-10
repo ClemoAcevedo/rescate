@@ -1,4 +1,4 @@
-import { LOGIN_WINDOW_MS, SESSION_DURATION_MS, validEmail, validPassword } from "../../domain/identity.js"
+import { LOGIN_WINDOW_MS, PRIVACY_POLICY_VERSION, SESSION_DURATION_MS, validEmail, validPassword } from "../../domain/identity.js"
 import { IdentityError } from "./errors.js"
 import type { EmailCanonicalizer, IdentityRepository, IdentityUser, LoginSecurityRepository, PasswordCredential, PasswordHasher, SessionCredentials, SessionRepository, StoredSession } from "./ports.js"
 
@@ -25,11 +25,14 @@ export function createIdentityUseCases(d: IdentityDependencies) {
     if (until && until > now) throw new IdentityError("login_blocked", [], Math.ceil((until.getTime() - now.getTime()) / 1000))
   }
   return {
-    async register(email: string, password: string) {
+    async register(email: string, password: string, privacyConsent: boolean) {
       if (email.includes("\u0000")) throw new IdentityError("invalid_input", ["email"])
+      // Sin consentimiento no se guarda el correo, así que no hay cuenta.
+      if (!privacyConsent) throw new IdentityError("invalid_input", ["privacyConsent"])
     const canonical = await input(email, password)
       const credential = await d.passwords.hash(password)
-      const result = await d.identities.createUserWithCredential(canonical, credential)
+      const result = await d.identities.createUserWithCredential(canonical, credential,
+        { policyVersion: PRIVACY_POLICY_VERSION, grantedAt: d.now() })
       if (result.kind === "email_exists") throw new IdentityError("email_exists")
       return result.user
     },

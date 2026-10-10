@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { createIdentityUseCases } from "../src/application/identity/use-cases.js"
 import { IdentityError } from "../src/application/identity/errors.js"
-import { LOGIN_WINDOW_MS } from "../src/domain/identity.js"
+import { LOGIN_WINDOW_MS, PRIVACY_POLICY_VERSION } from "../src/domain/identity.js"
 import type { IdentityDependencies } from "../src/application/identity/use-cases.js"
 import type { LoginSecurityState, LoginSecurityWriter, StoredSession } from "../src/application/identity/ports.js"
 
@@ -81,9 +81,20 @@ test("cuenta inexistente consume verificación y falla igual; contraseña Unicod
   const f = fixture()
   await assert.rejects(f.useCases.login("missing@example.com", "contraseña correcta"), rejected("invalid_credentials"))
   assert.equal(f.verifies(), 1)
-  await assert.rejects(f.useCases.register("ana@example.com", "😀".repeat(6)), rejected("invalid_input"))
-  await f.useCases.register(" Ana@Example.com ", "😀".repeat(12))
+  await assert.rejects(f.useCases.register("ana@example.com", "😀".repeat(6), true), rejected("invalid_input"))
+  await f.useCases.register(" Ana@Example.com ", "😀".repeat(12), true)
   assert.equal(f.sessions.length, 0)
+})
+
+test("registro exige consentimiento y lo guarda con la versión vigente del texto", async () => {
+  const f = fixture()
+  const created: unknown[] = []
+  f.dependencies.identities.createUserWithCredential = async (...args) => { created.push(args); return { kind: "created", user: { id: "1", publicId: "u", email: "ana@example.com" } } }
+  await assert.rejects(f.useCases.register("ana@example.com", "😀".repeat(12), false), (error: unknown) =>
+    error instanceof IdentityError && error.code === "invalid_input" && error.fields.includes("privacyConsent"))
+  assert.equal(created.length, 0)
+  await f.useCases.register("ana@example.com", "😀".repeat(12), true)
+  assert.deepEqual((created[0] as unknown[])[2], { policyVersion: PRIVACY_POLICY_VERSION, grantedAt: f.dependencies.now() })
 })
 
 test("expiración absoluta, revocación e indisponibilidad no se confunden con visitante", async () => {

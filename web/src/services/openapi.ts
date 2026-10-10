@@ -73,7 +73,7 @@ export type LotResponse = {
   timeZone: TimeZone
   pickupStartsAt: Instant
   pickupEndsAt: Instant
-  status: "draft" | "published"
+  status: LotStatus
   version: Version
   createdAt: Instant
   /**
@@ -81,6 +81,10 @@ export type LotResponse = {
    */
   publishedAt: string | null
 }
+/**
+ * expired y withdrawn son cierres lógicos: el lote deja de ofrecerse, pero se conserva con su historial.
+ */
+export type LotStatus = "draft" | "published" | "expired" | "withdrawn"
 /**
  * Estado vigente al responder. confirmed: vigente; cancelled: cancelada por su titular; expired: el lote cerró sin retiro, aunque el trabajador aún no lo haya registrado; delivered: retiro acreditado. Los tres últimos son terminales.
  */
@@ -162,6 +166,10 @@ export interface OperableEstablishment {
 export interface RegisterRequest {
   email: EmailInput
   password: Password
+  /**
+   * Consentimiento para tratar el correo de la cuenta. false responde 422 y no crea la cuenta; true queda registrado con la versión vigente del texto.
+   */
+  privacyConsent: boolean
 }
 /**
  * Cuenta creada sin sesión ni membresías operables automáticas.
@@ -270,7 +278,7 @@ export interface PublicLotPage {
  */
 export interface OperatorLotSummary {
   id: PublicId
-  status: "draft" | "published"
+  status: LotStatus
   version: Version
   description: LotDescription
   category: Category

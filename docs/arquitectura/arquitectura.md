@@ -80,7 +80,7 @@ servicios, las migraciones previas y el pipeline de producción.
 | Web | [App.tsx](../../web/src/app/App.tsx) define navegación y pantallas de la aplicación. [ConnectionPage.tsx](../../web/src/pages/ConnectionPage.tsx) usa [http-client.ts](../../web/src/services/http-client.ts) para comprobar `/health`. [K009](../evidencia/k009.md) integra registro y sesión; [lotes](../lotes.md) el borrador, publicación, búsqueda pública y reserva directa. |
 | Proxy | [vite.config.ts](../../web/vite.config.ts) configura el proxy de desarrollo mediante `API_PROXY_TARGET`. La base del cliente se configura con `VITE_API_BASE_URL`. |
 | API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cinco de operador, cuatro de fotos, tres de descubrimiento/reserva y cinco de reservas y retiro. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
-| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor; K021 agrega los contadores de inventario del lote; K022 agrega estados terminales, código de retiro cifrado y la tabla de entregas. |
+| Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor; K021 agrega los contadores de inventario del lote; K022 agrega estados terminales, código de retiro cifrado y la tabla de entregas. Después `lots.status` pasa a enum con cierre lógico y se agrega `user_consents`. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
 | Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createPhotoWorker` de Composition: valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Sin base o almacenamiento queda inactivo. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
 | Fotos | [Router](../../api/src/http/photos-router.ts), [casos de uso](../../api/src/application/photos/use-cases.ts), [reglas](../../api/src/domain/photos.ts), [repositorio](../../api/src/infrastructure/postgres/photo-repository.ts), adaptadores [S3](../../api/src/infrastructure/objects/s3-object-store.ts), [local](../../api/src/infrastructure/objects/local-object-store.ts) y [sharp](../../api/src/infrastructure/images/sharp-image-processor.ts). La [CLI K005](../../api/src/prototypes/photos/cli.ts) conserva el smoke del bucket. Ver [fotos](../fotos.md). |
@@ -114,6 +114,42 @@ Cancelar, retirar y vencer (K022) reutilizan ese bloqueo desde su propio
 [repositorio](../../api/src/infrastructure/postgres/reservation-repository.ts); el
 código se cifra en Infrastructure con una clave de Composition y Application solo
 recibe el port `PickupCodes` ([reservas](../reservas.md)).
+
+### Worker: cómo y cuándo trabaja
+
+El worker es un proceso aparte (`node dist/worker.js`), con la misma imagen que la
+API pero sin HTTP. No recibe pedidos: la API deja el trabajo anotado en PostgreSQL y
+el worker lo busca. Hoy su único trabajo son las fotos (K014).
+
+```mermaid
+flowchart TD
+  inicio([Arranca]) --> config{¿DATABASE_URL y PHOTO_STORAGE?}
+  config -- no --> inactivo[Queda inactivo hasta SIGTERM]
+  config -- sí --> limpieza{¿Pasó 1 minuto desde la última limpieza?}
+  limpieza -- sí --> limpiar[Borra temporales y cargas abandonadas]
+  limpieza -- no --> reclamar
+  limpiar --> reclamar[Reclama la foto pending más antigua]
+  reclamar -- hay una --> procesar[Valida con sharp y guarda imagen y miniatura sin EXIF]
+  procesar --> limpieza
+  reclamar -- no hay --> espera[Espera 2 s] --> limpieza
+```
+
+| Pregunta | Respuesta |
+| --- | --- |
+| ¿Cuándo trabaja? | Siempre que está levantado: un ciclo continuo. Procesa una foto tras otra y, si no hay pendientes, duerme 2 s. La limpieza corre como máximo una vez por minuto. |
+| ¿Cómo sabe qué hacer? | Lee `lot_photos` con `status = 'pending'`, en orden de llegada. La API solo inserta la fila y el original temporal; nunca llama al worker. |
+| ¿Y si hay más de un worker? | El reclamo usa `FOR UPDATE SKIP LOCKED` y deja la foto tomada por 2 minutos, así que dos procesos no toman la misma. |
+| ¿Y si se cae? | El reclamo vence y otro ciclo la retoma, sobrescribiendo las mismas claves. Tras tres intentos queda `rejected` con `processing_failed`. SIGTERM termina la foto en curso antes de salir. |
+| ¿Y si falla la base o el bucket? | Registra solo un código de error (sin SQL, rutas ni credenciales), espera 5 s y vuelve a intentar. |
+| ¿Qué no hace? | No decide reglas: llama a los casos de uso de Application, igual que la API. No usa HTTP contra la API ni toma el bloqueo del lote. |
+
+**Vencimientos (K028).** El vencimiento de lotes, reservas y ofertas se agrega a este
+mismo ciclo con el mismo patrón: reclamo con plazo, reintentos acotados y casos de uso
+compartidos con la API. La API no depende de él para ser correcta: si el lote cerró,
+la API ya responde como vencido aunque el worker esté detenido; el worker solo deja
+registrado el cierre (`expired`, `closed_at` y R → X) con el instante del cierre, no
+con el del proceso ([ADR 0007](../adr/0007-codigo-de-retiro-y-transiciones.md),
+[ADR 0008](../adr/0008-estado-del-lote-y-cierre-logico.md)).
 
 ## B. Arquitectura objetivo incremental para S02
 
@@ -397,7 +433,7 @@ sustituye ese trabajo.
 [HTTP](../../api/src/http/lots-router.ts) valida forma y propiedades permitidas,
 obtiene Actor y mapea respuestas a DTO generados. [Application](../../api/src/application/lots/use-cases.ts)
 resuelve el ID público del establecimiento, exige membership y controla versión.
-Para PATCH combina campos presentes con la declaración bloqueada; [Domain](../../api/src/domain/lots.ts)
+Para PATCH combina campos presentes con la descripción bloqueada; [Domain](../../api/src/domain/lots.ts)
 valida el resultado y prohíbe editar publicados. [Infrastructure](../../api/src/infrastructure/postgres/lot-repository.ts)
 ejecuta SELECT FOR UPDATE y escritura con el mismo cliente proporcionado por
 [withTransaction](../../api/src/infrastructure/postgres/pool.ts), incluido COMMIT/ROLLBACK.

@@ -58,7 +58,7 @@ const rejects = async (label, operation, expected) => {
 let clock = new Date('2026-09-28T12:00:00.000Z')
 const now = () => new Date(clock)
 const advance = ms => { clock = new Date(clock.getTime() + ms) }
-const declaration = {
+const description = {
   description: 'Pack ficticio con fotos', category: 'Panadería', quantity: 4, conditions: null,
   address: 'Dirección ficticia 123', latitude: -33.45, longitude: -70.66, timeZone: 'America/Santiago',
   pickupStartsAt: new Date('2026-09-29T15:00:00.000Z'), pickupEndsAt: new Date('2026-09-29T18:00:00.000Z'),
@@ -97,8 +97,8 @@ try {
   let lots = createLotUseCases(createLotRepository(pool), now)
   const objects = createLocalObjectStore(storage)
   let photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects, images: createSharpImageProcessor(), now })
-  const lot = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, declaration })
-  const second = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, declaration })
+  const lot = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, description })
+  const second = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, description })
   const jpeg = await jpegWithExif()
   ok('datos ficticios: operador, operador ajeno, visitante y dos borradores')
 
@@ -294,12 +294,12 @@ try {
   try {
     await call('GET', '/auth/session')
     const credentials = { email: 'operador-http-k014@example.invalid', password: 'Contraseña ficticia K014 segura' }
-    assert.equal((await call('POST', '/auth/register', { body: credentials, type: 'application/json' })).status, 201)
+    assert.equal((await call('POST', '/auth/register', { body: { ...credentials, privacyConsent: true }, type: 'application/json' })).status, 201)
     const [registered] = await query('SELECT id::text FROM users WHERE email = $1', [credentials.email])
     await query('INSERT INTO memberships(user_id, establishment_id) VALUES ($1, $2)', [registered.id, establishments[0].id])
     assert.equal((await call('POST', '/auth/login', { body: credentials, type: 'application/json' })).status, 200)
     const created = await call('POST', `/establishments/${establishments[0].public_id}/lots`, { type: 'application/json', body: {
-      ...declaration, pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z' } })
+      ...description, pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z' } })
     assert.equal(created.status, 201)
     const lotId = created.body.id
     const photosPath = `/lots/${lotId}/photos`

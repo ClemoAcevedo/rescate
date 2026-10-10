@@ -123,6 +123,20 @@ la retoma al vencer el reclamo y sobrescribe las mismas claves: no se duplican f
 ni registros. Tras tres intentos interrumpidos, la foto queda `rejected` con
 `processing_failed`. SIGTERM termina la foto en curso antes de salir.
 
+## Datos personales y EXIF
+
+Una foto de celular puede traer en su EXIF la ubicación GPS, la fecha, el modelo del
+teléfono y el nombre del autor. Son datos personales, así que se tratan según la
+Ley 21.719, que entra en vigencia en diciembre de 2026 (hasta entonces rige la
+Ley 19.628):
+
+| Principio | Cómo se cumple |
+| --- | --- |
+| Proporcionalidad | La imagen y la miniatura se vuelven a codificar sin EXIF, XMP ni ICC: GPS, fecha, dispositivo y autor no llegan a nadie. Lo prueban `photos-domain.test.ts`, con un fixture que trae GPS y autor, y `db:test:photos` sobre la imagen que sirve la API. |
+| Finalidad | Del EXIF solo se usa la orientación, para girar la imagen. El resto no se lee ni se guarda en la base. |
+| Temporalidad | El original con EXIF es un objeto temporal que se borra apenas termina la validación, y la limpieza lo revisa cada minuto. Si el worker está detenido, el original espera en el bucket privado hasta que vuelva; no se sirve ni entra al respaldo. K051 (#54) prueba esa retención. |
+| Seguridad | El bucket es privado y la API solo entrega imagen y miniatura, nunca el original. Las claves de objeto usan el ID aleatorio de la foto, no el nombre del archivo, y los registros guardan códigos, no metadatos. |
+
 ## Configuración
 
 | Variable | API | Worker | Uso |

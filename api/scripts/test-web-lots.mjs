@@ -73,7 +73,7 @@ async function signIn(accountEmail, from) {
   const registered = await page.evaluate(async ({ email, password }) => {
     const { csrfToken } = await (await fetch('/api/auth/session')).json()
     const response = await fetch('/api/auth/register', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ email, password }),
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ email, password, privacyConsent: true }),
     })
     return response.status
   }, { email: accountEmail, password })

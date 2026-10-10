@@ -285,6 +285,7 @@ paths:
             example:
               email: "persona@example.com"
               password: "Ejemplo-sin-acceso-2030"
+              privacyConsent: true
       responses:
         "201":
           description: "Cuenta creada. Sin sesión automática ni Set-Cookie de autenticación."
@@ -488,7 +489,7 @@ paths:
       parameters:
         - name: status
           in: query
-          schema: { type: string, enum: [draft, published] }
+          schema: { $ref: "#/components/schemas/LotStatus" }
         - name: page
           in: query
           schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
@@ -1258,7 +1259,7 @@ components:
       description: "Resumen de un lote para el operador de su establecimiento."
       properties:
         id: { $ref: "#/components/schemas/PublicId" }
-        status: { type: string, enum: [draft, published] }
+        status: { $ref: "#/components/schemas/LotStatus" }
         version: { $ref: "#/components/schemas/Version" }
         description: { $ref: "#/components/schemas/LotDescription" }
         category: { $ref: "#/components/schemas/Category" }
@@ -1470,11 +1471,15 @@ components:
       required:
         - "email"
         - "password"
+        - "privacyConsent"
       properties:
         email:
           $ref: "#/components/schemas/EmailInput"
         password:
           $ref: "#/components/schemas/Password"
+        privacyConsent:
+          type: "boolean"
+          description: "Consentimiento para tratar el correo de la cuenta. false responde 422 y no crea la cuenta; true queda registrado con la versión vigente del texto."
       description: "Crea solo la cuenta; no acepta establishmentId, membresías, roles ni displayName."
     LoginRequest:
       type: "object"
@@ -1615,6 +1620,14 @@ components:
       type: "string"
       description: "Instante RFC 3339 con Z u offset explícito; respuestas en UTC (Z). No aceptar hora local sin offset."
       format: "date-time"
+    LotStatus:
+      type: "string"
+      enum:
+        - "draft"
+        - "published"
+        - "expired"
+        - "withdrawn"
+      description: "expired y withdrawn son cierres lógicos: el lote deja de ofrecerse, pero se conserva con su historial."
     Version:
       type: "integer"
       minimum: 1
@@ -1739,10 +1752,7 @@ components:
         pickupEndsAt:
           $ref: "#/components/schemas/Instant"
         status:
-          type: "string"
-          enum:
-            - "draft"
-            - "published"
+          $ref: "#/components/schemas/LotStatus"
         version:
           $ref: "#/components/schemas/Version"
         createdAt:

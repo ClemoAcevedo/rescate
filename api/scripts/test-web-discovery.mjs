@@ -111,7 +111,7 @@ try {
   const registration = await page.evaluate(async ({ email, password }) => {
     const { csrfToken } = await (await fetch('/api/auth/session')).json()
     return (await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      body: JSON.stringify({ email, password }) })).status
+      body: JSON.stringify({ email, password, privacyConsent: true }) })).status
   }, { email, password })
   assert.equal(registration, 201)
   await page.locator('input[name="email"]').fill(email)

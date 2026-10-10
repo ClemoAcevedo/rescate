@@ -1,7 +1,8 @@
 // HTTP: parsing estructural, actor y representación derivada de OpenAPI.
 import { Router } from "express"
 import type { Request, Response } from "express"
-import type { Lot, LotDeclaration } from "../domain/lots.js"
+import { LOT_STATUSES } from "../domain/lots.js"
+import type { Lot, LotDescription, LotStatus } from "../domain/lots.js"
 import type { LotUseCases } from "../application/lots/use-cases.js"
 import type { Actor, LotSummary } from "../application/lots/ports.js"
 import { notAuthenticated } from "../application/errors.js"
@@ -23,16 +24,16 @@ function toBody(lot: Lot): HttpSchemas["LotResponse"] {
     establishmentId: lot.establishmentPublicId,
     status: lot.status,
     version: lot.version,
-    description: lot.declaration.description,
-    category: lot.declaration.category,
-    quantity: lot.declaration.quantity,
-    conditions: lot.declaration.conditions,
-    address: lot.declaration.address,
-    latitude: lot.declaration.latitude,
-    longitude: lot.declaration.longitude,
-    timeZone: lot.declaration.timeZone,
-    pickupStartsAt: lot.declaration.pickupStartsAt.toISOString(),
-    pickupEndsAt: lot.declaration.pickupEndsAt.toISOString(),
+    description: lot.description.description,
+    category: lot.description.category,
+    quantity: lot.description.quantity,
+    conditions: lot.description.conditions,
+    address: lot.description.address,
+    latitude: lot.description.latitude,
+    longitude: lot.description.longitude,
+    timeZone: lot.description.timeZone,
+    pickupStartsAt: lot.description.pickupStartsAt.toISOString(),
+    pickupEndsAt: lot.description.pickupEndsAt.toISOString(),
     createdAt: lot.createdAt.toISOString(),
     publishedAt: lot.publishedAt === null ? null : lot.publishedAt.toISOString(),
   }
@@ -50,24 +51,24 @@ function toSummaryBody(lot: LotSummary): HttpSchemas["OperatorLotSummary"] {
 }
 
 /** Filtros del listado: valores únicos y conocidos; el resto es error de validación. */
-function readListQuery(query: Request["query"]): { status?: "draft" | "published"; page: number } {
+function readListQuery(query: Request["query"]): { status?: LotStatus; page: number } {
   const invalid = Object.keys(query).filter((key) => !["status", "page"].includes(key))
   const status = query.status
-  if (status !== undefined && status !== "draft" && status !== "published") invalid.push("status")
+  if (status !== undefined && !LOT_STATUSES.includes(status as LotStatus)) invalid.push("status")
   let page = 1
   if (query.page !== undefined) {
     page = typeof query.page === "string" && /^[1-9]\d{0,3}$/.test(query.page) ? Number(query.page) : 0
     if (page < 1 || page > 1000) invalid.push("page")
   }
   if (invalid.length) throw new InvalidRequestError(invalid)
-  return { status: status as "draft" | "published" | undefined, page }
+  return { status: status as LotStatus | undefined, page }
 }
 
 class InvalidRequestError extends Error {
   constructor(readonly fields: readonly string[]) { super("Entrada inválida") }
 }
 type Payload = Record<string, unknown>
-const declarationFields = ["description", "category", "quantity", "conditions", "address", "latitude", "longitude", "timeZone", "pickupStartsAt", "pickupEndsAt"] as const satisfies readonly (keyof HttpSchemas["CreateLotDraftRequest"])[]
+const descriptionFields = ["description", "category", "quantity", "conditions", "address", "latitude", "longitude", "timeZone", "pickupStartsAt", "pickupEndsAt"] as const satisfies readonly (keyof HttpSchemas["CreateLotDraftRequest"])[]
 
 function readPayload(value: unknown, allowed: readonly string[]): Payload {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new InvalidRequestError([""])
@@ -76,10 +77,10 @@ function readPayload(value: unknown, allowed: readonly string[]): Payload {
   return value as Payload
 }
 
-function readDeclaration(payload: Payload, partial: boolean): Partial<LotDeclaration> {
+function readDescription(payload: Payload, partial: boolean): Partial<LotDescription> {
   const result: Record<string, unknown> = {}
   const invalid: string[] = []
-  for (const field of declarationFields) {
+  for (const field of descriptionFields) {
     if (!Object.hasOwn(payload, field)) {
       if (!partial && field !== "conditions") invalid.push(field)
       else if (!partial) result.conditions = null
@@ -102,7 +103,7 @@ function readDeclaration(payload: Payload, partial: boolean): Partial<LotDeclara
     } else result[field] = value
   }
   if (invalid.length) throw new InvalidRequestError(invalid)
-  return result as Partial<LotDeclaration>
+  return result as Partial<LotDescription>
 }
 
 function readVersion(payload: Payload): number {
@@ -139,10 +140,10 @@ export function createLotsRouter({ useCases, authenticate, protectCommand, log =
     response.json({ items: result.items.map(toSummaryBody), page: result.page, hasNextPage: result.hasNextPage } satisfies HttpSchemas["OperatorLotPage"])
   }))
   router.post("/establishments/:establishmentId/lots", withActor(async (actor, request, response) => {
-    const payload = readPayload(request.body, declarationFields)
+    const payload = readPayload(request.body, descriptionFields)
     const lot = await useCases.createDraft(actor, {
       establishmentId: routeId(request.params.establishmentId),
-      declaration: readDeclaration(payload, false) as LotDeclaration,
+      description: readDescription(payload, false) as LotDescription,
     })
     response.status(201).json(toBody(lot))
   }))
@@ -150,12 +151,12 @@ export function createLotsRouter({ useCases, authenticate, protectCommand, log =
     response.json(toBody(await useCases.getLot(actor, routeId(request.params.lotId))))
   }))
   router.patch("/lots/:lotId", withActor(async (actor, request, response) => {
-    const payload = readPayload(request.body, ["version", ...declarationFields])
+    const payload = readPayload(request.body, ["version", ...descriptionFields])
     const version = readVersion(payload)
     if (Object.keys(payload).length < 2) throw new InvalidRequestError([""])
     response.json(toBody(await useCases.updateDraft(actor, {
       publicId: routeId(request.params.lotId), expectedVersion: version,
-      declaration: readDeclaration(payload, true),
+      description: readDescription(payload, true),
     })))
   }))
   router.post("/lots/:lotId/publish", withActor(async (actor, request, response) => {

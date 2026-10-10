@@ -60,7 +60,7 @@ async function person(label) {
   const call = client()
   await call('GET', '/auth/session')
   const email = `k022-${label}-${randomUUID()}@example.invalid`
-  assert.equal((await call('POST', '/auth/register', { email, password: 'Clave-ficticia-K022-segura' })).status, 201)
+  assert.equal((await call('POST', '/auth/register', { email, password: 'Clave-ficticia-K022-segura', privacyConsent: true })).status, 201)
   assert.equal((await call('POST', '/auth/login', { email, password: 'Clave-ficticia-K022-segura' })).status, 200)
   const { rows } = await database.query('SELECT id::text FROM users WHERE email = $1', [email])
   return { call, userId: rows[0].id }

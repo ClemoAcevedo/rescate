@@ -21,7 +21,7 @@ type LotFormFieldsProps = {
 }
 
 /**
- * Campos de la declaración del lote; la página decide envío, estado y resultado.
+ * Campos de la descripción del lote; la página decide envío, estado y resultado.
  * Los numéricos son texto que ignora cambios no numéricos: type="number" admite «e», «+» y «-» en Chrome y
  * cualquier texto en Safari/Firefox. Las coordenadas no usan inputMode="decimal"
  * porque el teclado de iOS no ofrece el signo menos.

@@ -51,7 +51,7 @@ function toLot(row: LotRow): Lot {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
-    declaration: {
+    description: {
       description: row.description,
       category: row.category,
       quantity: row.quantity,
@@ -128,7 +128,7 @@ export function createLotRepository(pool: Pool): LotRepository {
     },
 
     async insertLot(lot: NewLot) {
-      const d = lot.declaration
+      const d = lot.description
       const { rows } = await pool.query<LotRow>(
         `INSERT INTO public.lots (establishment_id, description, category, quantity, conditions,
            address, latitude, longitude, time_zone, pickup_starts_at, pickup_ends_at)
@@ -154,7 +154,7 @@ export function createLotRepository(pool: Pool): LotRepository {
            (SELECT p.public_id::text FROM public.lot_photos p
              WHERE p.lot_id = l.id AND p.status = 'ready' ORDER BY p.position LIMIT 1) AS photo_id
          FROM public.lots l
-         WHERE l.establishment_id = $1 AND ($2::text IS NULL OR l.status = $2)
+         WHERE l.establishment_id = $1 AND ($2::public.lot_status IS NULL OR l.status = $2)
          ORDER BY COALESCE(l.published_at, l.created_at) DESC, l.id DESC
          LIMIT 21 OFFSET $3`,
         [establishmentId, filter.status ?? null, (filter.page - 1) * 20],
@@ -179,8 +179,8 @@ function createLotWriter(client: PoolClient): LotWriter {
       return membershipExists(client, userId, establishmentId)
     },
 
-    async updateDeclaration(update: LotUpdate) {
-      const d = update.declaration
+    async updateDescription(update: LotUpdate) {
+      const d = update.description
       const { rows } = await client.query<LotRow>(
         `UPDATE public.lots SET description = $3, category = $4, quantity = $5, conditions = $6,
            address = $7, latitude = $8, longitude = $9, time_zone = $10,

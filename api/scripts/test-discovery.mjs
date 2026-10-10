@@ -70,7 +70,7 @@ try {
   const buyer = client()
   assert.equal((await buyer('GET', '/auth/session')).status, 200)
   const email = `k015-${randomUUID()}@example.invalid`
-  assert.equal((await buyer('POST', '/auth/register', { email, password: 'Clave-ficticia-K015-segura' })).status, 201)
+  assert.equal((await buyer('POST', '/auth/register', { email, password: 'Clave-ficticia-K015-segura', privacyConsent: true })).status, 201)
   assert.equal((await buyer('POST', '/auth/login', { email, password: 'Clave-ficticia-K015-segura' })).status, 200)
   const key = randomUUID()
   const confirmed = await buyer('POST', `/public/lots/${lotId}/reservations`, { quantity: 2, idempotencyKey: key })
@@ -84,7 +84,7 @@ try {
   const other = client()
   await other('GET', '/auth/session')
   const otherEmail = `k015-${randomUUID()}@example.invalid`
-  await other('POST', '/auth/register', { email: otherEmail, password: 'Clave-ficticia-K015-segura' })
+  await other('POST', '/auth/register', { email: otherEmail, password: 'Clave-ficticia-K015-segura', privacyConsent: true })
   await other('POST', '/auth/login', { email: otherEmail, password: 'Clave-ficticia-K015-segura' })
   assert.equal((await other('POST', `/public/lots/${lotId}/reservations`, { quantity: 1, idempotencyKey: randomUUID() })).status, 409)
   assert.equal((await guest('GET', `/public/lots/${lotId}`)).body.availableQuantity, 0)
@@ -112,8 +112,8 @@ try {
     const { rows } = await database.query(`INSERT INTO lots
       (establishment_id, description, category, quantity, address, latitude, longitude, time_zone,
        pickup_starts_at, pickup_ends_at, status, published_at)
-      VALUES ($1,$2,'Filtro K015',$3,'Santiago',$4,$5,'America/Santiago',$6,$7,$8,
-        CASE WHEN $8='published' THEN now() ELSE NULL END) RETURNING public_id::text AS id`,
+      VALUES ($1,$2,'Filtro K015',$3,'Santiago',$4,$5,'America/Santiago',$6,$7,$8::lot_status,
+        CASE WHEN $8::lot_status='published' THEN now() ELSE NULL END) RETURNING public_id::text AS id`,
       [establishment.rows[0].id, description, quantity, latitude, longitude, starts, ends, status])
     return rows[0].id
   }
