@@ -7,6 +7,7 @@ import { LotEditorPage } from '../pages/LotEditorPage'
 import { LotsPage } from '../pages/LotsPage'
 import { MyLotsPage } from '../pages/MyLotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { PickupsPage } from '../pages/PickupsPage'
 import { ReservationsPage, ReservationDetailPage } from '../pages/ReservationsPage'
 import { RegisterPage } from '../pages/RegisterPage'
 
@@ -26,6 +27,7 @@ function App() {
         <Route path="operador/lotes" element={<MyLotsPage />} />
         <Route path="operador/lotes/nuevo" element={<LotEditorPage />} />
         <Route path="operador/lotes/:lotId" element={<LotEditorPage />} />
+        <Route path="operador/lotes/:lotId/retiros" element={<PickupsPage />} />
         <Route path="reservas" element={<ReservationsPage />} />
         <Route path="reservas/:id" element={<ReservationDetailPage />} />
         <Route path="registro" element={<RegisterPage />} />

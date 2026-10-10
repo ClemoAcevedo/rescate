@@ -1,0 +1,23 @@
+/* Presentación exclusiva de la validación de retiros (K024). */
+.pickups { display: grid; gap: var(--sp-4); }
+.pickups .eyebrow { margin-bottom: 0; }
+.pickups h1 { font-size: var(--fs-display-md); }
+.pickups__lot { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.pickups__desk { display: grid; gap: var(--sp-4); }
+.pickups__form { display: grid; gap: var(--sp-3); }
+.pickups__form > .ui-button { justify-self: start; }
+.pickups__code { font-family: var(--font-mono); letter-spacing: var(--ls-caps); text-transform: uppercase; }
+.pickups__review { display: grid; gap: var(--sp-4); }
+.pickups__review-heading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.pickups__review-heading h2 { font-size: var(--fs-title-lg); }
+.pickups__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--sp-3); margin: 0; }
+.pickups__facts dt { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.pickups__facts dd { margin: 0; }
+.pickups__actions, .pickups__footer { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.pickups .ui-alert p { margin: 0; }
+.pickups .ui-alert .ui-button { margin-top: var(--sp-3); }
+
+@media (max-width: 48rem) {
+  .pickups__form > .ui-button { justify-self: stretch; }
+  .pickups__actions > .ui-button { flex: 1 1 100%; }
+}
