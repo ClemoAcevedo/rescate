@@ -33,7 +33,8 @@ levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth`,
 
 ## Estado de las rutas
 
-`/` redirige a `/lotes`. `/lotes` y `/lotes/:id` son demostraciones estáticas;
+`/` redirige a `/lotes`. `/lotes` y `/lotes/:id` consumen la búsqueda pública y reserva directa;
+`/reservas` y `/reservas/:id` muestran historial, detalle y cancelación;
 `/registro` y `/login` integran K008. `/operador/lotes/nuevo` y
 `/operador/lotes/:lotId` integran el borrador y la publicación de K010 (K011). `/conexion` consulta únicamente
 `/health`; las rutas desconocidas muestran la pantalla 404. Recargas directas
@@ -120,8 +121,20 @@ Categoría y horario aparecen primero; zona y radio se despliegan cuando hacen
 falta. Las tarjetas separan stock, lugar y ventana de retiro. El detalle muestra
 un panel de reserva junto a la información en escritorio y antes de ella en móvil;
 los botones de cantidad respetan los límites y se bloquean durante un resultado
-incierto. La confirmación recibe el foco y muestra el identificador persistido.
-La confirmación muestra la reserva persistida y conserva su intención al reintentar
-una respuesta perdida. Reglas y pruebas en [lotes](../docs/lotes.md).
-Los lotes agotados siguen visibles con su estado y sin formulario de reserva;
+incierto. El resultado de creación recibe el foco, muestra el identificador persistido y
+enlaza al detalle vigente. El reintento de una respuesta perdida conserva la intención. Reglas y pruebas en [lotes](../docs/lotes.md).
+Los lotes agotados siguen visibles con su estado; solo ofrecen reintentar una
+reserva si hay una intención pendiente de comprobar;
 una fotografía ausente o fallida muestra el reemplazo local.
+
+## Reservas y cancelación
+
+«Mis reservas» conduce a `/reservas`, con páginas de reservas vigentes y terminadas.
+`/reservas/:id` muestra el estado vigente y el código solo mientras corresponde;
+la cancelación requiere confirmación y una respuesta válida del servidor. Tipos
+HTTP generados y parsing en `reservations-service.ts`. Reglas y recuperación de
+respuestas perdidas en [reservas](../docs/reservas.md#vista-del-titular).
+
+Con Vite iniciado sin mocks de identidad, `npm --prefix api run test:web:reservations`
+prueba el flujo de navegador con respuestas HTTP controladas. `test:web:compose`
+lo incluye junto con los recorridos reales de reserva y cancelación.

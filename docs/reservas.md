@@ -46,6 +46,36 @@ código no vaya en la URL; no cambia estado. `canConfirm` es `false` con estado
 `confirmed` cuando la ventana aún no comienza. Revisar de nuevo el código muestra
 el estado que provocó un 409 al confirmar.
 
+## Vista del titular
+
+`/reservas` muestra las reservas propias, incluidas canceladas, retiradas y vencidas,
+en páginas de 20. `/reservas/:id` consulta el estado vigente y muestra cantidad,
+lugar, condiciones, ventana en la zona del lote e instantes de creación y término.
+El detalle organiza los datos con etiquetas y destaca el código en un bloque propio.
+El aviso de solicitud registrada enlaza al detalle vigente y mantiene el identificador
+como dato secundario. Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
+URLs ni almacenamiento del navegador.
+
+El detalle muestra el código únicamente con una respuesta válida y confirmada,
+antes del cierre y sin una cancelación pendiente de comprobar. Al finalizar la
+ventana lo oculta y ofrece consultar el estado; vuelve a consultar al regresar a
+la pestaña y cada quince segundos mientras está visible. Un resultado de creación
+reproducido por idempotencia lleva al detalle para conocer el estado actual, pues puede corresponder a una reserva ya terminada.
+
+Cancelar pide confirmación en un bloque de advertencia dentro de la tarjeta y
+bloquea envíos simultáneos. La acción destructiva y la opción de conservar la reserva
+se separan y se apilan en móvil. No anuncia cancelación
+hasta recibir el estado `cancelled`. Ante una respuesta perdida oculta el código
+y permite consultar el estado o repetir la cancelación de la misma reserva. Un
+conflicto conserva el aviso hasta consultar el resultado vigente. El registro
+terminado sigue accesible desde el historial.
+
+La reserva directa guarda clave y cantidad por actor y lote en `sessionStorage`
+antes de enviar. Navegar o recargar la misma pestaña recupera esa intención, incluso
+si ya no queda stock o el lote cerró. Un reintento conserva ambas; la respuesta de
+creación no aporta un código ni acredita el estado vigente. Si el navegador no
+permite guardar la intención, el comando no se inicia.
+
 ## Backend
 
 Recorrido: [router](../api/src/http/reservations-router.ts) →
@@ -70,14 +100,17 @@ huella. Compose trae una clave ficticia que la API rechaza en producción
 
 | Comando | Qué comprueba |
 | --- | --- |
+| `npm --prefix api run test:web:reservations` | Navegador con HTTP controlado: cancelación pendiente o perdida, reintento, conflictos y permisos, código inválido, cierre con la vista abierta, historial, páginas y recuperación de intención tras recarga. Requiere Vite sin mocks de identidad. |
 | `npm --prefix api test` | Reglas de plazo y transición, normalización, cifrado y huella, y recorrido HTTP contra OpenAPI con repositorio en memoria. |
 | `npm --prefix api run db:test:reservations:compose` | PostgreSQL real: código cifrado, captura cancelada, nuevo código por reserva, dos operadores y reintentos, cancelar contra retirar en 20 reservas, plazos sin trabajador, vencimiento repetido, espera de bloqueo, rollback y conciliación de R, E y X. |
 | `npm --prefix api run db:test:compose` | Restricciones de estado, término, código y entregas, y rollback de la migración. |
 
 `test:web:compose` ejecuta también la prueba con PostgreSQL en CI.
+La prueba de navegador acepta el certificado HTTPS autofirmado del entorno local
+en sus contextos de Playwright.
 
 ## Limitaciones
 
-- Las pantallas del titular y del operador son K023 (#25) y K024 (#26).
+- La pantalla del operador corresponde a K024 (#26).
 - El límite de cinco fallos de revisión por operador cada quince minutos es K034 (#37).
 - El trabajador que registra vencimientos es K028 (#31).
