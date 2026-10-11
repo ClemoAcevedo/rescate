@@ -111,6 +111,8 @@ jobs:
         run: npm --prefix api run db:test:identity:compose
       - name: K014 photo upload, validation, worker restart and cleanup on empty PostgreSQL
         run: npm --prefix api run db:test:photos:compose
+      - name: K025 reservation races and pickup deadlines with worker running and stopped
+        run: npm --prefix api run db:test:reservations:compose
       - name: Install Chromium for HTTPS cookie validation
         run: cd api && npx playwright install --with-deps chromium
       - name: K008 auth, restart and K010 integration over HTTPS

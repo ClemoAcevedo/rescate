@@ -263,6 +263,8 @@ lo cambia.
   retiro de fotos (K014), según OpenAPI.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
   (K014).
+- **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
+  observados y repetición con el worker activo y detenido (K025).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

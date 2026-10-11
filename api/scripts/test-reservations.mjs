@@ -1,4 +1,4 @@
-// K022: cancelación, código de retiro, entrega y vencimiento contra PostgreSQL real.
+// K022/K025: cancelación, retiro, concurrencia y plazos contra PostgreSQL real.
 // Usa una base aislada y ya migrada; las carreras usan los casos de uso con el Pool real.
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -71,6 +71,41 @@ const codes = createPickupCodes(pickupKey)
 const reservations = createReservationUseCases(createReservationRepository(pool), codes, () => new Date())
 const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date())
 const settle = promise => promise.then(value => ({ value }), error => ({ error }))
+// Cada contendiente debe esperar nuestro bloqueo, directamente o detrás de otro contendiente.
+async function lockedRace(lotId, actions, whileBlocked = async () => {}) {
+  const pending = []
+  let committed = false
+  await database.query('BEGIN')
+  try {
+    const { rows: [{ pid }] } = await database.query('SELECT pg_backend_pid() AS pid')
+    await database.query('SELECT id FROM lots WHERE public_id = $1 FOR UPDATE', [lotId])
+    const deadline = performance.now() + 1500
+    for (const action of actions) {
+      pending.push(settle(action()))
+      let blocked = 0
+      do {
+        await database.query('SELECT pg_stat_clear_snapshot()')
+        const waiting = await database.query(`WITH RECURSIVE waiting(pid) AS (
+          SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))
+          UNION
+          SELECT a.pid FROM pg_stat_activity a JOIN waiting w ON w.pid = ANY(pg_blocking_pids(a.pid))
+            WHERE a.datname = current_database()
+        ) SELECT pid FROM waiting`, [pid])
+        blocked = waiting.rowCount
+        if (blocked === pending.length) break
+        await new Promise(resolve => setTimeout(resolve, 10))
+      } while (performance.now() < deadline)
+      assert.equal(blocked, pending.length, `deben esperar ${pending.length} transacciones del lote ${lotId}`)
+    }
+    await whileBlocked(pending)
+    await database.query('COMMIT')
+    committed = true
+    return await Promise.all(pending)
+  } finally {
+    if (!committed) await database.query('ROLLBACK')
+    await Promise.all(pending)
+  }
+}
 try {
   await database.connect()
   const establishment = async name => (await database.query(`INSERT INTO establishments
@@ -157,26 +192,47 @@ try {
   // --- Dos operadores y reintentos: una sola entrega.
   const key = randomUUID()
   const body = { reservationId: again.body.id, code: newCode, idempotencyKey: key }
-  const [first, retry, rival] = await Promise.all([
-    operator.call('POST', `/lots/${lot}/pickups`, body),
-    operator.call('POST', `/lots/${lot}/pickups`, body),
-    colleague.call('POST', `/lots/${lot}/pickups`, { ...body, idempotencyKey: randomUUID() }),
+  const attempts = await lockedRace(lot, [
+    () => operator.call('POST', `/lots/${lot}/pickups`, body),
+    () => operator.call('POST', `/lots/${lot}/pickups`, body),
+    () => colleague.call('POST', `/lots/${lot}/pickups`, { ...body, idempotencyKey: randomUUID() }),
   ])
-  const winners = [first, retry, rival].filter(result => result.status === 201)
-  assert.ok(winners.length >= 1 && [first, retry, rival].every(result => [201, 409].includes(result.status)))
-  assert.ok(winners.every(result => result.body.reservationId === again.body.id))
+  assert.ok(attempts.every(result => result.value), 'las tres solicitudes HTTP deben terminar')
+  const [first, retry, rival] = attempts.map(result => result.value)
+  assert.deepEqual([first.status, retry.status, rival.status], [201, 201, 409])
+  assert.deepEqual(retry.body, first.body)
+  assert.equal(first.body.reservationId, again.body.id)
   assert.equal((await database.query(`SELECT count(*)::int AS n FROM deliveries d JOIN commitments c ON c.id = d.commitment_id
     WHERE c.public_id = $1`, [again.body.id])).rows[0].n, 1)
   assert.deepEqual(await counters(lot), { f: 4, r: 0, e: 1, x: 0 })
   const replay = await operator.call('POST', `/lots/${lot}/pickups`, body)
-  const original = winners.find(result => result !== rival) ?? first
-  if (rival.status === 201) assert.equal(replay.status, 409)
-  else assert.deepEqual(replay.body, original.body)
+  assert.deepEqual(replay, first)
   assert.equal((await operator.call('POST', `/lots/${lot}/pickups`, { ...body, idempotencyKey: randomUUID() })).status, 409)
   assert.equal((await holder.call('POST', `/reservations/${again.body.id}/cancel`, {})).status, 409)
   assert.equal((await operator.call('POST', `/lots/${lot}/pickup-reviews`, { code: newCode })).body.reservation.status, 'delivered')
   assert.equal((await status(again.body.id)).readable, false)
-  ok('dos operadores y reintentos simultáneos: una entrega, R → E una vez; la clave reproduce y otro intento informa retirado')
+  await database.query("UPDATE lots SET pickup_ends_at = clock_timestamp() + interval '100 milliseconds' WHERE public_id = $1", [lot])
+  await database.query('SELECT pg_sleep(GREATEST(0, extract(epoch FROM (pickup_ends_at - clock_timestamp())))) FROM lots WHERE public_id = $1', [lot])
+  assert.deepEqual(await operator.call('POST', `/lots/${lot}/pickups`, body), first)
+  ok('dos operadores y reintento con 3 bloqueos observados: [201, 201, 409], una entrega; replay idéntico incluso tras cierre')
+
+  const lastPack = await makeLot(1)
+  const lastKey = randomUUID()
+  const lastAttempts = await lockedRace(lastPack, [
+    () => discovery.reserve(holder, lastPack, 1, lastKey),
+    () => discovery.reserve(holder, lastPack, 1, lastKey),
+    () => discovery.reserve(stranger, lastPack, 1, randomUUID()),
+  ])
+  assert.ok(lastAttempts[0].value)
+  assert.deepEqual(lastAttempts[1].value, lastAttempts[0].value)
+  assert.equal(lastAttempts[2].error?.reason, 'unavailable')
+  const restarted = createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date())
+  assert.deepEqual(await restarted.reserve(holder, lastPack, 1, lastKey), lastAttempts[0].value)
+  assert.deepEqual(await counters(lastPack), { f: 0, r: 1, e: 0, x: 0 })
+  assert.equal((await database.query(`SELECT count(*)::int AS n FROM commitments c JOIN lots l ON l.id = c.lot_id
+    WHERE l.public_id = $1`, [lastPack])).rows[0].n, 1)
+  issuedCodes.add((await reservations.get(holder, lastAttempts[0].value.id)).pickupCode)
+  ok('última unidad con 3 bloqueos observados: reserva y replay idénticos, rival sin stock; otra instancia recupera la respuesta')
 
   // --- Cancelar y retirar compiten bajo bloqueo: una sola transición terminal por reserva.
   const raceLot = await makeLot(20)
@@ -187,10 +243,15 @@ try {
     const { pickupCode } = await reservations.get({ userId: rows[0].id }, created.id)
     racers.push({ userId: rows[0].id, id: created.id, code: pickupCode })
   }
-  const outcomes = await Promise.all(racers.map(racer => Promise.all([
-    settle(reservations.cancel({ userId: racer.userId }, racer.id)),
-    settle(reservations.confirmPickup({ userId: operator.userId }, raceLot, racer.id, racer.code, randomUUID())),
-  ])))
+  const outcomes = []
+  for (const [i, racer] of racers.entries()) {
+    const actions = [
+      () => reservations.cancel({ userId: racer.userId }, racer.id),
+      () => reservations.confirmPickup(operator, raceLot, racer.id, racer.code, randomUUID()),
+    ]
+    const results = await lockedRace(raceLot, i % 2 ? actions.reverse() : actions)
+    outcomes.push(i % 2 ? results.reverse() : results)
+  }
   let cancels = 0; let deliveries = 0
   for (const [i, [cancel, pickup]] of outcomes.entries()) {
     const final = (await status(racers[i].id)).status
@@ -204,8 +265,10 @@ try {
       assert.equal(cancel.value?.status, 'cancelled')
       assert.equal(pickup.error?.reason, 'cancelled', JSON.stringify(pickup))
     }
+    assert.equal(final, i % 2 ? 'delivered' : 'cancelled')
+    console.log(`RACE K025 ${i + 1}/20: 2 bloqueos observados; reserva ${racers[i].id}: ${final}`)
   }
-  assert.equal(cancels + deliveries, 20)
+  assert.deepEqual([cancels, deliveries], [10, 10])
   assert.deepEqual(await counters(raceLot), { f: cancels, r: 0, e: deliveries, x: 0 })
   ok(`cancelar contra retirar en 20 reservas: una transición terminal cada una (${cancels} canceladas, ${deliveries} retiradas)`)
 
@@ -241,25 +304,68 @@ try {
   assert.equal(await reservations.expireLot(lot), 0)
   ok('registrar el vencimiento mueve R → X con el cierre como término; repetirlo no libera de nuevo')
 
-  // --- Cancelar espera el bloqueo y relee: un cierre confirmado mientras esperaba gana.
+  // --- Cancelar espera el bloqueo y relee un cambio de ventana confirmado mientras esperaba.
   const waited = await makeLot(3)
   const waitedReservation = await discovery.reserve({ userId: holder.userId }, waited, 1, randomUUID())
-  await database.query('BEGIN')
-  await database.query('SELECT id FROM lots WHERE public_id = $1 FOR UPDATE', [waited])
-  const pending = settle(reservations.cancel({ userId: holder.userId }, waitedReservation.id))
-  let blocked = false
-  for (let i = 0; i < 100 && !blocked; i++) {
-    blocked = (await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
-      AND wait_event_type = 'Lock' AND query LIKE '%FROM public.lots WHERE public_id%'`)).rowCount > 0
-    if (!blocked) await new Promise(resolve => setTimeout(resolve, 10))
-  }
-  assert.equal(blocked, true, 'la cancelación debe esperar el bloqueo real del lote')
-  await database.query(`UPDATE lots SET pickup_starts_at = now() - interval '3 hours', pickup_ends_at = now() - interval '1 second'
-    WHERE public_id = $1`, [waited])
-  await database.query('COMMIT')
-  assert.equal((await pending).error?.reason, 'expired')
+  const [pending] = await lockedRace(waited, [() => reservations.cancel(holder, waitedReservation.id)], async () => {
+    await database.query(`UPDATE lots SET pickup_starts_at = now() - interval '3 hours', pickup_ends_at = now() - interval '1 second'
+      WHERE public_id = $1`, [waited])
+  })
+  assert.equal(pending.error?.reason, 'expired')
   assert.deepEqual(await counters(waited), { f: 2, r: 1, e: 0, x: 0 })
-  ok('cancelar espera el bloqueo del lote y relee estado y reloj: no libera después del cierre')
+  ok('cancelar espera el bloqueo observado y relee la nueva ventana: no libera después del cierre')
+
+  // El plazo ya está confirmado antes de BEGIN: solo avanza el reloj, no se cambia la ventana bajo bloqueo.
+  for (const command of ['reserve', 'cancel', 'pickup', 'start']) {
+    const timedLot = await makeLot(2)
+    const created = command === 'reserve' ? null : await discovery.reserve(holder, timedLot, 1, randomUUID())
+    const pickupCode = created && (await reservations.get(holder, created.id)).pickupCode
+    if (pickupCode) issuedCodes.add(pickupCode)
+    if (command === 'pickup') assert.equal((await reservations.reviewPickup(operator, timedLot, pickupCode)).canConfirm, true)
+    const boundary = command === 'start' ? 'pickup_starts_at' : 'pickup_ends_at'
+    await database.query(`UPDATE lots SET ${boundary} = date_trunc('milliseconds', clock_timestamp() + interval '1200 milliseconds')
+      WHERE public_id = $1`, [timedLot])
+    const key = randomUUID()
+    const action = command === 'reserve' ? () => discovery.reserve(holder, timedLot, 1, key)
+      : command === 'cancel' ? () => reservations.cancel(holder, created.id)
+      : () => reservations.confirmPickup(operator, timedLot, created.id, pickupCode, key)
+    const [result] = await lockedRace(timedLot, [action], async () => {
+      assert.equal((await database.query(`SELECT clock_timestamp() < ${boundary} AS before
+        FROM lots WHERE public_id = $1`, [timedLot])).rows[0].before, true, `${command} debe bloquearse antes del límite`)
+      await database.query(`SELECT pg_sleep(GREATEST(0, extract(epoch FROM (${boundary} - clock_timestamp()))))
+        FROM lots WHERE public_id = $1`, [timedLot])
+      assert.equal((await database.query(`SELECT clock_timestamp() >= ${boundary} AS crossed
+        FROM lots WHERE public_id = $1`, [timedLot])).rows[0].crossed, true)
+    })
+    if (command === 'start') {
+      assert.ok(result.value, 'el retiro debe aceptar el inicio alcanzado durante la espera')
+      assert.deepEqual(await counters(timedLot), { f: 1, r: 0, e: 1, x: 0 })
+    } else {
+      assert.equal(result.error?.reason, command === 'reserve' ? 'unavailable' : 'expired')
+      assert.deepEqual(await counters(timedLot), { f: created ? 1 : 2, r: created ? 1 : 0, e: 0, x: 0 })
+      assert.equal((await database.query(`SELECT count(*)::int AS n FROM commitments c JOIN lots l ON l.id = c.lot_id
+        WHERE l.public_id = $1`, [timedLot])).rows[0].n, created ? 1 : 0)
+      assert.equal((await database.query('SELECT count(*)::int AS n FROM deliveries WHERE idempotency_key = $1', [key])).rows[0].n, 0)
+      if (created) assert.deepEqual([(await status(created.id)).status, (await status(created.id)).readable], ['confirmed', true])
+    }
+    ok(`${command}: bloqueo observado antes del límite, reloj PostgreSQL lo cruza; ${result.value ? 'retiro aceptado desde el inicio' : result.error.reason}, inventario conciliado`)
+  }
+
+  const timeoutLot = await makeLot(1)
+  const timeoutReservation = await discovery.reserve(holder, timeoutLot, 1, randomUUID())
+  const timeoutCode = (await reservations.get(holder, timeoutReservation.id)).pickupCode
+  issuedCodes.add(timeoutCode)
+  const timeoutKey = randomUUID()
+  const pickupAfterTimeout = () => reservations.confirmPickup(operator, timeoutLot, timeoutReservation.id, timeoutCode, timeoutKey)
+  await lockedRace(timeoutLot, [pickupAfterTimeout], async ([attempt]) => {
+    assert.equal((await attempt).error?.code, '55P03')
+  })
+  assert.deepEqual(await counters(timeoutLot), { f: 0, r: 1, e: 0, x: 0 })
+  assert.equal((await database.query('SELECT count(*)::int AS n FROM deliveries WHERE idempotency_key = $1', [timeoutKey])).rows[0].n, 0)
+  const afterTimeout = await pickupAfterTimeout()
+  assert.deepEqual(await pickupAfterTimeout(), afterTimeout)
+  assert.deepEqual(await counters(timeoutLot), { f: 0, r: 0, e: 1, x: 0 })
+  ok('retiro bloqueado supera 2 s: 55P03 sin entrega ni clave consumida; reintento y replay entregan una sola vez')
 
   // --- Un fallo después de escribir revierte entrega, estado, contador y clave.
   const rollbackLot = await makeLot(2)
@@ -296,17 +402,22 @@ try {
 
   // --- Inventario conciliado con sus registros y ningún código en los registros del proceso.
   const unreconciled = await database.query(`SELECT l.public_id FROM lots l
-    WHERE l.reserved_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
+    WHERE l.quantity <> l.free_quantity + l.offered_quantity + l.reserved_quantity + l.delivered_quantity + l.expired_quantity
+       OR LEAST(l.free_quantity, l.offered_quantity, l.reserved_quantity, l.delivered_quantity, l.expired_quantity) < 0
+       OR l.reserved_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
        OR l.delivered_quantity <> COALESCE((SELECT sum(d.quantity) FROM deliveries d JOIN commitments c ON c.id = d.commitment_id WHERE c.lot_id = l.id), 0)
        OR l.expired_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'expired'), 0)
-       OR EXISTS (SELECT 1 FROM commitments c WHERE c.lot_id = l.id AND c.status = 'delivered'
-         AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.commitment_id = c.id))`)
+       OR EXISTS (SELECT 1 FROM commitments c WHERE c.lot_id = l.id
+         AND (SELECT count(*) FROM deliveries d WHERE d.commitment_id = c.id) <> CASE WHEN c.status = 'delivered' THEN 1 ELSE 0 END)
+       OR EXISTS (SELECT 1 FROM deliveries d JOIN commitments c ON c.id = d.commitment_id
+         WHERE c.lot_id = l.id AND (d.quantity <> c.quantity OR d.delivered_at <> c.ended_at
+           OR d.delivered_at < l.pickup_starts_at OR d.delivered_at >= l.pickup_ends_at))`)
   assert.deepEqual(unreconciled.rows, [])
   for (const racer of racers) issuedCodes.add(racer.code)
   for (const value of [code, newCode, earlyCode, rollbackCode]) issuedCodes.add(value)
   assert.ok(logged.every(line => [...issuedCodes].every(value => !line.includes(value))))
-  ok('conciliación: R, E y X coinciden con reservas y entregas; los códigos no aparecen en registros')
-  console.log(`PASS K022: ${checks} grupos de integración con PostgreSQL real`)
+  ok('conciliación: Q = F + O + R + E + X sin negativos; R/E/X y entregas únicas dentro de ventana coinciden con registros; códigos ausentes de logs')
+  console.log(`PASS K022/K025: ${checks} grupos de integración con PostgreSQL real`)
 } finally {
   await database.query('ROLLBACK').catch(() => {})
   await database.end().catch(() => {})
