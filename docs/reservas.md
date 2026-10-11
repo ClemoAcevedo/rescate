@@ -125,10 +125,23 @@ huella. Compose trae una clave ficticia que la API rechaza en producción
 | `npm --prefix api run test:web:reservations` | Navegador con HTTP controlado: cancelación pendiente o perdida, reintento, conflictos y permisos, código inválido, cierre con la vista abierta, historial, páginas y recuperación de intención tras recarga. Requiere Vite sin mocks de identidad. |
 | `npm --prefix api run test:web:pickups` | Navegador con API y PostgreSQL reales: acceso denegado, código inexistente, revisar y confirmar una vez ante doble clic, código usado, revisión seguida de cancelación (409 sin entrega), ventana sin comenzar, lote cerrado y código ausente de URL y almacenamiento. |
 | `npm --prefix api test` | Reglas de plazo y transición, normalización, cifrado y huella, y recorrido HTTP contra OpenAPI con repositorio en memoria. |
-| `npm --prefix api run db:test:reservations:compose` | PostgreSQL real: código cifrado, captura cancelada, nuevo código por reserva, dos operadores y reintentos, cancelar contra retirar en 20 reservas, plazos sin trabajador, vencimiento repetido, espera de bloqueo, rollback y conciliación de R, E y X. |
+| `npm --prefix api run db:test:reservations:compose` | PostgreSQL real: última unidad, reintentos, dos operadores, cancelación contra retiro, plazos tras esperar el bloqueo, vencimiento repetido, rollback y conciliación del inventario con reservas y entregas. Repite la suite con el worker activo y detenido. |
 | `npm --prefix api run db:test:compose` | Restricciones de estado, término, código y entregas, y rollback de la migración. |
 
-`test:web:compose` ejecuta también la prueba con PostgreSQL en CI.
+Con el servicio `db` de Compose iniciado, el wrapper crea y migra una base dedicada.
+El script siembra usuarios, membresías, lotes y reservas ficticios; cada ejecución
+usa identificadores nuevos. Las carreras fuerzan y observan la espera por bloqueos
+en PostgreSQL antes de comprobar respuestas, estados y contadores. La salida muestra
+el resultado de cada carrera y el nombre de la base, que se conserva para inspección.
+
+Primero inicia un worker de fotos con esa misma base y almacenamiento temporal.
+Comprueba su conexión, ejecuta la suite, envía `SIGTERM` y verifica la salida y el
+cierre de sus conexiones. Después repite la suite en la misma base con datos nuevos.
+El worker actual procesa fotos; el registro programado de vencimientos corresponde
+a [K028](https://github.com/ClemoAcevedo/rescate/issues/31). Las pruebas de plazos
+exigen que la API rechace operaciones vencidas aunque el registro siga confirmado.
+
+CI ejecuta ambas fases. `test:web:compose` también incluye la suite de reservas.
 La prueba de navegador acepta el certificado HTTPS autofirmado del entorno local
 en sus contextos de Playwright.
 
