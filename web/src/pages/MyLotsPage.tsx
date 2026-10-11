@@ -53,6 +53,9 @@ function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
         <Link className={`ui-button ui-button--${lot.status === 'draft' ? 'primary' : 'secondary'}`} to={editorPath}>
           {lot.status === 'draft' ? 'Continuar borrador' : 'Ver lote'}
         </Link>
+        {lot.status !== 'draft' && (
+          <Link className="ui-button ui-button--secondary" to={`${editorPath}/retiros`}>Validar retiros</Link>
+        )}
         {lot.status === 'published' && !ended && (
           <Link className="ui-button ui-button--ghost" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Vista pública</Link>
         )}

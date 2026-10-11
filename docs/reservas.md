@@ -76,6 +76,28 @@ si ya no queda stock o el lote cerró. Un reintento conserva ambas; la respuesta
 creación no aporta un código ni acredita el estado vigente. Si el navegador no
 permite guardar la intención, el comando no se inicia.
 
+## Vista del operador
+
+`/operador/lotes/:lotId/retiros` («Validar retiros», desde «Mis lotes» o la vista del
+lote publicado) separa los dos pasos del contrato:
+
+1. **Revisar.** El operador escribe el código que le muestran y la página llama a la
+   revisión. Ve cantidad, estado, creación y término de la reserva, nunca el código ni
+   datos del titular. Cada estado se explica: cancelada, vencida, ya retirada (código
+   usado) o vigente; si la ventana aún no comienza, no ofrece confirmar. Un 404 solo
+   indica que el código no corresponde a una reserva del lote.
+2. **Confirmar.** Un botón aparte, solo con `canConfirm`. La página genera una
+   `idempotencyKey` por revisión: ante una respuesta perdida, «Reintentar confirmación»
+   usa la misma clave y la API reproduce el resultado sin duplicar la entrega. Un 409
+   vuelve a revisar el código y muestra el estado vigente, por ejemplo una cancelación
+   ocurrida después de revisar; no se registra la entrega.
+
+El encabezado avisa si la ventana aún no comienza o si el lote cerró, y una cuenta sin
+membership ve «Acceso denegado». El código vive solo en la memoria de la página: el
+campo se vacía al revisar, el código se descarta al confirmar o revisar otro, y no va
+en URL, almacenamiento del navegador ni actividad. Un comando a la vez evita dobles
+envíos.
+
 ## Backend
 
 Recorrido: [router](../api/src/http/reservations-router.ts) →
@@ -101,6 +123,7 @@ huella. Compose trae una clave ficticia que la API rechaza en producción
 | Comando | Qué comprueba |
 | --- | --- |
 | `npm --prefix api run test:web:reservations` | Navegador con HTTP controlado: cancelación pendiente o perdida, reintento, conflictos y permisos, código inválido, cierre con la vista abierta, historial, páginas y recuperación de intención tras recarga. Requiere Vite sin mocks de identidad. |
+| `npm --prefix api run test:web:pickups` | Navegador con API y PostgreSQL reales: acceso denegado, código inexistente, revisar y confirmar una vez ante doble clic, código usado, revisión seguida de cancelación (409 sin entrega), ventana sin comenzar, lote cerrado y código ausente de URL y almacenamiento. |
 | `npm --prefix api test` | Reglas de plazo y transición, normalización, cifrado y huella, y recorrido HTTP contra OpenAPI con repositorio en memoria. |
 | `npm --prefix api run db:test:reservations:compose` | PostgreSQL real: código cifrado, captura cancelada, nuevo código por reserva, dos operadores y reintentos, cancelar contra retirar en 20 reservas, plazos sin trabajador, vencimiento repetido, espera de bloqueo, rollback y conciliación de R, E y X. |
 | `npm --prefix api run db:test:compose` | Restricciones de estado, término, código y entregas, y rollback de la migración. |
@@ -111,6 +134,5 @@ en sus contextos de Playwright.
 
 ## Limitaciones
 
-- La pantalla del operador corresponde a K024 (#26).
 - El límite de cinco fallos de revisión por operador cada quince minutos es K034 (#37).
 - El trabajador que registra vencimientos es K028 (#31).

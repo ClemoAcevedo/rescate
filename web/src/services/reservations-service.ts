@@ -1,8 +1,8 @@
-import { HttpError, UnexpectedResponseError, request } from './http-client'
-import type { ReservationDetail, ReservationPage, ReservationSummary } from './openapi'
+import { ConnectionError, HttpError, UnexpectedResponseError, request } from './http-client'
+import type { PickupResponse, PickupReview, ReservationDetail, ReservationPage, ReservationSummary, ReviewedReservation } from './openapi'
 import { isValidTimeZone } from '../lots/lot-time'
 
-export type { ReservationDetail, ReservationSummary }
+export type { PickupResponse, PickupReview, ReservationDetail, ReservationSummary, ReviewedReservation }
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const instant = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value))
 
@@ -65,4 +65,54 @@ export function reservationError(error: unknown) {
   if (error instanceof HttpError && error.status === 403) return 'La solicitud fue rechazada por seguridad. Recarga la página.'
   if (error instanceof HttpError && error.status === 429) return 'Hay demasiadas solicitudes. Espera antes de reintentar.'
   return 'No fue posible comprobar la reserva. Revisa tu conexión y reintenta.'
+}
+
+const statuses = ['confirmed', 'cancelled', 'expired', 'delivered']
+const positiveInteger = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 1
+
+function reviewed(value: unknown): ReviewedReservation {
+  if (!record(value) || typeof value.id !== 'string' || !value.id || !positiveInteger(value.quantity)
+    || !statuses.includes(String(value.status)) || !instant(value.createdAt)
+    || (value.status === 'confirmed' ? value.endedAt !== null : !instant(value.endedAt))) throw new Error('Reserva revisada inesperada.')
+  // Selección explícita: la revisión no transporta datos del titular ni el código.
+  return { id: value.id, quantity: value.quantity as number, status: value.status as ReviewedReservation['status'],
+    createdAt: value.createdAt, endedAt: value.endedAt as string | null }
+}
+
+/** Revisión del operador (K022): muestra la reserva del código sin consumirlo. El código va solo en el cuerpo. */
+export function reviewPickupCode(lotId: string, code: string, csrfToken: string): Promise<PickupReview> {
+  return send(`/lots/${encodeURIComponent(lotId)}/pickup-reviews`, value => {
+    if (!record(value) || typeof value.canConfirm !== 'boolean') throw new Error('Revisión inesperada.')
+    const reservation = reviewed(value.reservation)
+    if (value.canConfirm && reservation.status !== 'confirmed') throw new Error('Revisión incoherente.')
+    return { reservation, canConfirm: value.canConfirm }
+  }, { method: 'POST', body: { code }, headers: { 'X-CSRF-Token': csrfToken } })
+}
+
+/** Confirmación del retiro: la API vuelve a validar todo bajo bloqueo; la misma clave reproduce el resultado. */
+export function confirmPickup(lotId: string, input: { reservationId: string; code: string; idempotencyKey: string }, csrfToken: string): Promise<PickupResponse> {
+  return send(`/lots/${encodeURIComponent(lotId)}/pickups`, value => {
+    if (!record(value) || value.reservationId !== input.reservationId || !positiveInteger(value.quantity)
+      || !instant(value.deliveredAt)) throw new Error('Entrega inesperada.')
+    return { reservationId: value.reservationId, quantity: value.quantity as number, deliveredAt: value.deliveredAt }
+  }, { method: 'POST', body: input, headers: { 'X-CSRF-Token': csrfToken } })
+}
+
+/** Sin respuesta legible, una confirmación pudo haberse registrado: se reintenta con la misma clave. */
+export const isUnknownOutcome = (error: unknown) => error instanceof ConnectionError || error instanceof UnexpectedResponseError
+
+export function pickupError(error: unknown, operation: 'review' | 'confirm') {
+  if (error instanceof HttpError && error.status === 404) {
+    return operation === 'review'
+      ? 'El código no corresponde a una reserva de este lote. Revisa que esté bien escrito.'
+      : 'El código ya no corresponde a esta reserva del lote. Revísalo de nuevo.'
+  }
+  if (error instanceof HttpError && error.status === 422) return 'Escribe el código de retiro tal como lo muestra la persona.'
+  if (error instanceof HttpError && error.status === 401) return 'Tu sesión venció. Inicia sesión nuevamente.'
+  if (error instanceof HttpError && error.status === 403) return 'Acceso denegado: tu cuenta no opera este establecimiento o la solicitud fue rechazada por seguridad. Recarga la página.'
+  if (error instanceof HttpError && error.status === 429) return `Hay demasiados intentos. Espera${error.retryAfter ? ` ${error.retryAfter} s` : ' un momento'} antes de reintentar.`
+  if (error instanceof HttpError && error.status === 503) return 'El servicio no está disponible temporalmente. Inténtalo nuevamente.'
+  return operation === 'confirm'
+    ? 'No se recibió una respuesta válida. El retiro podría haberse registrado: reintenta la confirmación, que no duplica la entrega.'
+    : 'No fue posible revisar el código. Revisa tu conexión y reintenta.'
 }

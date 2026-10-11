@@ -39,7 +39,8 @@
     "db:test:reservations:compose": "node scripts/test-reservations-compose.mjs",
     "db:test:photos": "npm run build && node --import tsx scripts/test-photos.mjs",
     "db:test:photos:compose": "node scripts/test-photos-compose.mjs",
-    "test:web:reservations": "node scripts/test-web-reservations.mjs"
+    "test:web:reservations": "node scripts/test-web-reservations.mjs",
+    "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs"
   },
   "keywords": [],
   "author": "",

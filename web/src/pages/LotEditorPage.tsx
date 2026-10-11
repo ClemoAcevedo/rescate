@@ -220,6 +220,7 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
           {lot.status === 'published' && Date.parse(lot.pickupEndsAt) > openedAt && (
             <Link className="ui-button ui-button--primary" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Ver como rescatista</Link>
           )}
+          <Link className="ui-button ui-button--secondary" to={`/operador/lotes/${encodeURIComponent(lot.id)}/retiros`}>Validar retiros</Link>
           <Link className="ui-button ui-button--secondary" to="/operador/lotes">Volver a mis lotes</Link>
           <Link className="ui-button ui-button--ghost" to="/operador/lotes/nuevo"><Icon name="plus" />Crear otro lote</Link>
         </div>
