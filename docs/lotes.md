@@ -148,8 +148,8 @@ Se puede reservar antes del inicio del retiro. La cantidad publicada no cambia;
 la disponibilidad es F, la columna de libres del lote. Los CHECK de la base impiden
 que quede negativa ([ADR 0006](adr/0006-inventario-del-lote.md)). Cada reserva nace
 con su código de retiro; cancelarla, retirarla o vencerla se describe en
-[reservas](reservas.md). La cola FIFO y las ofertas se atenderán según ADR 0002
-bajo el mismo bloqueo.
+[reservas](reservas.md). La cola FIFO y las ofertas, según ADR 0002, se atienden
+bajo el mismo bloqueo ([cola de espera](cola-de-espera.md)).
 
 La clave UUID viaja en `idempotencyKey`. Un resultado confirmado reproduce el
 mismo 201 y cuerpo con la misma clave y parámetros, incluso tras cerrar el lote.

@@ -15,6 +15,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Identidad y sesiones | [Identidad](k008-identidad.md) |
 | Lotes | [Lotes](lotes.md) |
 | Reservas, cancelación y retiro | [Reservas](reservas.md) |
+| Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |
 | Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
@@ -32,6 +33,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0007](adr/0007-codigo-de-retiro-y-transiciones.md) | Código de retiro cifrado con huella; cancelar, retirar y vencer como una sola transición terminal |
 | [0008](adr/0008-estado-del-lote-y-cierre-logico.md) | Estado del lote como enum; vencido y retirado son cierres lógicos con `closed_at` |
 | [0009](adr/0009-consentimiento-del-correo.md) | Consentimiento del correo en `user_consents`, obligatorio al registrarse y revocable |
+| [0010](adr/0010-cola-fifo-y-ofertas.md) | Cola FIFO y ofertas en `waitlist_entries`; la cola se asienta bajo el bloqueo del lote en cada comando que libera o lee inventario |
 
 ## Entregas y evidencia
 

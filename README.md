@@ -186,7 +186,8 @@ separa lo implementado de las cuatro responsabilidades que guiarán el backend.
 El [ADR 0003](docs/adr/0003-arquitectura-incremental-s02.md) registra esa decisión
 y [AGENTS.md](AGENTS.md) contiene las reglas para desarrollar incrementalmente.
 La regla vigente de [ofertas parciales y resolución de la solicitud](docs/adr/0002-ofertas-parciales.md)
-complementa E1 sin modificar los PDF históricos ni implementar todavía ese flujo.
+complementa E1 sin modificar los PDF históricos; su implementación está en la
+[cola de espera](docs/cola-de-espera.md).
 
 ## Flujo de trabajo
 
@@ -260,7 +261,8 @@ lo cambia.
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
-  retiro de fotos (K014), según OpenAPI.
+  retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
+  vencimiento (K027), según OpenAPI.
 - **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
   (K014).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos

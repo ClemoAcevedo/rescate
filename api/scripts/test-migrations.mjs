@@ -19,6 +19,7 @@ const migrations = [
   '1791000000000_reservation-transitions',
   '1791100000000_lot-status-enum',
   '1791100000001_user-consents',
+  '1791200000000_waitlist',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -313,15 +314,40 @@ try {
   await query('DELETE FROM user_consents')
   ok('consentimientos: uno vigente por propósito, revocados como historial y versión obligatoria')
 
-  // K014, K022 y los consentimientos solo agregan tablas: las previas conservan OID.
+  // K027: la cola FIFO es una tabla nueva; sus restricciones rechazan estados incoherentes.
+  const entry = `INSERT INTO waitlist_entries (user_id, lot_id, requested_quantity, status, idempotency_key,
+      offered_quantity, offered_at, offer_expires_at, ended_at)
+    VALUES ($1, $2, $3, $4, gen_random_uuid(), $5, $6, $7, $8) RETURNING id`
+  const none = [null, null, null, null]
+  await rejected('solicitud de cero packs', entry, [consentUser, closing.id, 0, 'waiting', ...none], '23514', 'waitlist_entries_requested_check')
+  await rejected('estado de solicitud inventado', entry, [consentUser, closing.id, 1, 'inventado', null, null, null, new Date()],
+    '23514', 'waitlist_entries_status_check')
+  await rejected('oferta mayor a lo solicitado', entry,
+    [consentUser, closing.id, 2, 'offered', 3, new Date(), new Date(Date.now() + 60_000), null], '23514', 'waitlist_entries_offer_check')
+  await rejected('oferta vigente sin cantidad', entry, [consentUser, closing.id, 1, 'offered', ...none], '23514', 'waitlist_entries_state_check')
+  await rejected('espera ya terminada', entry, [consentUser, closing.id, 1, 'waiting', null, null, null, new Date()],
+    '23514', 'waitlist_entries_ended_check')
+  await rejected('aceptada sin reserva', entry,
+    [consentUser, closing.id, 1, 'accepted', 1, new Date(), new Date(Date.now() + 60_000), new Date()], '23514', 'waitlist_entries_commitment_check')
+  const [waiting] = await query(entry, [consentUser, closing.id, 1, 'waiting', ...none])
+  await rejected('dos solicitudes abiertas del mismo usuario y lote', entry, [consentUser, closing.id, 1, 'waiting', ...none],
+    '23505', 'waitlist_entries_open_user_lot_key')
+  await query("UPDATE waitlist_entries SET status = 'left', ended_at = now() WHERE id = $1", [waiting.id])
+  await query(entry, [consentUser, closing.id, 1, 'waiting', ...none])
+  await query('DELETE FROM waitlist_entries')
+  ok('cola FIFO: cantidades, oferta, cierre y reserva coherentes; una solicitud abierta por usuario y lote, reingreso tras terminar')
+
+  // K014, K022, los consentimientos y la cola solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const withDeliveries = latest.filter(row => row.relname !== 'user_consents')
+  const withConsents = latest.filter(row => row.relname !== 'waitlist_entries')
+  const withDeliveries = withConsents.filter(row => row.relname !== 'user_consents')
   const withPhotos = withDeliveries.filter(row => row.relname !== 'deliveries')
   assert.deepEqual(withPhotos.filter(row => row.relname !== 'lot_photos'), before)
   assert.ok(withPhotos.some(row => row.relname === 'lot_photos'))
   assert.ok(latest.some(row => row.relname === 'deliveries'))
   assert.ok(latest.some(row => row.relname === 'user_consents'))
-  ok('K014, K022 y consentimientos agregan tablas sin recrear las existentes; el enum no recrea lots')
+  assert.ok(latest.some(row => row.relname === 'waitlist_entries'))
+  ok('K014, K022, consentimientos y cola agregan tablas sin recrear las existentes; el enum no recrea lots')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), latest)
@@ -334,6 +360,11 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.waitlist_entries') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), withConsents)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  ok('rollback de la cola retira solo waitlist_entries y conserva compromisos')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.user_consents') AS name"))[0].name, null)
   assert.deepEqual(await snapshot(), withDeliveries)
@@ -419,7 +450,7 @@ try {
   assert.deepEqual((await history()).map(row => row.name), migrations)
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
-  await verifyModel(['lot_photos', 'deliveries', 'user_consents'])
+  await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')
