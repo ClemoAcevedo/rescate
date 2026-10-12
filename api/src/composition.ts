@@ -26,6 +26,9 @@ import { createPhotosRouter } from "./http/photos-router.js"
 import { createLotsRouter } from "./http/lots-router.js"
 import { createDiscoveryRouter } from "./http/discovery-router.js"
 import { createReservationsRouter } from "./http/reservations-router.js"
+import { createWaitlistUseCases } from "./application/waitlist/use-cases.js"
+import { createWaitlistRepository } from "./infrastructure/postgres/waitlist-repository.js"
+import { createWaitlistRouter } from "./http/waitlist-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { createTrafficLimits } from "./http/rate-limits.js"
@@ -115,7 +118,10 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
   const reservationsRouter = createReservationsRouter(
     createReservationUseCases(createReservationRepository(pool), codes, () => new Date()),
     authentication.authenticate, authentication.protectCommand)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
+  const waitlistRouter = createWaitlistRouter(
+    createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date()),
+    authentication.authenticate, authentication.protectCommand)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
       try { limits.ip(req.ip ?? req.socket.remoteAddress ?? "unknown"); next() }

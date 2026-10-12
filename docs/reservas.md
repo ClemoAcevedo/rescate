@@ -11,7 +11,8 @@ establecimiento o vencida al cierre del lote. El contrato HTTP está en
 - **Estado vigente.** Una reserva confirmada cuyo lote cerró es `expired` aunque el
   trabajador no lo haya registrado. Desde el cierre no se cancela ni se retira.
 - **Cancelar.** Solo el titular, antes del cierre. Invalida el código y devuelve
-  los packs a libres (R → F) en la misma transacción. Repetir sobre una cancelada
+  los packs a libres (R → F) en la misma transacción y los ofrece a la
+  [cola de espera](cola-de-espera.md). Repetir sobre una cancelada
   responde lo mismo y no libera otra vez. Una retirada o vencida responde 409.
 - **Código.** Cada reserva recibe uno nuevo: ocho símbolos sin I, L, O ni U. El
   titular lo consulta mientras la reserva está confirmada; terminada, el backend

@@ -1,7 +1,7 @@
 import { QUANTITY_MAX } from './lots.js'
 
 export class ReservationRuleError extends Error {
-  constructor(readonly reason: 'invalid_quantity' | 'unavailable' | 'active_commitment') {
+  constructor(readonly reason: 'invalid_quantity' | 'unavailable' | 'active_commitment' | 'directly_available') {
     super(reason)
   }
 }
@@ -12,14 +12,17 @@ export function requireReservationQuantity(quantity: number): void {
   }
 }
 
-/** Reserva directa K015. La disponibilidad se relee después de bloquear el lote. */
+/**
+ * Reserva directa K015. La disponibilidad se relee después de bloquear el lote. Con
+ * personas esperando nadie la adelanta (RF07, anexos B p. 4).
+ */
 export function requireDirectReservation(
   lot: { quantity: number; availableQuantity: number; pickupEndsAt: Date },
-  quantity: number, active: boolean, now: Date,
+  quantity: number, active: boolean, now: Date, queued = false,
 ): void {
   requireReservationQuantity(quantity)
   if (active) throw new ReservationRuleError('active_commitment')
-  if (lot.pickupEndsAt <= now || quantity > lot.quantity || quantity > lot.availableQuantity) {
+  if (queued || lot.pickupEndsAt <= now || quantity > lot.quantity || quantity > lot.availableQuantity) {
     throw new ReservationRuleError('unavailable')
   }
 }

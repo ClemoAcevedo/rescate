@@ -7,6 +7,7 @@ export interface AppDependencies {
   lotsRouter?: Router
   discoveryRouter?: Router
   reservationsRouter?: Router
+  waitlistRouter?: Router
   photosRouter?: Router
   authRouter?: Router
   traffic?: express.RequestHandler
@@ -29,6 +30,7 @@ export function createApp(dependencies: AppDependencies = {}): express.Express {
   if (dependencies.authRouter) app.use(dependencies.authRouter)
   if (dependencies.discoveryRouter) app.use(dependencies.discoveryRouter)
   if (dependencies.reservationsRouter) app.use(dependencies.reservationsRouter)
+  if (dependencies.waitlistRouter) app.use(dependencies.waitlistRouter)
   // Fotos: cuerpo binario con su propio límite; express.json ignora image/*.
   if (dependencies.photosRouter) app.use(dependencies.photosRouter)
 

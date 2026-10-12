@@ -8,6 +8,7 @@ import type { ReservationStatus } from '../../domain/reservations.js'
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
+import { settleQueue } from './waitlist-queue.js'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const bytes = (value: Uint8Array | null) => value === null ? null : Buffer.from(value)
@@ -87,6 +88,8 @@ export function createReservationRepository(pool: Pool): ReservationRepository {
             // R → F en la misma transacción (ADR 0006).
             await client.query('UPDATE public.lots SET reserved_quantity = reserved_quantity - $2 WHERE id = $1',
               [row.lot_internal_id, quantity])
+            // Lo liberado se ofrece a quien sigue en la cola (RF07) bajo el mismo bloqueo.
+            await settleQueue(client, row.lot_internal_id, at)
           },
           async assignCode(code) {
             const updated = await client.query(
@@ -187,6 +190,8 @@ export function createReservationRepository(pool: Pool): ReservationRepository {
             if (packs > 0) await client.query(
               `UPDATE public.lots SET reserved_quantity = reserved_quantity - $2,
                  expired_quantity = expired_quantity + $2 WHERE id = $1`, [locked.lotId, packs])
+            // El lote ya no asigna: la cola termina con él, sin ofertas nuevas (ADR 0002).
+            await settleQueue(client, locked.lotId, locked.at)
             return expired.rows.length
           },
         })

@@ -15,6 +15,7 @@ export type ApplicationErrorCode =
   | "inventory_discrepancy"
   | "reservation_not_found"
   | "pickup_code_not_found"
+  | "waitlist_entry_not_found"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -48,6 +49,10 @@ export const reservationNotFound = (): ApplicationError =>
 /** Código inexistente, mal formado o de otro lote: no expone información. */
 export const pickupCodeNotFound = (): ApplicationError =>
   new ApplicationError("pickup_code_not_found", "El código no corresponde a una reserva del lote.")
+
+/** Inexistente o de otra persona: no se distingue para no revelar solicitudes ajenas. */
+export const waitlistEntryNotFound = (): ApplicationError =>
+  new ApplicationError("waitlist_entry_not_found", "La solicitud no existe.")
 
 export const establishmentNotFound = (): ApplicationError =>
   new ApplicationError("establishment_not_found", "El establecimiento no existe.")

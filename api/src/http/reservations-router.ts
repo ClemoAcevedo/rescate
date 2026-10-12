@@ -11,9 +11,9 @@ import type { Authenticate } from './actor.js'
 import type { HttpSchemas } from './openapi.js'
 import { handleError, sendError } from './errors.js'
 
-class InvalidInput extends Error { constructor(readonly fields: string[]) { super('Entrada inválida') } }
+export class InvalidInput extends Error { constructor(readonly fields: string[]) { super('Entrada inválida') } }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const id = (value: unknown) => typeof value === 'string' ? value : ''
+export const id = (value: unknown) => typeof value === 'string' ? value : ''
 const iso = (value: Date | null) => value === null ? null : value.toISOString()
 
 interface ReservationView {
@@ -31,7 +31,7 @@ function summaryBody(reservation: ReservationView & { lot: ReservationLot }): Ht
 }
 
 /** Cuerpo JSON con exactamente los campos permitidos; los ausentes o desconocidos se informan. */
-function readBody(value: unknown, fields: Record<string, (field: unknown) => boolean>): Record<string, string> {
+export function readBody(value: unknown, fields: Record<string, (field: unknown) => boolean>): Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new InvalidInput([''])
   const body = value as Record<string, unknown>
   const invalid = Object.keys(body).filter(key => !Object.hasOwn(fields, key))
@@ -39,10 +39,10 @@ function readBody(value: unknown, fields: Record<string, (field: unknown) => boo
   if (invalid.length) throw new InvalidInput(invalid)
   return body as Record<string, string>
 }
-const isUuid = (value: unknown) => typeof value === 'string' && uuid.test(value)
+export const isUuid = (value: unknown) => typeof value === 'string' && uuid.test(value)
 // Forma estructural: Application normaliza y valida el código sin distinguir sus fallos.
 const isCode = (value: unknown) => typeof value === 'string' && value.length >= 1 && value.length <= 32
-function readPage(query: Request['query']): number {
+export function readPage(query: Request['query']): number {
   const invalid = Object.keys(query).filter(key => key !== 'page')
   let page = 1
   if (query.page !== undefined) {
@@ -53,26 +53,34 @@ function readPage(query: Request['query']): number {
   return page
 }
 
+export type ActorRoute = (handler: (actor: Actor, request: Request, response: Response) => Promise<void>) =>
+  (request: Request, response: Response) => Promise<void>
+
+/** Autentica, protege los comandos y traduce los errores de una ruta del titular. */
+export function createActorRoute(authenticate: Authenticate, protectCommand: (request: Request) => Promise<void>,
+  log: (error: unknown) => void): ActorRoute {
+  return handler => async (request, response) => {
+    try {
+      const actor = await authenticate(request)
+      if (!actor) throw notAuthenticated()
+      if (request.method !== 'GET') {
+        await protectCommand(request)
+        if (!request.is('application/json')) { sendError(response, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Se requiere application/json.'); return }
+      }
+      await handler(actor, request, response)
+    } catch (error) {
+      if (error instanceof InvalidInput) sendError(response, 422, 'VALIDATION_ERROR', 'Revisa los campos indicados.',
+        error.fields.map(field => ({ path: field ? `/${field.replaceAll('~', '~0').replaceAll('/', '~1')}` : '',
+          message: 'Campo desconocido, ausente o con formato inválido.' })))
+      else handleError(error, response, log)
+    }
+  }
+}
+
 export function createReservationsRouter(cases: ReservationUseCases, authenticate: Authenticate,
   protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = error => console.error(error)): Router {
   const router = Router()
-  const withActor = (handler: (actor: Actor, request: Request, response: Response) => Promise<void>) =>
-    async (request: Request, response: Response) => {
-      try {
-        const actor = await authenticate(request)
-        if (!actor) throw notAuthenticated()
-        if (request.method !== 'GET') {
-          await protectCommand(request)
-          if (!request.is('application/json')) { sendError(response, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Se requiere application/json.'); return }
-        }
-        await handler(actor, request, response)
-      } catch (error) {
-        if (error instanceof InvalidInput) sendError(response, 422, 'VALIDATION_ERROR', 'Revisa los campos indicados.',
-          error.fields.map(field => ({ path: field ? `/${field.replaceAll('~', '~0').replaceAll('/', '~1')}` : '',
-            message: 'Campo desconocido, ausente o con formato inválido.' })))
-        else handleError(error, response, log)
-      }
-    }
+  const withActor = createActorRoute(authenticate, protectCommand, log)
 
   router.get('/reservations', withActor(async (actor, request, response) => {
     const result = await cases.list(actor, readPage(request.query))

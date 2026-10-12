@@ -142,21 +142,20 @@ Estados almacenados, traducción técnica **B** de términos explícitos de B p.
 
 K003 usó `text` + CHECK con nombre (**B**). `commitments.status` lo mantiene;
 `lots.status` pasó a enum con vencido y retirado ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)).
-Espera y ofertado de compromisos están definidos en E1, pero se agregan con sus
-tarjetas.
+La espera y las ofertas no son estados de `commitments`: viven en `waitlist_entries`
+([ADR 0010](adr/0010-cola-fifo-y-ofertas.md), [cola de espera](cola-de-espera.md)).
 Agotado es condición del inventario, no estado (B p. 4).
 
 `lots_publication_check` exige `published_at IS NULL` en borrador y NOT NULL en
 publicado (**B**, coherencia local de campos). No publica, valida permisos,
 congela contenido ni verifica fotos. El índice UNIQUE parcial
 `commitments_active_user_lot_key` protege `(user_id, lot_id)` cuando
-`status = 'confirmed'` (**A**, RF04, implementación **B**). Al incorporar espera y
-ofertas, la misma migración deberá ampliar el predicado a esos estados activos;
-no sustituirlo por UNIQUE permanente que impida nuevos compromisos históricos.
-ADR 0002 no elimina esta restricción: cerrar la solicitud en cola al aceptar
-parcialmente no termina la reserva confirmada. Como E1 admite un solo compromiso
-activo por usuario y lote (A p. 1), una nueva solicitud del mismo usuario espera a
-que su reserva termine; el índice parcial de K003 se amplía a los estados activos.
+`status = 'confirmed'` (**A**, RF04, implementación **B**); el índice parcial
+`waitlist_entries_open_user_lot_key` hace lo mismo con las solicitudes abiertas, y la
+exclusión entre ambas se comprueba bajo el bloqueo del lote. ADR 0002 no elimina esta
+restricción: cerrar la solicitud en cola al aceptar parcialmente no termina la reserva
+confirmada. Como E1 admite un solo compromiso activo por usuario y lote (A p. 1), una
+nueva solicitud del mismo usuario espera a que su reserva termine.
 
 ## Modelo conceptual E2 (K013)
 

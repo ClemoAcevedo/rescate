@@ -29,7 +29,7 @@ export function createDiscoveryUseCases(repository: DiscoveryRepository, codes: 
         if (!state.lot) throw lotNotFound()
         if (!state.reconciled) throw new InventoryDiscrepancyError(lotId)
         // El instante viene de la base después del bloqueo, no del reloj del proceso.
-        requireDirectReservation(state.lot, quantity, state.active, state.now)
+        requireDirectReservation(state.lot, quantity, state.active, state.now, state.queued)
         // Una reserva confirmada nace con su código de retiro (RF06); cada reserva recibe uno nuevo.
         return writer.insert(quantity, state.now, codes.issue())
       })

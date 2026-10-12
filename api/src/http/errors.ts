@@ -6,6 +6,7 @@ import { ApplicationError, ConcurrentUploadsError, InventoryDiscrepancyError } f
 import { PhotoRuleError } from "../domain/photos.js"
 import { LotRuleError } from "../domain/lots.js"
 import { ReservationRuleError, ReservationTransitionError } from "../domain/reservations.js"
+import { WaitlistTransitionError } from "../domain/waitlist.js"
 import type { HttpSchemas } from "./openapi.js"
 
 type ErrorBody = HttpSchemas["ErrorResponse"]
@@ -29,12 +30,21 @@ const errors = {
   inventory_discrepancy: [409, "CONFLICT", "El lote está en revisión y no admite reservas por ahora."],
   reservation_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   pickup_code_not_found: [404, "NOT_FOUND", "El código no corresponde a una reserva de este lote."],
+  waitlist_entry_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
 } as const
 const transitions = {
   cancelled: "La reserva fue cancelada.",
   expired: "La reserva venció: la ventana de retiro cerró.",
   delivered: "La reserva ya fue retirada.",
   pickup_not_started: "La ventana de retiro aún no comienza.",
+} as const
+const waitlistTransitions = {
+  not_offered: "La solicitud aún no tiene una oferta.",
+  not_waiting: "La solicitud ya tiene una oferta: acéptala o recházala.",
+  accepted: "La oferta ya fue aceptada.",
+  declined: "La oferta ya fue rechazada.",
+  expired: "La solicitud venció: la oferta o el lote ya no están vigentes.",
+  left: "Saliste de la cola de espera.",
 } as const
 const conflicts = new Set(["lot_already_published", "published_lot_is_immutable"])
 const fields: Record<string, string> = {
@@ -61,10 +71,15 @@ export function handleError(error: unknown, response: Response, log: (error: unk
   } else if (error instanceof ReservationRuleError) {
     if (error.reason === 'invalid_quantity') sendError(response, 422, 'VALIDATION_ERROR', 'Revisa la cantidad.',
       [{ path: '/quantity', message: 'Se requiere un entero entre 1 y 2147483647.' }])
-    else sendError(response, 409, 'CONFLICT', error.reason === 'active_commitment'
-      ? 'Ya tienes una reserva activa de este lote.' : 'El lote cerró o no tiene packs suficientes.')
+    else sendError(response, 409, 'CONFLICT', {
+      active_commitment: 'Ya tienes una reserva o una solicitud activa de este lote.',
+      directly_available: 'Hay packs suficientes: reserva directamente.',
+      unavailable: 'El lote cerró o no tiene packs suficientes.',
+    }[error.reason])
   } else if (error instanceof ReservationTransitionError) {
     sendError(response, 409, "CONFLICT", transitions[error.reason])
+  } else if (error instanceof WaitlistTransitionError) {
+    sendError(response, 409, "CONFLICT", waitlistTransitions[error.reason])
   } else if (error instanceof PhotoRuleError) {
     if (error.reason === "unrecognized_image") sendError(response, 422, "VALIDATION_ERROR", "El archivo no es una imagen JPEG, PNG o WebP.",
       [{ path: "", message: "Los bytes no corresponden a un formato permitido." }])

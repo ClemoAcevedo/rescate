@@ -51,7 +51,7 @@ export interface ReservationWriter {
 export type ReservationState =
   | { existing: Reservation }
   | { existing: null; lot: null }
-  | { existing: null; lot: PublicLot; active: boolean; reconciled: boolean; now: Date }
+  | { existing: null; lot: PublicLot; active: boolean; queued: boolean; reconciled: boolean; now: Date }
 
 export interface DiscoveryRepository {
   search(filters: SearchFilters, now: Date): Promise<{ items: PublicLot[]; hasNextPage: boolean }>
