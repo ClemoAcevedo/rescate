@@ -24,6 +24,9 @@ tags:
   -
     name: "Reservations"
     description: "RF05/RF06/RF08: reservas del titular, cancelación, código de retiro y entrega acreditada por el operador."
+  -
+    name: "Waitlist"
+    description: "RF07: cola FIFO, ofertas parciales y su aceptación o rechazo por el titular."
 paths:
   "/public/lots":
     get:
@@ -181,6 +184,188 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReservationDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/public/lots/{lotId}/waitlist":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "joinWaitlist"
+      summary: "Entrar a la cola de espera de un lote"
+      description: "Abre una solicitud al final de la cola FIFO cuando la cantidad no se puede reservar directamente: no alcanza o ya hay personas esperando. Con packs libres suficientes y la cola vacía responde 409 y corresponde reservar directamente. Si hay packs libres, la primera solicitud recibe de inmediato una oferta por lo que haya, parcial si no alcanza (ADR 0002); la respuesta ya la refleja. Una solicitud en espera no retiene packs. Requiere sesión, Origin y CSRF. idempotencyKey es un UUID por actor: la misma clave y parámetros devuelven la solicitud existente con su estado vigente; otros parámetros producen 409. 409 también si el lote cerró, ya hay una reserva o solicitud activa de ese lote, o el lote está en revisión por contadores distintos de sus registros; 404 para lote inexistente o borrador."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JoinWaitlistRequest" }
+      responses:
+        "201":
+          description: "Solicitud abierta, o la existente para esa clave."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist":
+    get:
+      operationId: "listWaitlistEntries"
+      summary: "Listar las solicitudes de espera propias"
+      description: "Solicitudes del actor de la sesión, vigentes y terminadas, por creación descendente en páginas de 20. status es el estado vigente al leer: una oferta cuya hora pasó o una espera de un lote cerrado se informan expired aunque el trabajador aún no lo haya registrado."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de solicitudes."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    get:
+      operationId: "getWaitlistEntry"
+      summary: "Consultar una solicitud de espera propia"
+      description: "Estado vigente, posición mientras espera, cantidad ofrecida y su vigencia, y la reserva que nació al aceptar. 404 si es ajena o no existe."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Solicitud con su estado vigente."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}/accept":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    post:
+      operationId: "acceptWaitlistOffer"
+      summary: "Aceptar la oferta vigente"
+      description: "Confirma solo la cantidad ofrecida (O → R, sin descontar libres otra vez), cierra la solicitud sin saldo prioritario y crea la reserva con su código de retiro, que se consulta en GET /reservations/{reservationId}. Repetir sobre una aceptada responde 200 con la misma reserva. 409 si no hay oferta, venció (también si el lote cerró), fue rechazada o la solicitud se retiró; 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistCommandRequest" }
+      responses:
+        "200":
+          description: "Solicitud aceptada con su reservationId."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}/decline":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    post:
+      operationId: "declineWaitlistOffer"
+      summary: "Rechazar la oferta vigente"
+      description: "Cierra la solicitud, libera solo lo retenido (a libres, o a no asignables si el lote ya cerró) y ofrece a quien sigue en la misma transacción. No conserva prioridad ni reingresa: volver exige una solicitud nueva. Repetir sobre una rechazada responde 200 y no libera de nuevo. 409 si no hay oferta, ya fue aceptada o venció; 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistCommandRequest" }
+      responses:
+        "200":
+          description: "Solicitud rechazada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}/leave":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    post:
+      operationId: "leaveWaitlist"
+      summary: "Salir de la cola de espera"
+      description: "Retira una solicitud que aún espera sin oferta; pierde su posición y volver exige una solicitud nueva. Repetir sobre una retirada responde 200. Con una oferta vigente se rechaza en vez de salir (409). 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistCommandRequest" }
+      responses:
+        "200":
+          description: "Solicitud retirada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1008,6 +1193,14 @@ components:
       schema:
         $ref: "#/components/schemas/PublicId"
       example: "lot_demo_R4q"
+    EntryId:
+      name: "entryId"
+      in: "path"
+      required: true
+      description: "Identificador público de la solicitud de espera; no concede acceso a otras personas."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "wl_demo_M2x"
     ReservationId:
       name: "reservationId"
       in: "path"
@@ -1376,6 +1569,45 @@ components:
       additionalProperties: false
       maxProperties: 0
       description: "Objeto vacío: la reserva sale de la ruta y el actor de la sesión."
+    JoinWaitlistRequest:
+      type: object
+      additionalProperties: false
+      required: [quantity, idempotencyKey]
+      properties:
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs que se desean. La oferta puede ser menor (ADR 0002); nunca mayor." }
+        idempotencyKey: { type: string, format: uuid, description: "UUID generado por el cliente para una intención de ingreso." }
+    WaitlistCommandRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: "Objeto vacío: la solicitud sale de la ruta y el actor de la sesión."
+    WaitlistStatus:
+      type: string
+      enum: [waiting, offered, accepted, declined, expired, left]
+      description: "Estado vigente al responder. waiting: en la cola sin packs retenidos; offered: tiene una oferta vigente que retiene packs; accepted, declined, expired y left son terminales. Una oferta no aceptada a tiempo y una espera de un lote cerrado se informan expired aunque el trabajador aún no lo haya registrado."
+    WaitlistEntry:
+      type: object
+      additionalProperties: false
+      required: [id, requestedQuantity, status, offeredQuantity, offerExpiresAt, position, reservationId, createdAt, endedAt, lot]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        requestedQuantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/WaitlistStatus" }
+        offeredQuantity: { type: [integer, "null"], minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, nunca más que los solicitados; null si nunca recibió una oferta. Se conserva tras rechazar, vencer o aceptar." }
+        offerExpiresAt: { type: [string, "null"], format: date-time, description: "Fin de la vigencia de la oferta: diez minutos o el cierre del lote, lo que ocurra primero." }
+        position: { type: [integer, "null"], minimum: 1, description: "Lugar en la cola (1 es el primero) mientras status es waiting; si no, null." }
+        reservationId: { oneOf: [{ $ref: "#/components/schemas/PublicId" }, { type: "null" }], description: "Reserva creada al aceptar, por la cantidad ofrecida; null en cualquier otro estado." }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time, description: "Instante en que terminó; null mientras espera o tiene una oferta vigente. Una oferta vencida terminó al llegar su hora y una espera al cierre del lote." }
+        lot: { $ref: "#/components/schemas/ReservationLot" }
+    WaitlistPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/WaitlistEntry" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
     PickupCode:
       type: string
       minLength: 1

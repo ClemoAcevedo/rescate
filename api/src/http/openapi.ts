@@ -90,6 +90,10 @@ export type LotStatus = "draft" | "published" | "expired" | "withdrawn"
  */
 export type ReservationStatus = "confirmed" | "cancelled" | "expired" | "delivered"
 /**
+ * Estado vigente al responder. waiting: en la cola sin packs retenidos; offered: tiene una oferta vigente que retiene packs; accepted, declined, expired y left son terminales. Una oferta no aceptada a tiempo y una espera de un lote cerrado se informan expired aunque el trabajador aún no lo haya registrado.
+ */
+export type WaitlistStatus = "waiting" | "offered" | "accepted" | "declined" | "expired" | "left"
+/**
  * Código tal como lo dicta la persona; el servidor ignora espacios, guiones y mayúsculas. Nunca en URL ni logs.
  */
 export type PickupCode = string
@@ -115,6 +119,9 @@ export interface HttpSchemas {
   ReservationSummary: ReservationSummary
   ReservationDetail: ReservationDetail
   ReservationPage: ReservationPage
+  JoinWaitlistRequest: JoinWaitlistRequest
+  WaitlistEntry: WaitlistEntry
+  WaitlistPage: WaitlistPage
   PickupReviewRequest: PickupReviewRequest
   PickupReview: PickupReview
   ConfirmPickupRequest: ConfirmPickupRequest
@@ -367,6 +374,51 @@ export interface ReservationPage {
    * @maxItems 20
    */
   items: ReservationSummary[]
+  page: number
+  hasNextPage: boolean
+}
+export interface JoinWaitlistRequest {
+  /**
+   * Packs que se desean. La oferta puede ser menor (ADR 0002); nunca mayor.
+   */
+  quantity: number
+  /**
+   * UUID generado por el cliente para una intención de ingreso.
+   */
+  idempotencyKey: string
+}
+export interface WaitlistEntry {
+  id: PublicId
+  requestedQuantity: number
+  status: WaitlistStatus
+  /**
+   * Packs ofrecidos, nunca más que los solicitados; null si nunca recibió una oferta. Se conserva tras rechazar, vencer o aceptar.
+   */
+  offeredQuantity: number | null
+  /**
+   * Fin de la vigencia de la oferta: diez minutos o el cierre del lote, lo que ocurra primero.
+   */
+  offerExpiresAt: string | null
+  /**
+   * Lugar en la cola (1 es el primero) mientras status es waiting; si no, null.
+   */
+  position: number | null
+  /**
+   * Reserva creada al aceptar, por la cantidad ofrecida; null en cualquier otro estado.
+   */
+  reservationId: PublicId | null
+  createdAt: Instant
+  /**
+   * Instante en que terminó; null mientras espera o tiene una oferta vigente. Una oferta vencida terminó al llegar su hora y una espera al cierre del lote.
+   */
+  endedAt: string | null
+  lot: ReservationLot
+}
+export interface WaitlistPage {
+  /**
+   * @maxItems 20
+   */
+  items: WaitlistEntry[]
   page: number
   hasNextPage: boolean
 }

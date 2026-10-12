@@ -2,6 +2,7 @@ import type { DiscoveryRepository, PublicLot, PublicPhoto, Reservation } from '.
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
+import { lotReconciledSql, settleQueue } from './waitlist-queue.js'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 interface LotRow {
@@ -78,23 +79,25 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
           insert: async () => { throw new Error('Reintento no debe insertar') },
         })
         const locked = await lockLot(client, lotId)
+        // Una oferta vencida aún retiene packs: se registra antes de medir lo libre.
+        if (locked) await settleQueue(client, locked.lotId, locked.at)
         const lot = locked && await readLot(client, lotId, null)
         if (!locked || !lot) return operate({ existing: null, lot: null }, {
           insert: async () => { throw new Error('No se reserva sin lote publicado') },
         })
-        // R y E se contrastan con las reservas confirmadas y las entregas que los respaldan (anexos B p. 4).
-        const found = await client.query<{ active: boolean; reconciled: boolean }>(
-          `SELECT EXISTS (SELECT 1 FROM public.commitments
-             WHERE user_id = $1 AND lot_id = l.id AND status = 'confirmed') AS active,
-           l.reserved_quantity = COALESCE((SELECT sum(c.quantity) FROM public.commitments c
-             WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
-           AND l.delivered_quantity = COALESCE((SELECT sum(d.quantity) FROM public.deliveries d
-             JOIN public.commitments c ON c.id = d.commitment_id WHERE c.lot_id = l.id), 0) AS reconciled
+        // R, E y O se contrastan con los registros que los respaldan (anexos B p. 4).
+        const found = await client.query<{ active: boolean; queued: boolean; reconciled: boolean }>(
+          `SELECT (EXISTS (SELECT 1 FROM public.commitments
+             WHERE user_id = $1 AND lot_id = l.id AND status = 'confirmed')
+             OR EXISTS (SELECT 1 FROM public.waitlist_entries w WHERE w.user_id = $1 AND w.lot_id = l.id
+               AND w.status IN ('waiting', 'offered'))) AS active,
+           EXISTS (SELECT 1 FROM public.waitlist_entries w WHERE w.lot_id = l.id AND w.status = 'waiting') AS queued,
+           ${lotReconciledSql} AS reconciled
            FROM public.lots l WHERE l.id = $2`,
           [userId, locked.lotId],
         )
-        const { active, reconciled } = found.rows[0]!
-        return operate({ existing: null, lot, active, reconciled, now: locked.at }, {
+        const { active, queued, reconciled } = found.rows[0]!
+        return operate({ existing: null, lot, active, queued, reconciled, now: locked.at }, {
           insert: async (quantity, at, code) => {
             // F → R en la misma transacción: los CHECK del lote rechazan sobreasignación.
             await client.query(
