@@ -130,6 +130,10 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
           </section>
         </article>
         <Card as="section" className="reservation-panel" aria-label="Reserva de packs">
+          <div className="reservation-panel__waitlist">
+          <p><Link to={`/lotes/${encodeURIComponent(id)}/espera`}>Unirme a la lista de espera</Link></p>
+          <p>Estar en la lista no reserva packs. Si recibes una oferta, tendrás que aceptarla antes de que venza para confirmar tu reserva.</p>
+          </div>
           <Badge tone={lot.availableQuantity > 0 ? 'success' : 'warning'}>{lot.availableQuantity > 0 ? `${lot.availableQuantity} ${lot.availableQuantity === 1 ? 'pack libre' : 'packs libres'}` : 'Sin stock disponible'}</Badge>
           {reservation ? <div className="reservation-panel__intro">
             <h2>Solicitud registrada</h2><p>Solicitaste {reservation.quantity} {reservation.quantity === 1 ? 'pack' : 'packs'} de este lote.</p>

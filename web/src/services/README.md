@@ -16,3 +16,6 @@ Esta carpeta contiene los servicios que consumen la API y sus tipos.
   intención; `reservation-intent.ts` conserva clave y cantidad en la pestaña.
 - `reservations-service.ts` consulta historial/detalle y cancela con CSRF; valida
   estado, ventana y coherencia del código antes de entregar datos a la vista.
+- `waitlist-service.ts` consulta solicitudes y posición, ingresa con clave idempotente
+  y acepta/rechaza/sale con CSRF. Usa los tipos generados y valida la coherencia
+  entre estado, oferta, posición, vencimiento y reserva antes de mostrar acciones.
