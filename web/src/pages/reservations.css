@@ -79,3 +79,6 @@
 @media (min-width: 48rem) {
   .reservation-cancel__actions { flex-direction: row; flex-wrap: wrap; align-items: start; }
 }
+
+.reservation-panel__waitlist { display: grid; gap: var(--sp-2); }
+.reservation-panel__waitlist p { margin: 0; }
