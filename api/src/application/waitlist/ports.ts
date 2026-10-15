@@ -55,8 +55,4 @@ export interface WaitlistRepository {
   /** Bloquea el lote de una solicitud del titular y la relee; otra persona recibe `null`. */
   withEntryTransaction<T>(userId: string, entryId: string,
     operate: (state: EntryState, writer: EntryWriter) => Promise<T>): Promise<T>
-  /** Lotes con ofertas vencidas o solicitudes de un lote cerrado, vencimiento más antiguo primero. */
-  listSettleable(limit: number): Promise<string[]>
-  /** Bloquea el lote y registra vencimientos, cierre de la cola y ofertas pendientes. Devuelve las solicitudes cerradas. */
-  settleLot(lotId: string): Promise<number>
 }

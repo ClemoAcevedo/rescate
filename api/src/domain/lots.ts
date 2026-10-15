@@ -182,3 +182,11 @@ export function publishLot(lot: Lot, now: Date, photos: readonly PhotoStatus[] =
   if (violations.length > 0) throw new LotRuleError(violations)
   return { ...lot, status: "published", publishedAt: now, updatedAt: now }
 }
+
+/**
+ * RF08: un lote publicado cierra en `pickupEndsAt`. Desde ese instante deja de asignar
+ * y su cierre se registra como vencido, aunque el trabajador lo procese después.
+ */
+export function isDueToExpire(lot: { status: LotStatus; pickupEndsAt: Date }, now: Date): boolean {
+  return lot.status === "published" && now >= lot.pickupEndsAt
+}

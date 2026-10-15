@@ -20,6 +20,7 @@ const migrations = [
   '1791100000000_lot-status-enum',
   '1791100000001_user-consents',
   '1791200000000_waitlist',
+  '1791300000000_lot-expiry-claims',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -337,6 +338,14 @@ try {
   await query('DELETE FROM waitlist_entries')
   ok('cola FIFO: cantidades, oferta, cierre y reserva coherentes; una solicitud abierta por usuario y lote, reingreso tras terminar')
 
+  // K028: los lotes existentes empiezan sin reclamo de vencimiento y los intentos no son negativos.
+  assert.deepEqual(await query(`SELECT count(*)::int AS n FROM lots
+    WHERE expiry_attempts <> 0 OR expiry_claimed_until IS NOT NULL`), [{ n: 0 }])
+  await rejected('intentos de vencimiento negativos', 'UPDATE lots SET expiry_attempts = -1 WHERE id = $1',
+    [closing.id], '23514', 'lots_expiry_attempts_check')
+  assert.ok((await query("SELECT to_regclass('public.waitlist_entries_offer_expiry_idx') AS name"))[0].name)
+  ok('K028: lotes sin reclamo de vencimiento, intentos no negativos e índice de ofertas por vencer')
+
   // K014, K022, los consentimientos y la cola solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
   const withConsents = latest.filter(row => row.relname !== 'waitlist_entries')
@@ -360,6 +369,12 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='lots' AND column_name LIKE 'expiry\\_%'`), [])
+  assert.equal((await query("SELECT to_regclass('public.waitlist_entries_offer_expiry_idx') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), latest)
+  ok('rollback K028 retira solo el reclamo de vencimientos y su índice')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.waitlist_entries') AS name"))[0].name, null)
   assert.deepEqual(await snapshot(), withConsents)

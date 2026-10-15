@@ -18,7 +18,7 @@ ni usar mocks de identidad en el despliegue.
 | --- | --- |
 | PostgreSQL | Imagen `postgis/postgis:16-3.5`; volumen en `/var/lib/postgresql/data`; `PGDATA=/var/lib/postgresql/data/pgdata`; usuario, base y contraseña propia en variables Railway. Sin dominio público ni TCP proxy. |
 | API | Contexto de build `api/`, [Dockerfile](../api/Dockerfile), `node dist/index.js`, `PORT=3000`, healthcheck `/health`, restart `ON_FAILURE`. Pre-deploy: `npm run db:migrate`. |
-| Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. Valida fotos y limpia objetos; necesita `DATABASE_URL` y el almacenamiento de fotos. Sin ellos queda inactivo. |
+| Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. Registra [vencimientos](vencimientos.md) con `DATABASE_URL`; valida fotos y limpia objetos si además tiene el almacenamiento de fotos. No usa `PICKUP_CODE_KEY` ni `WORKER_EXPIRIES`. Sin base queda inactivo. |
 | Web | Proyecto Vercel vinculado a `web/`, Node 24.x, Vite, `npm ci` y build configurado en `vercel.mjs`; salida `dist/`. |
 
 Railway conserva la configuración de los servicios. Al crear un entorno, fijar
@@ -37,7 +37,7 @@ DATABASE_URL=postgresql://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSW
 API y worker reciben además `NODE_ENV=production`, ese mismo `DATABASE_URL`,
 `PHOTO_STORAGE=s3` y las cinco variables `PHOTO_S3_*` del bucket B2 privado
 ([fotos](fotos.md#configuración)). Sin `PHOTO_STORAGE`, cargar fotos responde 503,
-el worker queda inactivo y el resto del sitio funciona.
+el worker solo registra vencimientos y el resto del sitio funciona.
 
 Conservar ambas claves al reiniciar. Sin `PICKUP_CODE_KEY` la API no inicia y el
 healthcheck detiene el despliegue; cambiarla deja los códigos de retiro vigentes sin

@@ -28,6 +28,8 @@ import { createDiscoveryRouter } from "./http/discovery-router.js"
 import { createReservationsRouter } from "./http/reservations-router.js"
 import { createWaitlistUseCases } from "./application/waitlist/use-cases.js"
 import { createWaitlistRepository } from "./infrastructure/postgres/waitlist-repository.js"
+import { createExpiryUseCases } from "./application/expiries/use-cases.js"
+import { createLotExpiryRepository } from "./infrastructure/postgres/expiry-repository.js"
 import { createWaitlistRouter } from "./http/waitlist-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
@@ -130,20 +132,26 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
   }), close: () => pool.end() }
 }
 
-export interface PhotoWorker { run(): Promise<void>; stop(): void }
+export interface Worker { tasks: string[]; run(): Promise<void>; stop(): void }
 
 /**
- * Worker de fotos: valida una foto por vez y limpia objetos cada minuto. Reutiliza
- * los casos de uso de Application; sin base o almacenamiento queda inactivo.
+ * Worker: registra vencimientos de lotes, reservas y ofertas (K028), valida una foto
+ * por vez y limpia objetos cada minuto (K014). Reutiliza los casos de uso de
+ * Application. Sin DATABASE_URL no hay trabajo; sin almacenamiento solo registra
+ * vencimientos. `WORKER_EXPIRIES=off` los apaga, para pruebas que mueven plazos sobre
+ * una base compartida y esperan vencimientos sin registrar.
  */
-export function createPhotoWorker(environment: NodeJS.ProcessEnv = process.env,
-  log: (event: Record<string, unknown>) => void = event => console.log(JSON.stringify(event))): PhotoWorker | null {
+export function createWorker(environment: NodeJS.ProcessEnv = process.env,
+  log: (event: Record<string, unknown>) => void = event => console.log(JSON.stringify(event))): Worker | null {
+  const expiriesSetting = environment.WORKER_EXPIRIES?.trim() ?? ""
+  if (!["", "on", "off"].includes(expiriesSetting)) throw new Error("WORKER_EXPIRIES admite on u off")
   const objects = readPhotoStorage(environment)
   const databaseUrl = environment.DATABASE_URL?.trim()
-  if (objects === null || !databaseUrl) return null
+  if (!databaseUrl || (objects === null && expiriesSetting === "off")) return null
   // Anexos H p. 20: dos conexiones para el trabajador.
   const pool = createPool({ connectionString: databaseUrl, max: 2 })
-  const photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
+  const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log)
+  const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
   let running = true
   let wake: (() => void) | null = null
@@ -152,19 +160,23 @@ export function createPhotoWorker(environment: NodeJS.ProcessEnv = process.env,
     wake = () => { clearTimeout(timer); resolve() }
   })
   return {
+    tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : [])],
     async run() {
       let nextCleanup = 0
       while (running) {
         try {
-          if (Date.now() >= nextCleanup) {
+          if (photos && Date.now() >= nextCleanup) {
             await photos.cleanup()
             nextCleanup = Date.now() + 60_000
           }
-          if (!(await photos.processNext())) await pause(2000)
+          // Un lote y una foto por vuelta: una cola de fotos no atrasa los vencimientos.
+          const expired = expiries ? await expiries.expireNext() : false
+          const processed = photos ? await photos.processNext() : false
+          if (!expired && !processed) await pause(2000)
         } catch (error) {
           // Sin SQL, rutas ni credenciales en el registro; se reintenta más tarde.
           const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
-          log({ event: "photo_worker_error", code: /^[A-Z0-9_]{2,30}$/.test(code) ? code : "INTERNAL" })
+          log({ event: "worker_error", code: /^[A-Z0-9_]{2,30}$/.test(code) ? code : "INTERNAL" })
           await pause(5000)
         }
       }

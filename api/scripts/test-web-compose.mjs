@@ -55,7 +55,10 @@ try {
     ...env, ...photoEnv, PORT: String(apiPort), RESCATE_ALLOWED_ORIGINS: webUrl, CSRF_SIGNING_KEY: randomBytes(32).toString('base64'),
     PICKUP_CODE_KEY: randomBytes(32).toString('base64'),
   } }))
-  children.push(spawn(process.execPath, ['dist/worker.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'], env: { ...env, ...photoEnv } }))
+  // Los recorridos mueven plazos y esperan vencimientos sin registrar: este worker solo
+  // procesa fotos. Los vencimientos con worker real se prueban en db:test:expiries (K028).
+  children.push(spawn(process.execPath, ['dist/worker.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'],
+    env: { ...env, ...photoEnv, WORKER_EXPIRIES: 'off' } }))
   children.push(spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', '5174', '--strictPort'], {
     cwd: web, stdio: ['ignore', 'ignore', 'inherit'],
     env: { ...process.env, DEV_TLS_CERT_FILE: cert, DEV_TLS_KEY_FILE: key, API_PROXY_TARGET: `http://localhost:${apiPort}` },
