@@ -175,6 +175,11 @@ GitHub condiciona la revisión automática al acceso del autor a Copilot code re
 y a su cuota disponible; activar la regla no concede una licencia al equipo.
 Ver [disponibilidad y revisiones automáticas de GitHub](https://docs.github.com/en/copilot/concepts/agents/code-review).
 
+Si la solicitud no genera una revisión ni una ejecución de Copilot, comprobar
+el plan y la cuota en [la configuración de Copilot](https://github.com/settings/copilot).
+Copilot Free no incluye reviews de PR. Para una cuenta personal se necesita un
+plan con esa función, como Copilot Student para estudiantes verificados.
+
 Las instrucciones del reviewer están en
 [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) y remiten a
 las reglas compartidas de `AGENTS.md`. La revisión del bot complementa la revisión
