@@ -1,7 +1,7 @@
 # Entorno local y CI
 
 Guía vigente para el árbol de trabajo K008/K010 (2026-09-21).
-Compose levanta web, API, PostgreSQL/PostGIS y el worker de fotos. La API añade
+Compose levanta web, API, PostgreSQL/PostGIS y el worker. La API añade
 [operaciones de lotes](lotes.md) y [fotos](fotos.md); requiere migraciones aplicadas.
 Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
 [K006](evidencia/k006.md).
@@ -37,7 +37,7 @@ puertos publicados escuchan solo en `127.0.0.1`. No usar este Compose en producc
 | `web` | Vite, React y proxy `/api` | http://localhost:5173 |
 | `api` | Express compilado; `GET /health` | http://localhost:3000/health |
 | `db` | PostgreSQL 16 + PostGIS 3.5 | localhost:5432 |
-| `worker` | Proceso Node independiente: valida fotos y limpia temporales | Sin puerto |
+| `worker` | Proceso Node independiente: registra vencimientos, valida fotos y limpia temporales | Sin puerto |
 
 Variables del `.env` raíz (leídas por Compose):
 
@@ -92,10 +92,11 @@ mostrar la base configurada y la versión de PostGIS.
 `db`, `api` y `web` tienen healthchecks; web espera a que API esté saludable.
 `/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable.
 Compose no aplica migraciones automáticamente.
-El worker debe figurar `running` y registrar `Worker iniciado: validación y limpieza de fotos`.
+El worker debe figurar `running` y registrar `Worker iniciado: vencimientos; validación y limpieza de fotos`.
 Consulta PostgreSQL cada 2 s y limpia objetos cada minuto. Mientras falten las
-migraciones registra `photo_worker_error` y reintenta cada 5 s. Termina la foto en
-curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` o `PHOTO_STORAGE` queda inactivo.
+migraciones registra `worker_error` y reintenta cada 5 s. Termina el lote o la foto en
+curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` queda inactivo; sin `PHOTO_STORAGE`
+solo registra [vencimientos](vencimientos.md).
 
 ## Persistencia y migraciones K002/K003
 
@@ -160,7 +161,7 @@ API en paralelo y después Compose:
 - `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud, identidad, seguridad y lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reinicio de API, Chromium HTTPS y reservas, cancelación y retiro K022 con PostgreSQL real, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reservas K022/K025, cola K027, vencimientos K028 con procesos reales del worker, reinicio de API, Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay

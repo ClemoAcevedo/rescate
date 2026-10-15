@@ -11,6 +11,8 @@ import { createDiscoveryRepository } from '../dist/infrastructure/postgres/disco
 import { createReservationRepository } from '../dist/infrastructure/postgres/reservation-repository.js'
 import { createDiscoveryUseCases } from '../dist/application/discovery/use-cases.js'
 import { createReservationUseCases } from '../dist/application/reservations/use-cases.js'
+import { createExpiryUseCases } from '../dist/application/expiries/use-cases.js'
+import { createLotExpiryRepository } from '../dist/infrastructure/postgres/expiry-repository.js'
 
 const connectionString = process.env.DATABASE_URL
 assert.ok(connectionString && /^rescate_(k022_test_|web_test_)/.test(new URL(connectionString).pathname.slice(1)),
@@ -70,6 +72,7 @@ const pool = createPool({ connectionString })
 const codes = createPickupCodes(pickupKey)
 const reservations = createReservationUseCases(createReservationRepository(pool), codes, () => new Date())
 const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date())
+const expiries = createExpiryUseCases(createLotExpiryRepository(pool), () => {})
 const settle = promise => promise.then(value => ({ value }), error => ({ error }))
 // Cada contendiente debe esperar nuestro bloqueo, directamente o detrás de otro contendiente.
 async function lockedRace(lotId, actions, whileBlocked = async () => {}) {
@@ -291,18 +294,26 @@ try {
   assert.deepEqual(await counters(early), { f: 2, r: 1, e: 0, x: 0 })
   ok('sin trabajador: antes del inicio no se entrega; al cierre se rechaza cancelar y retirar y se informa vencida')
 
-  const expiredCount = await reservations.expireDue()
-  assert.ok(expiredCount >= 1)
+  // Registro del cierre como lo hace el trabajador (K028); su reclamo se prueba en test-expiries.mjs.
+  assert.deepEqual(await expiries.expireLot(early), { lotClosed: true, expiredReservations: 1, closedEntries: 0 })
   const closedRow = await status(earlyReservation.body.id)
   assert.deepEqual([closedRow.status, closedRow.readable], ['expired', false])
-  const { rows: [ends] } = await database.query('SELECT pickup_ends_at FROM lots WHERE public_id = $1', [early])
+  const { rows: [ends] } = await database.query(
+    'SELECT status, closed_at, pickup_ends_at FROM lots WHERE public_id = $1', [early])
   assert.equal(closedRow.ended_at.getTime(), ends.pickup_ends_at.getTime())
-  assert.deepEqual(await counters(early), { f: 2, r: 0, e: 0, x: 1 })
-  assert.equal(await reservations.expireLot(early), 0)
-  assert.equal(await reservations.expireDue(), 0)
-  assert.deepEqual(await counters(early), { f: 2, r: 0, e: 0, x: 1 })
-  assert.equal(await reservations.expireLot(lot), 0)
-  ok('registrar el vencimiento mueve R → X con el cierre como término; repetirlo no libera de nuevo')
+  assert.deepEqual([ends.status, ends.closed_at.getTime()], ['expired', ends.pickup_ends_at.getTime()])
+  assert.deepEqual(await counters(early), { f: 0, r: 0, e: 0, x: 3 })
+  assert.deepEqual(await expiries.expireLot(early), { lotClosed: false, expiredReservations: 0, closedEntries: 0 })
+  assert.deepEqual(await counters(early), { f: 0, r: 0, e: 0, x: 3 })
+  // Registrado o no, la API responde igual: cancelar, retirar y reservar se rechazan con 409.
+  assert.equal((await holder.call('GET', `/reservations/${earlyReservation.body.id}`)).body.status, 'expired')
+  assert.equal((await holder.call('POST', `/reservations/${earlyReservation.body.id}/cancel`, {})).status, 409)
+  assert.equal((await operator.call('POST', `/lots/${early}/pickups`,
+    { reservationId: earlyReservation.body.id, code: earlyCode, idempotencyKey: randomUUID() })).status, 409)
+  assert.equal((await stranger.call('POST', `/public/lots/${early}/reservations`, { quantity: 1, idempotencyKey: randomUUID() })).status, 409)
+  // Un lote cerrado sin reservas confirmadas también queda vencido, con lo libre en X.
+  assert.deepEqual(await expiries.expireLot(lot), { lotClosed: true, expiredReservations: 0, closedEntries: 0 })
+  ok('registrar el cierre vence el lote con closed_at = cierre, R y F → X con el cierre como término; repetirlo no libera; la API responde igual')
 
   // --- Cancelar espera el bloqueo y relee un cambio de ventana confirmado mientras esperaba.
   const waited = await makeLot(3)
@@ -406,7 +417,9 @@ try {
        OR LEAST(l.free_quantity, l.offered_quantity, l.reserved_quantity, l.delivered_quantity, l.expired_quantity) < 0
        OR l.reserved_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
        OR l.delivered_quantity <> COALESCE((SELECT sum(d.quantity) FROM deliveries d JOIN commitments c ON c.id = d.commitment_id WHERE c.lot_id = l.id), 0)
-       OR l.expired_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'expired'), 0)
+       -- Abierto: X son las reservas vencidas. Vencido (K028): no queda F, O ni R, y X = Q - E.
+       OR l.status <> 'expired' AND l.expired_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'expired'), 0)
+       OR l.status = 'expired' AND l.free_quantity + l.offered_quantity + l.reserved_quantity <> 0
        OR EXISTS (SELECT 1 FROM commitments c WHERE c.lot_id = l.id
          AND (SELECT count(*) FROM deliveries d WHERE d.commitment_id = c.id) <> CASE WHEN c.status = 'delivered' THEN 1 ELSE 0 END)
        OR EXISTS (SELECT 1 FROM deliveries d JOIN commitments c ON c.id = d.commitment_id

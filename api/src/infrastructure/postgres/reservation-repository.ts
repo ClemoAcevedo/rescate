@@ -1,4 +1,4 @@
-// K022 · Infrastructure: cancelación, retiro y vencimiento bajo el bloqueo común del
+// K022 · Infrastructure: cancelación y retiro bajo el bloqueo común del
 // lote (ADR 0006). Cada transición cambia el estado, el código y el contador con el
 // mismo cliente; la condición status = 'confirmed' impide una segunda transición.
 import type {
@@ -163,39 +163,6 @@ export function createReservationRepository(pool: Pool): ReservationRepository {
           },
         })
       })
-    },
-
-    async listExpirable(limit) {
-      const { rows } = await pool.query<{ id: string }>(
-        `SELECT l.public_id::text AS id FROM public.lots l
-         WHERE l.pickup_ends_at <= clock_timestamp() AND EXISTS (SELECT 1 FROM public.commitments c
-           WHERE c.lot_id = l.id AND c.status = 'confirmed')
-         ORDER BY l.pickup_ends_at, l.id LIMIT $1`, [limit])
-      return rows.map(row => row.id)
-    },
-
-    async withExpiryTransaction(lotId, operate) {
-      return withTransaction(pool, async (client) => {
-        const locked = await lockLot(client, lotId)
-        if (!locked) return operate(null, { expireConfirmed: async () => { throw new Error('Sin lote no se vence') } })
-        const { rows } = await client.query<{ pickup_ends_at: Date }>(
-          'SELECT pickup_ends_at FROM public.lots WHERE id = $1', [locked.lotId])
-        return operate({ pickupEndsAt: rows[0]!.pickup_ends_at, now: locked.at }, {
-          async expireConfirmed(at) {
-            const expired = await client.query<{ quantity: number }>(
-              `UPDATE public.commitments SET status = 'expired', ended_at = $2, pickup_code_ciphertext = NULL
-               WHERE lot_id = $1 AND status = 'confirmed' RETURNING quantity`, [locked.lotId, at])
-            const packs = expired.rows.reduce((total, row) => total + row.quantity, 0)
-            // Tras el cierre el lote ya no es asignable: R → X (anexos B p. 4).
-            if (packs > 0) await client.query(
-              `UPDATE public.lots SET reserved_quantity = reserved_quantity - $2,
-                 expired_quantity = expired_quantity + $2 WHERE id = $1`, [locked.lotId, packs])
-            // El lote ya no asigna: la cola termina con él, sin ofertas nuevas (ADR 0002).
-            await settleQueue(client, locked.lotId, locked.at)
-            return expired.rows.length
-          },
-        })
-      })
-    },
+    }
   }
 }

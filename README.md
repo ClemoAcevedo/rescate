@@ -264,10 +264,11 @@ lo cambia.
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
   vencimiento (K027), según OpenAPI.
-- **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
-  (K014).
+- **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
+  reintentos acotados (K028); valida fotos, genera imagen y miniatura sin EXIF y
+  limpia temporales (K014).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
-  observados y repetición con el worker activo y detenido (K025).
+  observados y repetición con el worker de fotos activo y detenido (K025).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

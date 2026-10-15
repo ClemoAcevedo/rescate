@@ -26,9 +26,9 @@ establecimiento o vencida al cierre del lote. El contrato HTTP está en
   ventana y antes de su cierre. Registra una única entrega completa (R → E). La
   misma clave del operador reproduce el resultado; otro intento informa que ya se
   retiró.
-- **Vencer.** El registro mueve R → X con el cierre como instante de término. Repetirlo no
-  libera de nuevo. `expireDue` de Application lo aplica por lotes para el
-  trabajador de K028 (#31).
+- **Vencer.** El worker registra el cierre del lote: R → X con el cierre como instante
+  de término y el código borrado. Repetirlo no libera de nuevo
+  ([vencimientos](vencimientos.md)).
 - **Privacidad.** El código solo viaja en cuerpos JSON: nunca en rutas, consultas,
   listados ni registros. Una reserva ajena responde 404 igual que una inexistente.
 
@@ -138,9 +138,10 @@ el resultado de cada carrera y el nombre de la base, que se conserva para inspec
 Primero inicia un worker de fotos con esa misma base y almacenamiento temporal.
 Comprueba su conexión, ejecuta la suite, envía `SIGTERM` y verifica la salida y el
 cierre de sus conexiones. Después repite la suite en la misma base con datos nuevos.
-El worker actual procesa fotos; el registro programado de vencimientos corresponde
-a [K028](https://github.com/ClemoAcevedo/rescate/issues/31). Las pruebas de plazos
-exigen que la API rechace operaciones vencidas aunque el registro siga confirmado.
+Ese worker corre con `WORKER_EXPIRIES=off`: las pruebas de plazos exigen que la API
+rechace operaciones vencidas aunque el registro siga confirmado, y registran el
+cierre ellas mismas. El worker real con vencimientos se prueba en
+[vencimientos](vencimientos.md#pruebas).
 
 CI ejecuta ambas fases. `test:web:compose` también incluye la suite de reservas.
 La prueba de navegador acepta el certificado HTTPS autofirmado del entorno local
@@ -149,4 +150,3 @@ en sus contextos de Playwright.
 ## Limitaciones
 
 - El límite de cinco fallos de revisión por operador cada quince minutos es K034 (#37).
-- El trabajador que registra vencimientos es K028 (#31).

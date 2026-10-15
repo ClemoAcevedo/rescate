@@ -13,6 +13,9 @@ import type { ReservationStatus } from '../src/domain/reservations.js'
 import { createPickupCodes } from '../src/infrastructure/crypto/pickup-codes.js'
 import { createReservationUseCases } from '../src/application/reservations/use-cases.js'
 import type { ReservationRepository } from '../src/application/reservations/ports.js'
+import { createExpiryUseCases } from '../src/application/expiries/use-cases.js'
+import type { LotExpiryRepository } from '../src/application/expiries/ports.js'
+import type { LotStatus } from '../src/domain/lots.js'
 import { createReservationsRouter } from '../src/http/reservations-router.js'
 import { createApp } from '../src/app.js'
 import { readPickupCodeKey } from '../src/composition.js'
@@ -151,18 +154,26 @@ function memory(codes: ReturnType<typeof createPickupCodes>) {
         },
       })
     },
-    async listExpirable() { return rows.some(r => r.status === 'confirmed') && state.dbNow >= ends ? [lot.id] : [] },
+  }
+  // Vencimientos del lote con el mismo estado; la concesión se prueba en lot-expiries.test.ts.
+  const closure = { status: 'published' as LotStatus, closedAt: null as Date | null }
+  const expiriesRepository: LotExpiryRepository = {
+    async claimNext() { return closure.status === 'published' && state.dbNow >= ends ? { lotId: lot.id, attempts: 1 } : null },
     async withExpiryTransaction(lotId, operate) {
-      return operate(lotId === lot.id ? { pickupEndsAt: ends, now: state.dbNow } : null, {
-        async expireConfirmed(at) {
+      return operate(lotId === lot.id ? { status: closure.status, pickupEndsAt: ends, now: state.dbNow } : null, {
+        async settleQueue() { return 0 },
+        async expireReservations(at) {
           const confirmed = rows.filter(r => r.status === 'confirmed')
           for (const row of confirmed) { end(row, 'expired', at); state.R -= row.quantity; state.X += row.quantity }
           return confirmed.length
         },
+        async closeLot(at) { closure.status = 'expired'; closure.closedAt = at; state.X += state.F; state.F = 0 },
+        async complete() {},
       })
     },
+    async release() { assert.fail('El vencimiento en memoria no falla') },
   }
-  return { lot, members, state, rows, deliveries, reserve, repository }
+  return { lot, members, state, rows, deliveries, reserve, repository, expiriesRepository, closure }
 }
 
 async function harness() {
@@ -260,7 +271,7 @@ test('HTTP: revisar no consume; confirmar valida de nuevo, entrega una vez y rep
   } finally { await h.close() }
 })
 
-test('vencimiento: la API rechaza al cierre sin trabajador; registrarlo mueve R → X una sola vez', async () => {
+test('vencimiento: la API rechaza al cierre sin trabajador; registrarlo vence el lote y mueve R y F → X una sola vez', async () => {
   const h = await harness()
   try {
     const { id, code } = h.db.reserve('holder', 2)
@@ -273,10 +284,17 @@ test('vencimiento: la API rechaza al cierre sin trabajador; registrarlo mueve R 
     assert.equal(h.db.rows[0]!.status, 'confirmed')
     // El registro usa el cierre como instante de término, aunque se procese después.
     h.db.state.dbNow = new Date(ends.getTime() + 60_000)
-    assert.equal(await h.cases.expireDue(), 1)
-    assert.equal(await h.cases.expireDue(), 0)
-    assert.equal(await h.cases.expireLot(h.db.lot.id), 0)
-    assert.deepEqual([h.db.state.R, h.db.state.X, h.db.rows[0]!.endedAt], [0, 2, ends])
+    const events: Record<string, unknown>[] = []
+    const expiries = createExpiryUseCases(h.db.expiriesRepository, event => events.push(event))
+    assert.equal(await expiries.expireNext(), true)
+    assert.equal(await expiries.expireNext(), false)
+    assert.deepEqual(await expiries.expireLot(h.db.lot.id), { lotClosed: false, expiredReservations: 0, closedEntries: 0 })
+    assert.deepEqual([h.db.state.R, h.db.state.F, h.db.state.X, h.db.rows[0]!.endedAt], [0, 0, 10, ends])
+    assert.deepEqual([h.db.closure.status, h.db.closure.closedAt], ['expired', ends])
+    assert.deepEqual(events, [{ event: 'lot_expiry', lotId: h.db.lot.id, attempts: 1,
+      lotClosed: true, expiredReservations: 1, closedEntries: 0 }])
+    // Registrado el cierre, la API responde igual que antes de registrarlo.
+    assert.equal((await h.call('holder', 'POST', `/reservations/${id}/cancel`, {})).status, 409)
   } finally { await h.close() }
 })
 
@@ -287,7 +305,8 @@ test('una reserva confirmada sin código recibe uno al consultarla; antes del ci
     const first = await h.call('holder', 'GET', `/reservations/${legacy.id}`)
     assert.match(first.body.pickupCode, /^[0-9A-HJKMNP-TV-Z]{8}$/)
     assert.equal((await h.call('holder', 'GET', `/reservations/${legacy.id}`)).body.pickupCode, first.body.pickupCode)
-    assert.equal(await h.cases.expireLot(h.db.lot.id), 0)
-    assert.equal(h.db.rows[0]!.status, 'confirmed')
+    assert.deepEqual(await createExpiryUseCases(h.db.expiriesRepository, () => {}).expireLot(h.db.lot.id),
+      { lotClosed: false, expiredReservations: 0, closedEntries: 0 })
+    assert.deepEqual([h.db.rows[0]!.status, h.db.closure.status], ['confirmed', 'published'])
   } finally { await h.close() }
 })

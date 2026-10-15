@@ -35,12 +35,14 @@ function toReservation(row: ReservationRow): Reservation {
     createdAt: row.created_at }
 }
 // Sin instante no se filtra por ventana: la reserva la comprueba Application con su reloj.
+// Un lote vencido ya registrado (K028) se lee igual que uno cerrado sin registrar, así
+// que la respuesta no depende de que el trabajador haya pasado.
 async function readLot(db: Pool | PoolClient, lotId: string, now: Date | null): Promise<PublicLot | null> {
   if (!uuid.test(lotId)) return null
   const { rows } = await db.query<LotRow>(
     `SELECT ${publicColumns} FROM public.lots l
-     WHERE l.public_id = $1 AND l.status = 'published'
-       AND ($2::timestamptz IS NULL OR l.pickup_ends_at > $2)`,
+     WHERE l.public_id = $1 AND ($2::timestamptz IS NULL AND l.status IN ('published', 'expired')
+       OR l.status = 'published' AND l.pickup_ends_at > $2)`,
     [lotId, now, null, null],
   )
   return rows[0] ? toLot(rows[0]) : null
