@@ -128,7 +128,7 @@ try {
   assert.equal((await settle(discovery.reserve(actor(1), stopped, 1, randomUUID()))).error?.reason, 'unavailable')
   assert.equal((await settle(waitlist.join(actor(1), stopped, 9, randomUUID()))).error?.reason, 'unavailable')
   assert.equal((await stopWorker(worker)).code, 0, 'SIGTERM termina el worker de forma ordenada')
-  assert.match(worker.output, /Worker iniciado: vencimientos\n/)
+  assert.match(worker.output, /Worker iniciado: vencimientos; avisos internos\n/)
   assert.deepEqual(events(worker), [{ event: 'lot_expiry', lotId: stopped, attempts: 1,
     lotClosed: true, expiredReservations: 1, closedEntries: 0 }])
   assert.doesNotMatch(worker.output, /postgresql:|worker_error/)
