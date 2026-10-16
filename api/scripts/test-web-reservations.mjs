@@ -29,6 +29,8 @@ try {
       const url = new URL(route.request().url())
       const path = url.pathname
       if (path === '/api/auth/session') return route.fulfill({ json: { session: scenario === 'anonymous' ? null : session, csrfToken: 'controlled' } })
+      // K030: la cabecera consulta la bandeja con sesión; una vacía aísla este recorrido.
+      if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
       if (path === '/api/reservations') {
         const number = Number(url.searchParams.get('page'))
         const items = number === 2 ? [terminal('expired')] : [confirmed, terminal('cancelled'), terminal('delivered'), terminal('expired')]
@@ -113,6 +115,8 @@ try {
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
     if (path === '/api/auth/session') return route.fulfill({ json: { session, csrfToken: 'controlled' } })
+    // K030: la cabecera consulta la bandeja con sesión; una vacía aísla este recorrido.
+    if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
     if (path === '/api/public/lots/lot_test') return route.fulfill({ json: { ...lot, category: 'Panadería', quantity: 2, availableQuantity: original ? 0 : 2, photoUrl: null, photos: [], distanceKm: null } })
     if (path === '/api/public/lots/lot_test/reservations') {
       const body = route.request().postDataJSON()

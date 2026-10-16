@@ -94,13 +94,17 @@ test('un reintento que funciona registra el cierre una sola vez', async () => {
   assert.equal(calls.closed.length, 1)
 })
 
-test('worker: vencimientos activos con base; sin base o sin trabajos queda inactivo', async () => {
+test('worker: vencimientos y avisos activos con base; sin base queda inactivo', async () => {
   const database = 'postgresql://127.0.0.1:1/x'
   assert.equal(createWorker({}), null)
-  assert.equal(createWorker({ DATABASE_URL: database, WORKER_EXPIRIES: 'off' }), null)
   assert.throws(() => createWorker({ DATABASE_URL: database, WORKER_EXPIRIES: 'no' }), /on u off/)
+  // Con los vencimientos apagados, la base sigue alimentando los avisos internos (K030).
+  const withoutExpiries = createWorker({ DATABASE_URL: database, WORKER_EXPIRIES: 'off' })
+  assert.deepEqual(withoutExpiries?.tasks, ['avisos internos'])
+  withoutExpiries!.stop()
+  await withoutExpiries!.run()
   const worker = createWorker({ DATABASE_URL: database })
-  assert.deepEqual(worker?.tasks, ['vencimientos'])
+  assert.deepEqual(worker?.tasks, ['vencimientos', 'avisos internos'])
   worker!.stop()
   await worker!.run()
 })

@@ -8,6 +8,7 @@ import type { ReservationStatus } from '../../domain/reservations.js'
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
+import { appendEvent } from './outbox.js'
 import { settleQueue } from './waitlist-queue.js'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -88,6 +89,10 @@ export function createReservationRepository(pool: Pool): ReservationRepository {
             // R → F en la misma transacción (ADR 0006).
             await client.query('UPDATE public.lots SET reserved_quantity = reserved_quantity - $2 WHERE id = $1',
               [row.lot_internal_id, quantity])
+            // K030: el aviso de la cancelación nace con ella (ADR 0012).
+            await appendEvent(client, row.internal_id, { kind: 'reservation_cancelled', recipientUserId: userId,
+              payload: { lot: { id: row.lot_id, description: row.description }, quantity, waitlistEntryId: null,
+                reservationId: row.id, offerExpiresAt: null } }, at)
             // Lo liberado se ofrece a quien sigue en la cola (RF07) bajo el mismo bloqueo.
             await settleQueue(client, row.lot_internal_id, at)
           },

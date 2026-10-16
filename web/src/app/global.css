@@ -110,6 +110,19 @@ code, kbd, samp { font-family: var(--font-mono); }
   color: var(--text-success);
 }
 
+.notifications-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-1);
+  border-radius: var(--radius-pill);
+  background: var(--action-primary);
+  color: var(--text-inverse);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+}
 .session-status {
   display: inline-flex;
   align-items: center;

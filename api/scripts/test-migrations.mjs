@@ -21,6 +21,7 @@ const migrations = [
   '1791100000001_user-consents',
   '1791200000000_waitlist',
   '1791300000000_lot-expiry-claims',
+  '1791400000000_notifications-outbox',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -346,9 +347,29 @@ try {
   assert.ok((await query("SELECT to_regclass('public.waitlist_entries_offer_expiry_idx') AS name"))[0].name)
   ok('K028: lotes sin reclamo de vencimiento, intentos no negativos e índice de ofertas por vencer')
 
+  // K030: outbox y avisos. Un evento por transición y un aviso por evento y destinatario.
+  const event = `INSERT INTO outbox_events (event_type, subject_id, recipient_user_id, payload, created_at, available_at,
+      status, processed_at) VALUES ($1, $2, $3, $4::jsonb, now(), now(), $5, $6) RETURNING id`
+  const payload = JSON.stringify({ lot: { id: 'x', description: 'Pack' }, quantity: 1 })
+  await rejected('evento de tipo inventado', event, ['inventado', 1, consentUser, payload, 'pending', null], '23514', 'outbox_events_type_check')
+  await rejected('payload que no es objeto', event, ['offer_issued', 1, consentUser, '[]', 'pending', null], '23514', 'outbox_events_payload_check')
+  await rejected('procesado sin instante', event, ['offer_issued', 1, consentUser, payload, 'processed', null], '23514', 'outbox_events_processed_check')
+  const [outboxEvent] = await query(event, ['offer_issued', 1, consentUser, payload, 'pending', null])
+  await rejected('misma transición dos veces', event, ['offer_issued', 1, consentUser, payload, 'pending', null], '23505', 'outbox_events_subject_key')
+  const notice = `INSERT INTO notifications (event_id, user_id, kind, payload, created_at, read_at)
+    VALUES ($1, $2, 'offer_issued', $3::jsonb, now(), $4) RETURNING id`
+  await rejected('leído antes de existir', notice, [outboxEvent.id, consentUser, payload, new Date(Date.now() - 86_400_000)],
+    '23514', 'notifications_read_check')
+  await query(notice, [outboxEvent.id, consentUser, payload, null])
+  await rejected('dos avisos del mismo evento y destinatario', notice, [outboxEvent.id, consentUser, payload, null],
+    '23505', 'notifications_event_user_key')
+  await query('DELETE FROM notifications'); await query('DELETE FROM outbox_events')
+  ok('outbox: tipos y estados válidos, una fila por transición; un aviso por evento y destinatario')
+
   // K014, K022, los consentimientos y la cola solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const withConsents = latest.filter(row => row.relname !== 'waitlist_entries')
+  const withQueue = latest.filter(row => !['outbox_events', 'notifications'].includes(row.relname))
+  const withConsents = withQueue.filter(row => row.relname !== 'waitlist_entries')
   const withDeliveries = withConsents.filter(row => row.relname !== 'user_consents')
   const withPhotos = withDeliveries.filter(row => row.relname !== 'deliveries')
   assert.deepEqual(withPhotos.filter(row => row.relname !== 'lot_photos'), before)
@@ -356,7 +377,8 @@ try {
   assert.ok(latest.some(row => row.relname === 'deliveries'))
   assert.ok(latest.some(row => row.relname === 'user_consents'))
   assert.ok(latest.some(row => row.relname === 'waitlist_entries'))
-  ok('K014, K022, consentimientos y cola agregan tablas sin recrear las existentes; el enum no recrea lots')
+  assert.ok(latest.some(row => row.relname === 'outbox_events') && latest.some(row => row.relname === 'notifications'))
+  ok('K014, K022, consentimientos, cola y avisos agregan tablas sin recrear las existentes; el enum no recrea lots')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), latest)
@@ -370,10 +392,16 @@ try {
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
   run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.notifications') AS name"))[0].name, null)
+  assert.equal((await query("SELECT to_regclass('public.outbox_events') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), withQueue)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  ok('rollback de avisos retira solo outbox_events y notifications; conserva compromisos y cola')
+  run('down', '1')
   assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
     WHERE table_schema='public' AND table_name='lots' AND column_name LIKE 'expiry\\_%'`), [])
   assert.equal((await query("SELECT to_regclass('public.waitlist_entries_offer_expiry_idx') AS name"))[0].name, null)
-  assert.deepEqual(await snapshot(), latest)
+  assert.deepEqual(await snapshot(), withQueue)
   ok('rollback K028 retira solo el reclamo de vencimientos y su índice')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.waitlist_entries') AS name"))[0].name, null)
@@ -465,7 +493,7 @@ try {
   assert.deepEqual((await history()).map(row => row.name), migrations)
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
-  await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries'])
+  await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries', 'outbox_events', 'notifications'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')
