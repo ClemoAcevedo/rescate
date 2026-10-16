@@ -16,6 +16,7 @@ export type ApplicationErrorCode =
   | "reservation_not_found"
   | "pickup_code_not_found"
   | "waitlist_entry_not_found"
+  | "notification_not_found"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -79,3 +80,6 @@ export class InventoryDiscrepancyError extends ApplicationError {
     super("inventory_discrepancy", "Los contadores del lote no coinciden con sus compromisos.")
   }
 }
+
+export const notificationNotFound = (): ApplicationError =>
+  new ApplicationError("notification_not_found", "El aviso no existe.")

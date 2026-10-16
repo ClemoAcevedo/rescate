@@ -3,6 +3,7 @@
 // libre a quienes esperan según el plan de Domain. Se llama con el cliente de la transacción
 // que acaba de liberar packs (cancelar, rechazar, vencer) o de leer el inventario.
 import { isAssignable, planOffers } from '../../domain/waitlist.js'
+import { appendEvent, lotSnapshot } from './outbox.js'
 import type { PoolClient } from './pool.js'
 
 /**
@@ -25,10 +26,18 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date): 
   const assignable = isAssignable({ status: lot.status, pickupEndsAt: lot.pickup_ends_at }, at)
 
   // Una oferta vence a su hora; si el lote dejó de asignar, termina con él.
-  const lapsed = await client.query<{ offered_quantity: number }>(
+  const lapsed = await client.query<{ id: string; user_id: string; public_id: string; offered_quantity: number }>(
     `UPDATE public.waitlist_entries SET status = 'expired', ended_at = LEAST(offer_expires_at, $2)
      WHERE lot_id = $1 AND status = 'offered' AND (offer_expires_at <= $2 OR NOT $3::boolean)
-     RETURNING offered_quantity`, [lotId, at, assignable])
+     RETURNING id::text, user_id::text, public_id::text, offered_quantity`, [lotId, at, assignable])
+  // K030: cada oferta vencida avisa a su titular en la misma transacción (ADR 0012).
+  let snapshot: { id: string; description: string } | null = null
+  const lotOf = async () => snapshot ??= await lotSnapshot(client, lotId)
+  for (const row of lapsed.rows) {
+    await appendEvent(client, row.id, { kind: 'offer_expired', recipientUserId: row.user_id, payload: {
+      lot: await lotOf(), quantity: row.offered_quantity, waitlistEntryId: row.public_id, reservationId: null, offerExpiresAt: null,
+    } }, at)
+  }
   let closed = lapsed.rowCount ?? 0
   const released = lapsed.rows.reduce((total, row) => total + row.offered_quantity, 0)
   // O → F si el lote sigue asignando (F se deriva), O → X si ya no (ADR 0002).
@@ -56,10 +65,15 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date): 
     queue.rows.map(row => ({ id: row.id, requestedQuantity: row.requested_quantity })), at, lot.pickup_ends_at)
   let offered = 0
   for (const offer of plan) {
-    const updated = await client.query(
+    const updated = await client.query<{ user_id: string; public_id: string }>(
       `UPDATE public.waitlist_entries SET status = 'offered', offered_quantity = $2, offered_at = $3,
-         offer_expires_at = $4 WHERE id = $1 AND status = 'waiting'`, [offer.id, offer.quantity, at, offer.expiresAt])
+         offer_expires_at = $4 WHERE id = $1 AND status = 'waiting'
+       RETURNING user_id::text, public_id::text`, [offer.id, offer.quantity, at, offer.expiresAt])
     if (updated.rowCount !== 1) throw new Error('La oferta no se asignó a la solicitud en espera')
+    await appendEvent(client, offer.id, { kind: 'offer_issued', recipientUserId: updated.rows[0]!.user_id, payload: {
+      lot: await lotOf(), quantity: offer.quantity, waitlistEntryId: updated.rows[0]!.public_id, reservationId: null,
+      offerExpiresAt: offer.expiresAt.toISOString(),
+    } }, at)
     offered += offer.quantity
   }
   // F → O: los CHECK del lote rechazan sobreasignación aunque el plan fallara.

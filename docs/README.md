@@ -16,6 +16,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Lotes | [Lotes](lotes.md) |
 | Reservas, cancelación y retiro | [Reservas](reservas.md) |
 | Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |
+| Vencimientos y worker | [Vencimientos](vencimientos.md) |
+| Avisos internos y outbox | [Avisos](avisos.md) |
 | Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
@@ -34,6 +36,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0008](adr/0008-estado-del-lote-y-cierre-logico.md) | Estado del lote como enum; vencido y retirado son cierres lógicos con `closed_at` |
 | [0009](adr/0009-consentimiento-del-correo.md) | Consentimiento del correo en `user_consents`, obligatorio al registrarse y revocable |
 | [0010](adr/0010-cola-fifo-y-ofertas.md) | Cola FIFO y ofertas en `waitlist_entries`; la cola se asienta bajo el bloqueo del lote en cada comando que libera o lee inventario |
+| [0011](adr/0011-vencimientos-con-concesion.md) | Vencimientos reclamados por lote con concesión y reintentos acotados; el cierre pasa todo F, O y R a X |
+| [0012](adr/0012-avisos-y-outbox.md) | Avisos internos con outbox transaccional: el evento nace con la transición y el worker genera un aviso por evento y destinatario |
 
 ## Entregas y evidencia
 

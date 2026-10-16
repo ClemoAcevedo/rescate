@@ -70,7 +70,7 @@ services:
     init: true
     command: ["node", "dist/worker.js"]
     environment:
-      # Valida fotos y limpia temporales; reintenta mientras faltan las migraciones.
+      # Valida fotos, limpia temporales y genera avisos; reintenta mientras faltan las migraciones.
       DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
       PHOTO_STORAGE: local
       PHOTO_LOCAL_DIR: /app/photo-storage

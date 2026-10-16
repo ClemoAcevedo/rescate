@@ -29,9 +29,11 @@ page.on('request', (request) => {
     commands.push({ method: request.method(), path: pathname, body })
   }
 })
-const ok = (message) => console.log(`✓ ${message}`)
+let lastStep = 'inicio'
+const ok = (message) => { lastStep = message; console.log(`✓ ${message}`) }
 const rateLimited = []
-page.on('response', (response) => { if (response.status() === 429) rateLimited.push(new URL(response.url()).pathname) })
+// Cada 429 registra la ruta y el último paso completado, para ubicar dónde se agota la cuota.
+page.on('response', (response) => { if (response.status() === 429) rateLimited.push(`${new URL(response.url()).pathname} tras «${lastStep}»`) })
 
 async function waitForApiResponse(path, method, action) {
   const responsePromise = page.waitForResponse((response) => {
@@ -205,6 +207,10 @@ try {
   assert.equal(await page.locator('[name="quantity"]').inputValue(), '10')
   assert.equal(await page.locator('[name="category"]').inputValue(), 'Panadería')
   ok('conflicto: 409 conserva lo escrito hasta que la persona recarga la versión actual')
+
+  // Desde K030 cada carga de página también consulta la bandeja de avisos: recuperar la ráfaga
+  // por usuario antes de publicar y recargar, igual que en los últimos pasos de esta cuenta.
+  await refillUserQuota()
 
   await publishButton.click()
   const confirm = page.getByRole('button', { name: 'Confirmar publicación' })

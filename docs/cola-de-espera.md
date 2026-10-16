@@ -29,7 +29,8 @@ están en [ADR 0002](adr/0002-ofertas-parciales.md) y las decisiones de implemen
 - **Vencimiento sin trabajador.** Una oferta pasada de hora o la espera de un lote cerrado
   se informan `expired` al leer y ya no se aceptan, aunque nadie las haya registrado. El
   registro ocurre bajo el bloqueo del lote en el siguiente comando que lo toca (ingresar,
-  aceptar, rechazar, cancelar, reservar) o con `settleDue`.
+  aceptar, rechazar, cancelar, reservar) o cuando lo registra el worker
+  ([vencimientos](vencimientos.md)).
 - **Privacidad.** Una solicitud ajena responde 404 igual que una inexistente.
 
 ## Contrato HTTP
@@ -94,11 +95,10 @@ bloquea ingresar, reservar y ofrecer ([ADR 0006](adr/0006-inventario-del-lote.md
 | --- | --- |
 | `npm --prefix api run test:web:waitlist` | Navegador con HTTP controlado: ingreso voluntario y recuperación tras recarga, posición, oferta parcial, doble envío, respuesta perdida, rechazo, salida, vencimiento local y rechazo del servidor con reloj desactualizado, privacidad, validación y páginas. Requiere Vite sin mocks de identidad. |
 | `npm --prefix api test` | Plan de ofertas (caso Ana 10, Pedro 3, Juan 1 con 4 libres), plazos, estado vigente y transiciones. |
-| `npm --prefix api run db:test:waitlist:compose` | PostgreSQL real vía API y contrato: oferta parcial, aceptar, rechazar, vencer sin trabajador, `settleDue`, cierre del lote, plazos, idempotencia, propiedad, ingresos y aceptaciones simultáneos y conciliación de Q, R y O. |
+| `npm --prefix api run db:test:waitlist:compose` | PostgreSQL real vía API y contrato: oferta parcial, aceptar, rechazar, vencer sin trabajador, registro de vencimientos, cierre del lote con todo F, O y R en X, plazos, idempotencia, propiedad, ingresos y aceptaciones simultáneos y conciliación de Q, R y O. |
 | `npm --prefix api run db:test:compose` | Restricciones de `waitlist_entries` y rollback de la migración. |
 
 ## Limitaciones
 
-- El trabajador que registra vencimientos de ofertas es K028 (#31); su integración con la
-  cola, K031 (#34). Hasta entonces el registro depende del siguiente comando sobre el lote.
-- Los avisos de oferta son K030 (#33).
+- La prueba integrada de cola, avisos y recuperación del trabajador es K031 (#34).
+- Las ofertas emitidas y vencidas generan [avisos](avisos.md) en la misma transacción.

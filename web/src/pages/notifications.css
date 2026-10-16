@@ -1,0 +1,19 @@
+/* Presentación exclusiva de la bandeja de avisos (K030). */
+.notifications { display: grid; gap: var(--sp-4); width: min(100%, var(--content-max)); }
+.notifications > p { margin: 0; color: var(--text-muted); }
+.notifications__summary { margin: 0 0 var(--sp-3); color: var(--text-muted); font-size: var(--fs-meta); }
+.notifications__list { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.notification { display: grid; gap: var(--sp-2); }
+.notification--unread { border-color: var(--border-control); box-shadow: inset var(--border-width-strong) 0 0 var(--action-primary); }
+.notification__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.notification__heading h2 { font-size: var(--fs-title-lg); }
+.notification p { margin: 0; overflow-wrap: anywhere; }
+.notification__lot { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.notification__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.notification__footer time { color: var(--text-muted); font-size: var(--fs-meta); }
+.notifications .ui-alert p { margin: 0; }
+.notifications .ui-alert .ui-button { margin-top: var(--sp-3); }
+
+@media (max-width: 48rem) {
+  .notification__footer > .ui-button { flex: 1 1 100%; }
+}

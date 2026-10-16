@@ -39,11 +39,16 @@
     "db:test:reservations:compose": "node scripts/test-reservations-compose.mjs",
     "db:test:waitlist": "npm run build && node --import tsx scripts/test-waitlist.mjs",
     "db:test:waitlist:compose": "node scripts/test-waitlist-compose.mjs",
+    "db:test:expiries": "npm run build && node scripts/test-expiries.mjs",
+    "db:test:expiries:compose": "node scripts/test-expiries-compose.mjs",
+    "db:test:notifications": "npm run build && node --import tsx scripts/test-notifications.mjs",
+    "db:test:notifications:compose": "node scripts/test-notifications-compose.mjs",
     "db:test:photos": "npm run build && node --import tsx scripts/test-photos.mjs",
     "db:test:photos:compose": "node scripts/test-photos-compose.mjs",
     "test:web:waitlist": "node scripts/test-web-waitlist.mjs",
     "test:web:reservations": "node scripts/test-web-reservations.mjs",
-    "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs"
+    "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs",
+    "test:web:notifications": "node --env-file-if-exists=.env scripts/test-web-notifications.mjs"
   },
   "keywords": [],
   "author": "",

@@ -257,17 +257,20 @@ lo cambia.
   reserva directa con API real (K016); historial, detalle vigente, código de retiro
   y cancelación con resultado comprobado (K023); revisión de código y confirmación
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
-  parcial, aceptación explícita y vencimiento con estado comprobado (K029).
+  parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
+  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030).
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
-  vencimiento (K027), según OpenAPI.
-- **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
-  (K014).
+  vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
+  (K030), según OpenAPI.
+- **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
+  reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
+  (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
-  observados y repetición con el worker activo y detenido (K025).
+  observados y repetición con el worker de fotos activo y detenido (K025).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

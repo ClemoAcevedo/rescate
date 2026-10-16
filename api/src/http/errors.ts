@@ -31,6 +31,7 @@ const errors = {
   reservation_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   pickup_code_not_found: [404, "NOT_FOUND", "El código no corresponde a una reserva de este lote."],
   waitlist_entry_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
+  notification_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
 } as const
 const transitions = {
   cancelled: "La reserva fue cancelada.",
