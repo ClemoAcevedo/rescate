@@ -61,6 +61,10 @@ Es una tarea más del ciclo del worker, junto a [vencimientos](vencimientos.md) 
 
 ## Pruebas
 
+La prueba de integración consulta el código de retiro real y comprueba que no aparezca
+en los eventos. La descripción del lote termina en ocho dígitos para cubrir el falso
+positivo de una búsqueda por patrón.
+
 | Comando | Qué comprueba |
 | --- | --- |
 | `npm --prefix api test` | Espera creciente y fallo visible, tandas de 50, liberación de fallos y transporte HTTP contra OpenAPI. |
