@@ -36,6 +36,10 @@ por un comando, sin gastar intentos.
 | El worker muere | Nada queda a medias. Otro worker lo retoma al vencer la concesión. |
 | Quinto fallo | Se registra `lot_expiry_exhausted` y el lote no se vuelve a reclamar. |
 
+El reclamo elige el lote con una sentencia y lo reclama con otra, ya bloqueado, que
+vuelve a comprobar que siga pendiente. Así un worker no reclama un lote que otro acaba
+de registrar con una foto anterior de la base.
+
 Un lote agotado sigue respondiendo como vencido. Tras revisar la causa, reiniciar
 `expiry_attempts` a 0 lo devuelve al worker. Los eventos `lot_expiry`,
 `lot_expiry_retry` y `lot_expiry_exhausted` registran el lote, el intento y un
