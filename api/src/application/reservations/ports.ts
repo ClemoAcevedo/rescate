@@ -1,5 +1,5 @@
 // K022 · Application: límites hacia Infrastructure para cancelar, revisar códigos,
-// retirar y vencer reservas. No exponen pg, SQL ni criptografía concreta.
+// retirar reservas. No exponen pg, SQL ni criptografía concreta.
 import type { ReservationStatus } from '../../domain/reservations.js'
 
 /** Lote de la reserva tal como lo consulta su titular. */
@@ -97,11 +97,6 @@ export type PickupState =
   | { existing: null; lot: PickupWindow; member: boolean
       reservation: { status: ReservationStatus; quantity: number } | null; now: Date }
 
-export interface ExpiryWriter {
-  /** RF08: todas las confirmadas del lote pasan a vencidas y R → X. Devuelve cuántas. */
-  expireConfirmed(at: Date): Promise<number>
-}
-
 export interface ReservationRepository {
   /** Reservas del titular, creación descendente, páginas de 20. */
   listByHolder(userId: string, page: number): Promise<{ items: StoredReservation[]; hasNextPage: boolean }>
@@ -115,9 +110,4 @@ export interface ReservationRepository {
   withPickupTransaction<T>(operatorUserId: string, lotId: string, reservationId: string,
     fingerprint: Uint8Array | null, idempotencyKey: string,
     operate: (state: PickupState, writer: PickupWriter) => Promise<T>): Promise<T>
-  /** Lotes cerrados que aún tienen reservas confirmadas, cierre más antiguo primero. */
-  listExpirable(limit: number): Promise<string[]>
-  /** Bloquea el lote y entrega su cierre con el reloj de la base; `null` si no existe. */
-  withExpiryTransaction<T>(lotId: string,
-    operate: (state: { pickupEndsAt: Date; now: Date } | null, writer: ExpiryWriter) => Promise<T>): Promise<T>
 }

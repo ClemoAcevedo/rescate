@@ -15,7 +15,8 @@ en runtime. K015 añade búsqueda PostGIS y reserva directa bajo bloqueo;
 K014 agrega carga, lectura y retiro de [fotos](fotos.md); el [worker](../api/src/worker.ts)
 las valida y limpia objetos con los mismos casos de uso de Application. K022 agrega
 [reservas](reservas.md): consulta del titular, cancelación, código de retiro, entrega
-y vencimiento ([ADR 0007](adr/0007-codigo-de-retiro-y-transiciones.md)).
+y vencimiento ([ADR 0007](adr/0007-codigo-de-retiro-y-transiciones.md)). K028 hace que
+el worker registre los [vencimientos](vencimientos.md) de lotes, reservas y ofertas.
 
 ## Documentación vigente por tarea
 

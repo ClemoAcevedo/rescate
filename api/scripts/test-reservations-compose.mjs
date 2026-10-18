@@ -1,4 +1,6 @@
-// K022/K025: misma base aislada, primero con worker de fotos y después detenido.
+// K022/K025: misma base aislada, primero con worker de fotos y después detenido. La suite
+// mueve plazos y espera vencimientos sin registrar, así que el worker corre con los
+// vencimientos apagados; con el worker real los prueba db:test:expiries (K028).
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -86,7 +88,7 @@ try {
   workerUrl.searchParams.set('application_name', workerName)
   worker = spawn(process.execPath, ['dist/worker.js'], {
     cwd: api, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...env, DATABASE_URL: workerUrl.href, PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: directory },
+    env: { ...env, DATABASE_URL: workerUrl.href, PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: directory, WORKER_EXPIRIES: 'off' },
   })
   workerExit = new Promise(resolve => {
     worker.once('error', () => { workerFailed = true; resolve({ code: null, signal: 'spawn-error' }) })
@@ -107,7 +109,7 @@ try {
   assert.ok(workerRunning() && await connections() > 0, 'El worker debe seguir conectado al terminar la primera fase')
   await stopWorker()
   assert.equal(await connections(), 0, 'SIGTERM debe cerrar las conexiones del worker')
-  assert.doesNotMatch(workerOutput, /photo_worker_error|database_idle_connection_lost/)
+  assert.doesNotMatch(workerOutput, /worker_error|database_idle_connection_lost|lot_expiry/)
   console.log('K025 fase 2: worker detenido con SIGTERM; se repite la suite en la misma base con nuevos datos')
   await runSuite(env)
   assert.equal(await connections(), 0, 'El worker debe continuar detenido durante la segunda fase')

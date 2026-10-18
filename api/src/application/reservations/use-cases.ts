@@ -1,5 +1,6 @@
 // K022 · Application: consulta del titular, cancelación (RF05), revisión y retiro
-// (RF06) y vencimiento (RF08). Coordina autorización, reglas de Domain y atomicidad.
+// (RF06). Coordina autorización, reglas de Domain y atomicidad. El vencimiento (RF08)
+// se decide aquí con el cierre del lote y se registra en expiries/ (K028).
 import { idempotencyConflict, lotNotFound, notAuthorized, pickupCodeNotFound, reservationNotFound } from '../errors.js'
 import type { Actor } from '../lots/ports.js'
 import type { PickupCodes, ReservationRepository, ReviewedReservation, StoredReservation } from './ports.js'
@@ -21,17 +22,6 @@ function forHolder(reservation: StoredReservation & { codeCiphertext?: unknown }
 
 export function createReservationUseCases(repository: ReservationRepository, codes: PickupCodes, now: () => Date) {
   const lower = (value: string) => value.toLowerCase()
-
-  /**
-   * RF08: registra el vencimiento de las reservas confirmadas de un lote cerrado.
-   * Termina al cierre, no cuando se procesa; repetirlo no libera nuevamente.
-   */
-  async function expireLot(lotId: string): Promise<number> {
-    return repository.withExpiryTransaction(lower(lotId), async (state, writer) => {
-      if (!state || state.now < state.pickupEndsAt) return 0
-      return writer.expireConfirmed(state.pickupEndsAt)
-    })
-  }
 
   return {
     async list(actor: Actor, page: number) {
@@ -115,15 +105,6 @@ export function createReservationUseCases(repository: ReservationRepository, cod
           requirePickup(state.reservation, state.lot, state.now)
           return writer.deliver(state.now)
         })
-    },
-
-    expireLot,
-
-    /** Lote de trabajo para el trabajador de vencimientos (K028). Devuelve reservas vencidas. */
-    async expireDue(limit = 50): Promise<number> {
-      let expired = 0
-      for (const lotId of await repository.listExpirable(limit)) expired += await expireLot(lotId)
-      return expired
     },
   }
 }
