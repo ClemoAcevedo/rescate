@@ -7,6 +7,7 @@ import type {
 import type { WaitlistStatus } from '../../domain/waitlist.js'
 import { isAssignable } from '../../domain/waitlist.js'
 import { lockIntent, lockLot } from './lot-lock.js'
+import { appendEvent } from './outbox.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
 import { lotReconciledSql, settleQueue } from './waitlist-queue.js'
@@ -139,6 +140,10 @@ export function createWaitlistRepository(pool: Pool): WaitlistRepository {
             await client.query(
               `UPDATE public.lots SET offered_quantity = offered_quantity - $2,
                  reserved_quantity = reserved_quantity + $2 WHERE id = $1`, [locked.lotId, quantity])
+            // K030: el aviso de la reserva confirmada nace con la aceptación (ADR 0012); sin código.
+            await appendEvent(client, reservation.rows[0]!.id, { kind: 'reservation_confirmed', recipientUserId: row.user_id,
+              payload: { lot: { id: row.lot_id, description: row.description }, quantity, waitlistEntryId: row.id,
+                reservationId: reservation.rows[0]!.public_id, offerExpiresAt: null } }, at)
             return reservation.rows[0]!.public_id
           },
           async decline(at) {

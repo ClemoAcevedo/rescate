@@ -141,7 +141,7 @@ Ley 19.628):
 
 | Variable | API | Worker | Uso |
 | --- | --- | --- | --- |
-| `PHOTO_STORAGE` | ✓ | ✓ | `s3` (bucket privado) o `local` (solo desarrollo). Vacía: cargar responde 503 y el worker queda inactivo. |
+| `PHOTO_STORAGE` | ✓ | ✓ | `s3` (bucket privado) o `local` (solo desarrollo). Vacía: cargar responde 503 y el worker no procesa fotos (sigue generando avisos). |
 | `PHOTO_LOCAL_DIR` | ✓ | ✓ | Directorio compartido con `local`; Compose usa el volumen `photo_data`. |
 | `PHOTO_S3_ENDPOINT`, `PHOTO_S3_REGION`, `PHOTO_S3_BUCKET` | ✓ | ✓ | Bucket S3 compatible. Endpoint HTTPS sin credenciales. |
 | `PHOTO_S3_ACCESS_KEY_ID`, `PHOTO_S3_SECRET_ACCESS_KEY` | ✓ | ✓ | Application key limitada al bucket. |

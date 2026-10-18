@@ -117,6 +117,8 @@ jobs:
         run: npm --prefix api run db:test:waitlist:compose
       - name: K028 lot, reservation and offer expiry with real worker processes, lease recovery and bounded retries
         run: npm --prefix api run db:test:expiries:compose
+      - name: K030 notifications outbox, worker batches and dedupe on empty PostgreSQL
+        run: npm --prefix api run db:test:notifications:compose
       - name: Install Chromium for HTTPS cookie validation
         run: cd api && npx playwright install --with-deps chromium
       - name: K008 auth, restart and K010 integration over HTTPS

@@ -31,6 +31,9 @@ import { createWaitlistRepository } from "./infrastructure/postgres/waitlist-rep
 import { createExpiryUseCases } from "./application/expiries/use-cases.js"
 import { createLotExpiryRepository } from "./infrastructure/postgres/expiry-repository.js"
 import { createWaitlistRouter } from "./http/waitlist-router.js"
+import { createNotificationUseCases, createOutboxProcessor } from "./application/notifications/use-cases.js"
+import { createNotificationRepository, createOutboxRepository } from "./infrastructure/postgres/notification-repository.js"
+import { createNotificationsRouter } from "./http/notifications-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { createTrafficLimits } from "./http/rate-limits.js"
@@ -123,7 +126,10 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
   const waitlistRouter = createWaitlistRouter(
     createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date()),
     authentication.authenticate, authentication.protectCommand)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
+  const notificationsRouter = createNotificationsRouter(
+    createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
+    authentication.authenticate, authentication.protectCommand)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
       try { limits.ip(req.ip ?? req.socket.remoteAddress ?? "unknown"); next() }
@@ -135,11 +141,11 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
 export interface Worker { tasks: string[]; run(): Promise<void>; stop(): void }
 
 /**
- * Worker: registra vencimientos de lotes, reservas y ofertas (K028), valida una foto
- * por vez y limpia objetos cada minuto (K014). Reutiliza los casos de uso de
- * Application. Sin DATABASE_URL no hay trabajo; sin almacenamiento solo registra
- * vencimientos. `WORKER_EXPIRIES=off` los apaga, para pruebas que mueven plazos sobre
- * una base compartida y esperan vencimientos sin registrar.
+ * Worker: registra vencimientos de lotes, reservas y ofertas (K028), genera los avisos
+ * del outbox por tandas (K030) y valida una foto por vez y limpia objetos cada minuto
+ * (K014). Reutiliza los casos de uso de Application. Sin DATABASE_URL no hay trabajo;
+ * sin almacenamiento no procesa fotos. `WORKER_EXPIRIES=off` apaga los vencimientos,
+ * para pruebas que mueven plazos sobre una base compartida y esperan vencimientos sin registrar.
  */
 export function createWorker(environment: NodeJS.ProcessEnv = process.env,
   log: (event: Record<string, unknown>) => void = event => console.log(JSON.stringify(event))): Worker | null {
@@ -147,12 +153,13 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
   if (!["", "on", "off"].includes(expiriesSetting)) throw new Error("WORKER_EXPIRIES admite on u off")
   const objects = readPhotoStorage(environment)
   const databaseUrl = environment.DATABASE_URL?.trim()
-  if (!databaseUrl || (objects === null && expiriesSetting === "off")) return null
+  if (!databaseUrl) return null
   // Anexos H p. 20: dos conexiones para el trabajador.
   const pool = createPool({ connectionString: databaseUrl, max: 2 })
   const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log)
   const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
+  const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), Math.random, log)
   let running = true
   let wake: (() => void) | null = null
   const pause = (ms: number) => new Promise<void>(resolve => {
@@ -160,7 +167,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
     wake = () => { clearTimeout(timer); resolve() }
   })
   return {
-    tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : [])],
+    tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : []), "avisos internos"],
     async run() {
       let nextCleanup = 0
       while (running) {
@@ -169,10 +176,11 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
             await photos.cleanup()
             nextCleanup = Date.now() + 60_000
           }
-          // Un lote y una foto por vuelta: una cola de fotos no atrasa los vencimientos.
+          // Un lote, una foto y una tanda de avisos por vuelta: ninguna cola atrasa a las otras.
           const expired = expiries ? await expiries.expireNext() : false
           const processed = photos ? await photos.processNext() : false
-          if (!expired && !processed) await pause(2000)
+          const delivered = (await outbox.processNext()) > 0
+          if (!expired && !processed && !delivered) await pause(2000)
         } catch (error) {
           // Sin SQL, rutas ni credenciales en el registro; se reintenta más tarde.
           const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""

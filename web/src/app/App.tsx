@@ -7,6 +7,7 @@ import { LotEditorPage } from '../pages/LotEditorPage'
 import { LotsPage } from '../pages/LotsPage'
 import { MyLotsPage } from '../pages/MyLotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { NotificationsPage } from '../pages/NotificationsPage'
 import { PickupsPage } from '../pages/PickupsPage'
 import { ReservationsPage, ReservationDetailPage } from '../pages/ReservationsPage'
 import { JoinWaitlistPage, WaitlistPage, WaitlistDetailPage } from '../pages/WaitlistPage'
@@ -32,6 +33,7 @@ function App() {
         <Route path="lotes/:id/espera" element={<JoinWaitlistPage />} />
         <Route path="espera" element={<WaitlistPage />} />
         <Route path="espera/:id" element={<WaitlistDetailPage />} />
+        <Route path="avisos" element={<NotificationsPage />} />
         <Route path="reservas" element={<ReservationsPage />} />
         <Route path="reservas/:id" element={<ReservationDetailPage />} />
         <Route path="registro" element={<RegisterPage />} />

@@ -1,5 +1,5 @@
-// K009/K011/K017/K024: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
-// Las fotos (K017) usan almacenamiento local temporal y un worker real con la misma base.
+// K009/K011/K017/K024/K030: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
+// Las fotos (K017) usan almacenamiento local temporal; el mismo worker real genera los avisos (K030).
 // Usa una base dedicada nueva; no migra ni altera la base de desarrollo.
 import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
@@ -71,7 +71,7 @@ try {
   }
   if (!up) throw new Error('API o Vite no respondieron')
 
-  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:waitlist']) {
+  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:waitlist', 'test:web:notifications']) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }
   console.log(`Base de prueba conservada: ${database}. No se alteró la base de desarrollo.`)

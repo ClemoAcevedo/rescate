@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Button } from './ui/Button'
 import { Icon } from './Icon'
+import { NotificationsLink } from './NotificationsLink'
 import { RescateLogo } from './RescateLogo'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -79,6 +80,7 @@ export function SiteHeader() {
             {label}
           </NavLink>
         ))}
+        {session && <NotificationsLink key={session.user.id} onNavigate={closeMenu} />}
         {isOperator && (
           <NavLink className="ui-button ui-button--primary main-navigation__cta" to="/operador/lotes/nuevo" onClick={closeMenu}>
             <Icon name="plus" />Publicar lote

@@ -29,6 +29,10 @@ try {
       if (path === '/api/public/lots') {
         return route.fulfill({ json: { items: [], page: 1, hasNextPage: false } })
       }
+      // K030: la cabecera consulta la bandeja con sesión; una vacía aísla el recorrido de logout.
+      if (path === '/api/notifications') {
+        return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
+      }
       if (path === '/api/auth/logout') {
         attempts += 1
         if (attempts === 1) {

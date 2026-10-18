@@ -27,6 +27,9 @@ tags:
   -
     name: "Waitlist"
     description: "RF07: cola FIFO, ofertas parciales y su aceptación o rechazo por el titular."
+  -
+    name: "Notifications"
+    description: "RF09: avisos internos persistentes del titular y su lectura."
 paths:
   "/public/lots":
     get:
@@ -439,6 +442,62 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/notifications":
+    get:
+      operationId: "listNotifications"
+      summary: "Listar los avisos propios"
+      description: "Avisos del actor de la sesión, más recientes primero, en páginas de 20, con el total sin leer. Persisten aunque la persona estuviera desconectada. Solo muestran datos del propio titular y nunca códigos de retiro; el detalle enlazado (solicitud o reserva) vuelve a comprobar permisos y estado vigente. El worker genera el aviso después de la transición, por lo que puede tardar unos segundos en aparecer."
+      tags: ["Notifications"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de avisos propios."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/notifications/{notificationId}/read":
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    post:
+      operationId: "markNotificationRead"
+      summary: "Marcar un aviso propio como leído"
+      description: "Registra la lectura y devuelve el aviso. Repetir conserva el instante de la primera lectura. Leer no cambia ofertas, solicitudes ni reservas: una oferta vencida sigue vencida. 404 si el aviso es ajeno o no existe. Cuerpo: objeto vacío."
+      tags: ["Notifications"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkNotificationReadRequest" }
+      responses:
+        "200":
+          description: "Aviso con su lectura registrada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "400": { $ref: "#/components/responses/MalformedRequest" }
         "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
@@ -1193,6 +1252,13 @@ components:
       schema:
         $ref: "#/components/schemas/PublicId"
       example: "lot_demo_R4q"
+    NotificationId:
+      name: "notificationId"
+      in: "path"
+      required: true
+      description: "Identificador público del aviso; no concede acceso a avisos de otras personas."
+      schema:
+        $ref: "#/components/schemas/PublicId"
     EntryId:
       name: "entryId"
       in: "path"
@@ -1653,6 +1719,45 @@ components:
         reservationId: { $ref: "#/components/schemas/PublicId" }
         quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs entregados: la reserva completa." }
         deliveredAt: { $ref: "#/components/schemas/Instant" }
+    NotificationKind:
+      type: string
+      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled]
+      description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva."
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, kind, createdAt, readAt, lot, quantity, waitlistEntryId, reservationId, offerExpiresAt]
+      description: "Aviso del titular con los datos de la transición. Sin código de retiro ni datos de otras personas."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        kind: { $ref: "#/components/schemas/NotificationKind" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        readAt: { type: [string, "null"], format: date-time, description: "null hasta su primera lectura." }
+        lot:
+          type: object
+          additionalProperties: false
+          required: [id, description]
+          properties:
+            id: { $ref: "#/components/schemas/PublicId" }
+            description: { type: string }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados según el tipo." }
+        waitlistEntryId: { type: [string, "null"], description: "Solicitud de espera relacionada; null en una cancelación." }
+        reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta." }
+        offerExpiresAt: { type: [string, "null"], format: date-time, description: "Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo." }
+    NotificationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage, unreadCount]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/Notification" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+        unreadCount: { type: integer, minimum: 0, description: "Avisos propios sin leer, en todas las páginas." }
+    MarkNotificationReadRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: "Objeto vacío: el aviso sale de la ruta y el actor de la sesión."
     PublicId:
       type: "string"
     LotPhoto:

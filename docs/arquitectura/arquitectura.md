@@ -82,7 +82,7 @@ servicios, las migraciones previas y el pipeline de producción.
 | API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cinco de operador, cuatro de fotos, tres de descubrimiento/reserva y cinco de reservas y retiro. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
 | Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor; K021 agrega los contadores de inventario del lote; K022 agrega estados terminales, código de retiro cifrado y la tabla de entregas. Después `lots.status` pasa a enum con cierre lógico, se agregan `user_consents` y la cola `waitlist_entries`, y K028 guarda en `lots` el reclamo de vencimientos. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
-| Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createWorker` de Composition: registra vencimientos de lotes, reservas y ofertas, valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Sin base queda inactivo; sin almacenamiento solo registra vencimientos. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
+| Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createWorker` de Composition: registra vencimientos de lotes, reservas y ofertas, genera los avisos del outbox, valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Sin base queda inactivo; sin almacenamiento no procesa fotos. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
 | Fotos | [Router](../../api/src/http/photos-router.ts), [casos de uso](../../api/src/application/photos/use-cases.ts), [reglas](../../api/src/domain/photos.ts), [repositorio](../../api/src/infrastructure/postgres/photo-repository.ts), adaptadores [S3](../../api/src/infrastructure/objects/s3-object-store.ts), [local](../../api/src/infrastructure/objects/local-object-store.ts) y [sharp](../../api/src/infrastructure/images/sharp-image-processor.ts). La [CLI K005](../../api/src/prototypes/photos/cli.ts) conserva el smoke del bucket. Ver [fotos](../fotos.md). |
 | CI/CD | [ci.yml](../../.github/workflows/ci.yml) valida el origen development de los PR a main y ejecuta web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y después Compose (imágenes, web/API/proxy, PostGIS, migraciones, publicación concurrente y worker). Incluye login, publicación y reserva desde Chromium HTTPS. [deploy.yml](../../.github/workflows/deploy.yml) publica API, worker y web tras CI exitoso de main; verifica el sitio por HTTPS antes de crear el tag/release. |
 
@@ -120,8 +120,8 @@ recibe el port `PickupCodes` ([reservas](../reservas.md)).
 
 El worker es un proceso aparte (`node dist/worker.js`), con la misma imagen que la
 API pero sin HTTP. No recibe pedidos: la API deja el trabajo anotado en PostgreSQL y
-el worker lo busca. Registra vencimientos de lotes, reservas y ofertas (K028) y
-valida fotos (K014).
+el worker lo busca. Registra vencimientos de lotes, reservas y ofertas (K028), genera
+los [avisos](../avisos.md) del outbox (K030) y valida fotos (K014).
 
 ```mermaid
 flowchart TD
@@ -132,16 +132,17 @@ flowchart TD
   limpieza -- no --> vencer
   limpiar --> vencer[Reclama el lote con el vencimiento más antiguo y lo registra]
   vencer --> foto[Reclama la foto pending más antigua y la valida]
-  foto -- hubo trabajo --> limpieza
-  foto -- ninguno de los dos --> espera[Espera 2 s] --> limpieza
+  foto --> avisos[Reclama hasta 50 eventos del outbox y genera sus avisos]
+  avisos -- hubo trabajo --> limpieza
+  avisos -- ninguno --> espera[Espera 2 s] --> limpieza
 ```
 
 | Pregunta | Respuesta |
 | --- | --- |
-| ¿Cuándo trabaja? | Siempre que está levantado: un ciclo continuo con un lote y una foto por vuelta. Sin pendientes duerme 2 s. La limpieza corre como máximo una vez por minuto. Sin almacenamiento solo registra vencimientos. |
-| ¿Cómo sabe qué hacer? | Busca lotes publicados que cerraron u ofertas vencidas, y `lot_photos` con `status = 'pending'`. La API nunca llama al worker. |
-| ¿Y si hay más de un worker? | Los reclamos usan `FOR UPDATE SKIP LOCKED` y una concesión con el reloj de la base: un minuto por lote y 2 minutos por foto. Dos procesos no toman el mismo trabajo. |
-| ¿Y si se cae? | La concesión vence y otro ciclo retoma el trabajo. Un lote a medias se revierte entero. Tras cinco fallos un lote queda para revisión; tras tres, una foto queda `rejected`. SIGTERM termina el trabajo en curso antes de salir. |
+| ¿Cuándo trabaja? | Siempre que está levantado: un ciclo continuo con un lote, una foto y una tanda de avisos por vuelta. Sin pendientes duerme 2 s. La limpieza corre como máximo una vez por minuto. Sin almacenamiento no procesa fotos. |
+| ¿Cómo sabe qué hacer? | Busca lotes publicados que cerraron u ofertas vencidas, `lot_photos` con `status = 'pending'` y `outbox_events` pendientes. La API solo inserta filas en su transacción; nunca llama al worker. |
+| ¿Y si hay más de un worker? | Los reclamos usan `FOR UPDATE SKIP LOCKED` y una concesión con el reloj de la base: un minuto por lote y 2 minutos por foto o tanda de eventos. Dos procesos no toman el mismo trabajo. |
+| ¿Y si se cae? | La concesión vence y otro ciclo retoma el trabajo. Un lote a medias se revierte entero y un aviso es único por evento y destinatario. Tras cinco fallos un lote queda para revisión y un evento queda `failed`; tras tres, una foto queda `rejected`. SIGTERM termina el trabajo en curso antes de salir. |
 | ¿Y si falla la base o el bucket? | Registra solo un código de error (sin SQL, rutas ni credenciales), espera 5 s y vuelve a intentar. |
 | ¿Qué no hace? | No decide reglas: llama a los casos de uso de Application. No usa HTTP contra la API. |
 

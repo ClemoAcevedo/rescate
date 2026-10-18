@@ -94,9 +94,10 @@ mostrar la base configurada y la versión de PostGIS.
 Compose no aplica migraciones automáticamente.
 El worker debe figurar `running` y registrar `Worker iniciado: vencimientos; validación y limpieza de fotos`.
 Consulta PostgreSQL cada 2 s y limpia objetos cada minuto. Mientras falten las
-migraciones registra `worker_error` y reintenta cada 5 s. Termina el lote o la foto en
-curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` queda inactivo; sin `PHOTO_STORAGE`
-solo registra [vencimientos](vencimientos.md).
+migraciones registra `worker_error` y reintenta cada 5 s. Termina el lote, la foto o la tanda
+de avisos en curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` queda inactivo; con ella registra
+[vencimientos](vencimientos.md) y genera los [avisos](avisos.md) del outbox, y con `PHOTO_STORAGE`
+además procesa fotos.
 
 ## Persistencia y migraciones K002/K003
 

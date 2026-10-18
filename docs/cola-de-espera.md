@@ -101,4 +101,4 @@ bloquea ingresar, reservar y ofrecer ([ADR 0006](adr/0006-inventario-del-lote.md
 ## Limitaciones
 
 - La prueba integrada de cola, avisos y recuperación del trabajador es K031 (#34).
-- Los avisos de oferta son K030 (#33).
+- Las ofertas emitidas y vencidas generan [avisos](avisos.md) en la misma transacción.

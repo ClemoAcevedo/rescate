@@ -94,6 +94,8 @@ cuerpo JSON `400`, `413`, `415`, `422`; no sustituyen errores de autorización.
 | `cancelReservation` · POST `/reservations/{reservationId}/cancel` | Sesión; titular | C | 200, 401, 403, 404, 409, J, G | RF05 / K022 |
 | `reviewPickupCode` · POST `/lots/{lotId}/pickup-reviews` | Sesión y permiso sobre establecimiento del lote | C | 200, 401, 403, 404, J, G | RF06 / K022 |
 | `confirmPickup` · POST `/lots/{lotId}/pickups` | Sesión y permiso sobre establecimiento del lote | C | 201, 401, 403, 404, 409, J, G | RF06, RF08 / K022 |
+| `listNotifications` · GET `/notifications` | Sesión; solo los propios | No, lectura | 200, 401, 422, G | RF09 / K030 |
+| `markNotificationRead` · POST `/notifications/{notificationId}/read` | Sesión; destinatario | C | 200, 401, 403, 404, J, G | RF09 / K030 |
 
 RF01/RF02 provienen de anexos A p. 1; las tarjetas se relacionan en el
 [modelo inicial](../modelo-inicial.md), sección Fuera de K003, y en la planificación
