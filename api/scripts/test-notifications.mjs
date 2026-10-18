@@ -94,9 +94,12 @@ try {
   const cata = await person('cata')
 
   // --- Cancelar libera y ofrece en la misma transacción: dos eventos, cada uno a su titular.
-  const lot = await makeLot(2)
+  // La descripción termina en ocho dígitos para cubrir el falso positivo de CI.
+  const lot = await makeLot(2, 'Pan del día 12345678')
   const reserved = await ana.call('POST', `/public/lots/${lot}/reservations`, { quantity: 2, idempotencyKey: randomUUID() })
   assert.equal(reserved.status, 201)
+  const { pickupCode } = (await ana.call('GET', `/reservations/${reserved.body.id}`)).body
+  assert.match(pickupCode, /^[0-9A-HJKMNP-TV-Z]{8}$/)
   const joined = await bea.call('POST', `/public/lots/${lot}/waitlist`, { quantity: 1, idempotencyKey: randomUUID() })
   assert.equal(joined.body.status, 'waiting')
   assert.deepEqual(await events(), [], 'reservar directamente y esperar no generan avisos en K030')
@@ -105,7 +108,7 @@ try {
   assert.deepEqual(pending.map(row => [row.event_type, row.status, row.recipient]),
     [['reservation_cancelled', 'pending', ana.userId], ['offer_issued', 'pending', bea.userId]])
   assert.equal(pending[1].payload.waitlistEntryId, joined.body.id)
-  assert.ok(!JSON.stringify(pending).match(/[0-9A-HJKMNP-TV-Z]{8}"/), 'el payload no lleva códigos de retiro')
+  assert.ok(!JSON.stringify(pending).includes(pickupCode), 'el payload no lleva el código de retiro de la reserva')
   assert.equal((await inbox(bea)).items.length, 0, 'sin worker aún no hay aviso, pero el evento ya está confirmado')
   ok('cancelar confirma su evento y el de la oferta emitida junto con la transición')
 
@@ -129,7 +132,7 @@ try {
   assert.equal(beaInbox.items[0].waitlistEntryId, joined.body.id)
   assert.equal(beaInbox.items[0].quantity, 1)
   assert.ok(Date.parse(beaInbox.items[0].offerExpiresAt) > Date.now())
-  assert.equal(beaInbox.items[0].lot.description, 'Pan del día K030')
+  assert.equal(beaInbox.items[0].lot.description, 'Pan del día 12345678')
   const anaInbox = await inbox(ana)
   assert.deepEqual(anaInbox.items.map(item => [item.kind, item.reservationId]), [['reservation_cancelled', reserved.body.id]])
   ok('el worker genera un aviso por destinatario: oferta para Bea, cancelación para Ana')
