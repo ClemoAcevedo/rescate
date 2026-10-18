@@ -97,8 +97,9 @@ bloquea ingresar, reservar y ofrecer ([ADR 0006](adr/0006-inventario-del-lote.md
 | `npm --prefix api test` | Plan de ofertas (caso Ana 10, Pedro 3, Juan 1 con 4 libres), plazos, estado vigente y transiciones. |
 | `npm --prefix api run db:test:waitlist:compose` | PostgreSQL real vía API y contrato: oferta parcial, aceptar, rechazar, vencer sin trabajador, registro de vencimientos, cierre del lote con todo F, O y R en X, plazos, idempotencia, propiedad, ingresos y aceptaciones simultáneos y conciliación de Q, R y O. |
 | `npm --prefix api run db:test:compose` | Restricciones de `waitlist_entries` y rollback de la migración. |
+| `npm --prefix api run db:test:queue-worker:compose` | Flujo integrado con API, sesiones separadas y procesos reales del worker: cancelar → oferta FIFO → aviso → vencimiento → oferta a la siguiente → aceptar → cierre del lote. Mata el worker con `kill -9` tras reclamar el vencimiento y tras reclamar la tanda de avisos; al reiniciar no duplica ofertas ni avisos y Q, R, O e historial cuadran. Imprime la traza de cada paso. |
+| `npm --prefix api run test:web:queue-worker` | El mismo flujo en tres navegadores (Ana, Bea y Cata) con worker propio, `kill -9` y reinicio. Corre al final de `test:web:compose`. |
 
 ## Limitaciones
 
-- La prueba integrada de cola, avisos y recuperación del trabajador es K031 (#34).
 - Las ofertas emitidas y vencidas generan [avisos](avisos.md) en la misma transacción.

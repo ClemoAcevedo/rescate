@@ -64,4 +64,5 @@ registrar.
 | --- | --- |
 | `npm --prefix api test` | Regla de cierre, registro único con el instante del cierre, reintentos espaciados, agotamiento y configuración del worker. |
 | `npm --prefix api run db:test:expiries:compose` | PostgreSQL real y procesos reales del worker: API con worker detenido, cierre de lote y reservas, oferta vencida que pasa a la siguiente, cierres simultáneos, concesión de un worker caído, `kill -9` a mitad del registro, dos workers, reintentos agotados y conciliación. |
+| `npm --prefix api run db:test:queue-worker:compose` | Flujo de [cola](cola-de-espera.md) y avisos con `kill -9` al worker tras reclamar una oferta vencida y una tanda de avisos; el reiniciado la retoma una sola vez. |
 | `npm --prefix api run db:test:reservations:compose` y `db:test:waitlist:compose` | El mismo caso de uso registra el cierre de lotes con reservas y con cola. |

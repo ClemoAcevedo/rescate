@@ -69,4 +69,5 @@ positivo de una búsqueda por patrón.
 | --- | --- |
 | `npm --prefix api test` | Espera creciente y fallo visible, tandas de 50, liberación de fallos y transporte HTTP contra OpenAPI. |
 | `npm --prefix api run db:test:notifications:compose` | PostgreSQL real: evento confirmado con la transición y ausente si se revierte, un aviso por evento al reprocesar, aceptación, permisos, oferta vencida que leer no reactiva, persistencia tras cerrar sesión, reclamo vencido retomado, dos workers en paralelo con 100 eventos y evento `failed`. |
+| `npm --prefix api run db:test:queue-worker:compose` | Flujo de [cola](cola-de-espera.md) con el worker muerto tras reclamar la tanda: al reiniciar, un aviso por evento en la sesión de cada persona. |
 | `npm --prefix api run test:web:notifications` | Chromium con API y worker reales: contador por consulta periódica, recuperación al reconectar, bandeja, lectura que lleva a una oferta vencida sin aceptar y bandejas separadas. Corre dentro de `test:web:compose`. |

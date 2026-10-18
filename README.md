@@ -270,7 +270,9 @@ lo cambia.
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
   (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
-  observados y repetición con el worker de fotos activo y detenido (K025).
+  observados y repetición con el worker de fotos activo y detenido (K025); flujo de
+  cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
+  y en tres navegadores (K031).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 
