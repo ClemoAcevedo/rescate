@@ -119,13 +119,15 @@ jobs:
         run: npm --prefix api run db:test:expiries:compose
       - name: K030 notifications outbox, worker batches and dedupe on empty PostgreSQL
         run: npm --prefix api run db:test:notifications:compose
+      - name: K031 queue, expiry and notices flow with worker kill -9 and restart
+        run: npm --prefix api run db:test:queue-worker:compose
       - name: Install Chromium for HTTPS cookie validation
         run: cd api && npx playwright install --with-deps chromium
       - name: K008 auth, restart and K010 integration over HTTPS
         run: npm --prefix api run db:test:auth:compose
       - name: Install web dependencies for browser flows
         run: npm --prefix web ci
-      - name: K009 auth, K011 lot form, K015 discovery/reservation and K022 cancellation/pickup
+      - name: K009 auth, K011 lot form, K015 discovery/reservation, K022 cancellation/pickup and K031 three-browser queue flow
         run: npm --prefix api run test:web:compose
       - name: Worker
         run: |

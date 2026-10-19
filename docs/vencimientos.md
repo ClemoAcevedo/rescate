@@ -36,6 +36,10 @@ por un comando, sin gastar intentos.
 | El worker muere | Nada queda a medias. Otro worker lo retoma al vencer la concesión. |
 | Quinto fallo | Se registra `lot_expiry_exhausted` y el lote no se vuelve a reclamar. |
 
+El reclamo elige el lote con una sentencia y lo reclama con otra, ya bloqueado, que
+vuelve a comprobar que siga pendiente. Así un worker no reclama un lote que otro acaba
+de registrar con una foto anterior de la base.
+
 Un lote agotado sigue respondiendo como vencido. Tras revisar la causa, reiniciar
 `expiry_attempts` a 0 lo devuelve al worker. Los eventos `lot_expiry`,
 `lot_expiry_retry` y `lot_expiry_exhausted` registran el lote, el intento y un
@@ -60,4 +64,5 @@ registrar.
 | --- | --- |
 | `npm --prefix api test` | Regla de cierre, registro único con el instante del cierre, reintentos espaciados, agotamiento y configuración del worker. |
 | `npm --prefix api run db:test:expiries:compose` | PostgreSQL real y procesos reales del worker: API con worker detenido, cierre de lote y reservas, oferta vencida que pasa a la siguiente, cierres simultáneos, concesión de un worker caído, `kill -9` a mitad del registro, dos workers, reintentos agotados y conciliación. |
+| `npm --prefix api run db:test:queue-worker:compose` | Flujo de [cola](cola-de-espera.md) y avisos con `kill -9` al worker tras reclamar una oferta vencida y una tanda de avisos; el reiniciado la retoma una sola vez. |
 | `npm --prefix api run db:test:reservations:compose` y `db:test:waitlist:compose` | El mismo caso de uso registra el cierre de lotes con reservas y con cola. |

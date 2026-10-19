@@ -12,25 +12,34 @@ import { settleQueue } from './waitlist-queue.js'
 export function createLotExpiryRepository(pool: Pool): LotExpiryRepository {
   return {
     async claimNext(leaseMs, maxAttempts) {
-      // Pendiente: cierre de un lote publicado u oferta cuya hora pasó, la más antigua
-      // primero. SKIP LOCKED salta lotes que otro trabajador o un comando tienen bloqueados.
-      const { rows } = await pool.query<{ id: string; attempts: number }>(
-        `WITH due AS (
-           SELECT id AS lot_id, pickup_ends_at AS due_at FROM public.lots
-           WHERE status = 'published' AND pickup_ends_at <= clock_timestamp()
-           UNION ALL
-           SELECT lot_id, offer_expires_at FROM public.waitlist_entries
-           WHERE status = 'offered' AND offer_expires_at <= clock_timestamp())
-         UPDATE public.lots SET expiry_attempts = expiry_attempts + 1,
-           expiry_claimed_until = clock_timestamp() + $1 * interval '1 millisecond'
-         WHERE id = (SELECT l.id FROM public.lots l
+      return withTransaction(pool, async (client) => {
+        // Pendiente: cierre de un lote publicado u oferta cuya hora pasó, la más antigua
+        // primero. SKIP LOCKED salta lotes que otro trabajador o un comando tienen bloqueados.
+        const picked = await client.query<{ id: string }>(
+          `WITH due AS (
+             SELECT id AS lot_id, pickup_ends_at AS due_at FROM public.lots
+             WHERE status = 'published' AND pickup_ends_at <= clock_timestamp()
+             UNION ALL
+             SELECT lot_id, offer_expires_at FROM public.waitlist_entries
+             WHERE status = 'offered' AND offer_expires_at <= clock_timestamp())
+           SELECT l.id FROM public.lots l
            JOIN (SELECT lot_id, min(due_at) AS due_at FROM due GROUP BY lot_id) d ON d.lot_id = l.id
-           WHERE l.expiry_attempts < $2
+           WHERE l.expiry_attempts < $1
              AND (l.expiry_claimed_until IS NULL OR l.expiry_claimed_until <= clock_timestamp())
-           ORDER BY d.due_at, l.id LIMIT 1 FOR UPDATE OF l SKIP LOCKED)
-         RETURNING public_id::text AS id, expiry_attempts AS attempts`, [leaseMs, maxAttempts])
-      const row = rows[0]
-      return row ? { lotId: row.id, attempts: row.attempts } : null
+           ORDER BY d.due_at, l.id LIMIT 1 FOR UPDATE OF l SKIP LOCKED`, [maxAttempts])
+        if (!picked.rows[0]) return null
+        // La foto de la consulta anterior puede ser previa al registro de otro trabajador
+        // que soltó el lote justo antes del bloqueo. Con el lote bloqueado, una sentencia
+        // nueva ve lo último confirmado: si ya no está pendiente, la siguiente vuelta sigue.
+        const { rows } = await client.query<{ id: string; attempts: number }>(
+          `UPDATE public.lots l SET expiry_attempts = expiry_attempts + 1,
+             expiry_claimed_until = clock_timestamp() + $2 * interval '1 millisecond'
+           WHERE l.id = $1 AND (l.status = 'published' AND l.pickup_ends_at <= clock_timestamp()
+             OR EXISTS (SELECT 1 FROM public.waitlist_entries w WHERE w.lot_id = l.id
+               AND w.status = 'offered' AND w.offer_expires_at <= clock_timestamp()))
+           RETURNING public_id::text AS id, expiry_attempts AS attempts`, [picked.rows[0].id, leaseMs])
+        return rows[0] ? { lotId: rows[0].id, attempts: rows[0].attempts } : null
+      })
     },
 
     async withExpiryTransaction(lotId, operate) {

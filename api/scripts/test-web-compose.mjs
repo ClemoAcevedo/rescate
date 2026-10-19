@@ -1,4 +1,4 @@
-// K009/K011/K017/K024/K030: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
+// K009/K011/K017/K024/K030/K031: recorridos de navegador (logout usa respuestas controladas) contra Vite HTTPS → proxy → API → PostgreSQL de Compose.
 // Las fotos (K017) usan almacenamiento local temporal; el mismo worker real genera los avisos (K030).
 // Usa una base dedicada nueva; no migra ni altera la base de desarrollo.
 import { execFileSync, spawn } from 'node:child_process'
@@ -55,8 +55,8 @@ try {
     ...env, ...photoEnv, PORT: String(apiPort), RESCATE_ALLOWED_ORIGINS: webUrl, CSRF_SIGNING_KEY: randomBytes(32).toString('base64'),
     PICKUP_CODE_KEY: randomBytes(32).toString('base64'),
   } }))
-  // Los recorridos mueven plazos y esperan vencimientos sin registrar: este worker solo
-  // procesa fotos. Los vencimientos con worker real se prueban en db:test:expiries (K028).
+  // Los recorridos mueven plazos y esperan vencimientos sin registrar: este worker no
+  // registra vencimientos. K031, al final, lanza su propio worker con vencimientos.
   children.push(spawn(process.execPath, ['dist/worker.js'], { cwd: api, stdio: ['ignore', 'ignore', 'inherit'],
     env: { ...env, ...photoEnv, WORKER_EXPIRIES: 'off' } }))
   children.push(spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', '5174', '--strictPort'], {
@@ -71,7 +71,7 @@ try {
   }
   if (!up) throw new Error('API o Vite no respondieron')
 
-  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:waitlist', 'test:web:notifications']) {
+  for (const script of ['test:web:auth', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:waitlist', 'test:web:notifications', 'test:web:queue-worker']) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }
   console.log(`Base de prueba conservada: ${database}. No se alteró la base de desarrollo.`)
