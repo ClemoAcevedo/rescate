@@ -26,7 +26,8 @@ el worker registre los [vencimientos](vencimientos.md) de lotes, reservas y ofer
 | Implementar o consumir contratos HTTP S02 | [Guía HTTP](api/README.md) y [OpenAPI](api/openapi.yaml) |
 | Trabajar en lotes | [Lotes](lotes.md) |
 | Trabajar en cancelación, código de retiro o entregas | [Reservas](reservas.md) |
-| Entender identidad, atomicidad y seguridad | [K008](k008-identidad.md) |
+| Entender identidad, sesiones y atomicidad | [K008](k008-identidad.md) |
+| Límites de intentos, aislamiento por objeto y registros sin secretos | [Seguridad](seguridad.md) y [ADR 0013](adr/0013-limite-de-codigos-de-retiro.md) |
 | Levantar el entorno y ejecutar checks | [Entorno local y CI](desarrollo-local.md) |
 | Desplegar web/API y operar releases | [Railway, Vercel y CD](despliegue.md) |
 | Consultar persistencia y operar migraciones | [Modelo K003](modelo-inicial.md), [guía de migraciones](migraciones.md) y [ADR 0001](adr/0001-gestor-de-migraciones.md) |

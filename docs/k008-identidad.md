@@ -128,17 +128,12 @@ Es el patrón de [double-submit firmado](https://cheatsheetseries.owasp.org/chea
 
 Origin debe coincidir exactamente con un origen HTTPS configurado; ausente, null,
 ajeno o con barra extra falla. No se usa Referer ni CORS abierto. Todas las respuestas
-API son no-store; errores y logs no incluyen contraseña, cookie, tokens ni mensajes
-SQL. El único dato técnico registrado al fallar es categoría/código controlado.
+API son no-store. Qué registra la API al fallar está en
+[seguridad](seguridad.md#registros-sin-secretos).
 
-Los límites generales son token bucket: 120/minuto/usuario con ráfaga 20 y
-3000/minuto/IP con ráfaga 100. Login añade ventana móvil de 30 intentos/IP/15 minutos.
-Estos límites de tráfico son **por proceso**, con limpieza y mapas acotados; se
-reinician al reiniciar la API. El bloqueo de cuenta, en cambio, siempre persiste en
-PostgreSQL. Varios procesos multiplican límites de tráfico; deben complementarse
-con límites compartidos en el ingreso si se escala. No se confía en X-Forwarded-For:
-un proxy agrega clientes bajo su IP, de manera conservadora. La topología/proxies
-de confianza del despliegue debe fijarse antes de cambiar esa política.
+Los límites de tráfico por usuario e IP, el de login por IP y el bloqueo de cuenta,
+con dónde se cobra cada uno y qué sobrevive a un reinicio, están en
+[seguridad](seguridad.md#límites).
 
 ## Configuración y HTTPS local
 
@@ -207,7 +202,7 @@ El certificado ignorado por Chromium es solo el de esa prueba aislada.
 | --- | --- |
 | [Crypto](../api/test/identity-crypto.test.ts) | Sal aleatoria, verificación por parámetros persistidos, límites de costo/capacidad, secreto/huella canónicos. |
 | [Application](../api/test/identity-application.test.ts) | Ventana móvil, quinto fallo, éxito conserva eventos, bloqueo posterior a scrypt, expiración y errores de persistencia. |
-| [Seguridad](../api/test/auth-security.test.ts) | Firma CSRF, expiración/vínculo/clave, límites de tráfico y configuración cerrada. |
+| [Seguridad](../api/test/auth-security.test.ts) | Firma CSRF, expiración/vínculo/clave, límites de tráfico, regla de cinco fallos y configuración cerrada. |
 | [Infrastructure PostgreSQL](../api/scripts/test-identity.mjs) | Atomicidad, rollback, duplicado concurrente, lock/relectura y persistencia de hechos. |
 | [Funcional PostgreSQL/HTTPS](../api/scripts/test-auth.mjs) | Contrato auth, sesión tras reinicio real, permisos K010 actuales, rotación/logout, bloqueo persistente, expiración, concurrencia de cinco fallos, navegador HTTPS e indisponibilidad/recuperación de PostgreSQL. |
 | [Datos de demostración](lotes.md#datos-de-demostración) | El mismo recorrido funcional comprueba carga repetible, publicación por dos operadores, aislamiento y renovación explícita de fixtures vencidos. |

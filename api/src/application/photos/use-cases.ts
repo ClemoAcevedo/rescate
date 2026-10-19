@@ -12,6 +12,7 @@ import {
 } from "../errors.js"
 import type { Actor, Clock } from "../lots/ports.js"
 import type { ImageProcessor, LotPhoto, ObjectStore, PhotoRepository, ProcessingResult } from "./ports.js"
+import type { Log } from "../logging.js"
 
 export interface UploadPhotoInput {
   lotId: string
@@ -42,7 +43,7 @@ export interface PhotoDependencies {
   objects: ObjectStore | null
   images: ImageProcessor | null
   now: Clock
-  log?: (event: Record<string, unknown>) => void
+  log?: Log
 }
 
 /** Reclamo de una validación; al vencer, otro worker puede retomarla sin duplicar fotos. */

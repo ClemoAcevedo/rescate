@@ -106,6 +106,7 @@ function memory(codes: ReturnType<typeof createPickupCodes>) {
     endedAt: Date | null; ciphertext: Uint8Array | null; fingerprint: Uint8Array | null }
   const rows: Row[] = []
   const deliveries: { reservationId: string; operator: string; key: string; quantity: number; deliveredAt: Date }[] = []
+  const attempts = new Map<string, { blockedUntil: Date | null; failureTimes: Date[] }>()
   const same = (a: Uint8Array | null, b: Uint8Array | null) => a !== null && b !== null && Buffer.from(a).equals(Buffer.from(b))
   const stored = (row: Row) => ({ id: row.id, quantity: row.quantity, status: row.status, createdAt: row.createdAt,
     endedAt: row.endedAt, lot, codeCiphertext: row.ciphertext })
@@ -129,30 +130,42 @@ function memory(codes: ReturnType<typeof createPickupCodes>) {
         async assignCode(code) { row!.ciphertext = code.ciphertext; row!.fingerprint = code.fingerprint },
       })
     },
-    async findPickup(userId, lotId, fingerprint) {
-      if (lotId !== lot.id) return null
-      const row = rows.find(r => same(r.fingerprint, fingerprint))
-      return { member: members.has(userId), lot: window, reservation: row ? stored(row) : null }
-    },
-    async withPickupTransaction(operator, lotId, reservationId, fingerprint, key, operate) {
-      const prior = deliveries.find(d => d.operator === operator && d.key === key)
-      const unavailable = { deliver: async () => assert.fail('No entregar') }
-      if (prior) {
-        const row = rows.find(r => r.id === prior.reservationId)!
-        return operate({ member: members.has(operator), existing: { ...prior, lotId: lot.id,
-          codeMatches: same(row.fingerprint, fingerprint) } }, unavailable)
-      }
-      if (lotId !== lot.id) return operate({ existing: null, lot: null }, unavailable)
-      const row = rows.find(r => r.id === reservationId && same(r.fingerprint, fingerprint))
-      return operate({ existing: null, lot: window, member: members.has(operator), now: state.dbNow,
-        reservation: row ? { status: row.status, quantity: row.quantity } : null }, {
-        async deliver(at) {
-          end(row!, 'delivered', at); state.R -= row!.quantity; state.E += row!.quantity
-          const delivery = { reservationId, operator, key, quantity: row!.quantity, deliveredAt: at }
-          deliveries.push(delivery)
-          return { reservationId, quantity: delivery.quantity, deliveredAt: at }
+    async withPickupAttempts(operator, operate) {
+      // Copia de trabajo: los fallos se conservan solo si el callback termina sin lanzar, como el COMMIT.
+      const saved = attempts.get(operator) ?? { blockedUntil: null, failureTimes: [] }
+      const draft = { blockedUntil: saved.blockedUntil, failureTimes: [...saved.failureTimes] }
+      const result = await operate({ ...draft, failureTimes: [...draft.failureTimes], now: state.dbNow }, {
+        async review(lotId, fingerprint) {
+          if (lotId !== lot.id) return null
+          const row = rows.find(r => same(r.fingerprint, fingerprint))
+          return { member: members.has(operator), lot: window, reservation: row ? stored(row) : null }
         },
+        async confirm(lotId, reservationId, fingerprint, key, confirm) {
+          const prior = deliveries.find(d => d.operator === operator && d.key === key)
+          const unavailable = { deliver: async () => assert.fail('No entregar') }
+          if (prior) {
+            const row = rows.find(r => r.id === prior.reservationId)!
+            return confirm({ member: members.has(operator), existing: { ...prior, lotId: lot.id,
+              codeMatches: same(row.fingerprint, fingerprint) } }, unavailable)
+          }
+          if (lotId !== lot.id) return confirm({ existing: null, lot: null }, unavailable)
+          const row = rows.find(r => r.id === reservationId && same(r.fingerprint, fingerprint))
+          return confirm({ existing: null, lot: window, member: members.has(operator), now: state.dbNow,
+            reservation: row ? { status: row.status, quantity: row.quantity } : null }, {
+            async deliver(at) {
+              end(row!, 'delivered', at); state.R -= row!.quantity; state.E += row!.quantity
+              const delivery = { reservationId, operator, key, quantity: row!.quantity, deliveredAt: at }
+              deliveries.push(delivery)
+              return { reservationId, quantity: delivery.quantity, deliveredAt: at }
+            },
+          })
+        },
+        async deleteFailuresThrough(cutoff) { draft.failureTimes = draft.failureTimes.filter(at => at > cutoff) },
+        async recordFailure(at) { draft.failureTimes.push(at) },
+        async setBlockedUntil(until) { draft.blockedUntil = until },
       })
+      attempts.set(operator, draft)
+      return result
     },
   }
   // Vencimientos del lote con el mismo estado; la concesión se prueba en lot-expiries.test.ts.
@@ -173,7 +186,7 @@ function memory(codes: ReturnType<typeof createPickupCodes>) {
     },
     async release() { assert.fail('El vencimiento en memoria no falla') },
   }
-  return { lot, members, state, rows, deliveries, reserve, repository, expiriesRepository, closure }
+  return { lot, members, state, rows, deliveries, attempts, reserve, repository, expiriesRepository, closure }
 }
 
 async function harness() {
@@ -182,9 +195,11 @@ async function harness() {
   // Las lecturas usan el reloj del proceso; los comandos, el de "la base".
   const processNow = { at: during }
   const cases = createReservationUseCases(db.repository, codes, () => processNow.at)
+  // Cobros del límite por origen de códigos; el limitador real se prueba en auth-security.
+  const codeAttempts: string[] = []
   const app = createApp({ reservationsRouter: createReservationsRouter(cases,
     async request => { const user = request.header('x-test-actor'); return user ? { userId: user } : null },
-    async () => {}, () => {}) })
+    async () => {}, { pickupCode: ip => { codeAttempts.push(ip) } }, () => {}) })
   const server = app.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
@@ -193,9 +208,9 @@ async function harness() {
       headers: { ...(actor ? { 'x-test-actor': actor } : {}), ...(body === undefined ? {} : { 'content-type': 'application/json' }) } })
     const result = response.status === 204 ? undefined : await response.json()
     assertContract(method, path, response, result)
-    return { status: response.status, body: result }
+    return { status: response.status, body: result, headers: response.headers }
   }
-  return { db, codes, cases, processNow, call, close: () => new Promise(resolve => server.close(resolve)) }
+  return { db, codes, cases, processNow, codeAttempts, call, close: () => new Promise(resolve => server.close(resolve)) }
 }
 
 test('HTTP: el titular ve su código solo mientras está confirmada; cancelar lo invalida una vez', async () => {
@@ -268,6 +283,74 @@ test('HTTP: revisar no consume; confirmar valida de nuevo, entrega una vez y rep
     assert.equal((await h.call('holder', 'POST', `/reservations/${id}/cancel`, {})).status, 409)
     assert.deepEqual([h.db.state.R, h.db.state.E, h.db.deliveries.length], [0, 3, 1])
     assert.equal((await h.call('operator', 'POST', `${lotPath}/pickup-reviews`, { code })).body.reservation.status, 'delivered')
+  } finally { await h.close() }
+})
+
+test('K034: cinco códigos inválidos suspenden revisar y confirmar 15 minutos, también con el código correcto', async () => {
+  const h = await harness()
+  try {
+    const { id, code } = h.db.reserve('holder', 1)
+    const lotPath = `/lots/${h.db.lot.id}`
+    const review = (actor: string, value: string) => h.call(actor, 'POST', `${lotPath}/pickup-reviews`, { code: value })
+    const confirm = (actor: string, value: string, key = randomUUID()) =>
+      h.call(actor, 'POST', `${lotPath}/pickups`, { reservationId: id, code: value, idempotencyKey: key })
+    // No son fallos de código ni cobran el límite por origen: sin membership, lote inexistente o cuerpo inválido.
+    assert.equal((await review('stranger', 'ZZZZZZZZ')).status, 403)
+    assert.equal((await confirm('stranger', 'ZZZZZZZZ')).status, 403)
+    assert.equal((await h.call('operator', 'POST', `/lots/${randomUUID()}/pickup-reviews`, { code: 'ZZZZZZZZ' })).status, 404)
+    assert.equal((await review('operator', 'x'.repeat(33))).status, 422)
+    assert.equal(h.db.attempts.get('stranger')?.failureTimes.length ?? 0, 0)
+    assert.equal(h.db.attempts.get('operator')?.failureTimes.length ?? 0, 0)
+    assert.equal(h.codeAttempts.length, 0)
+    // Revisar y confirmar suman al mismo operador; el quinto fallo responde 404 y queda guardado.
+    for (const wrong of ['ZZZZZZZZ', 'corto', '7KQ2M9XU', 'ZZZZ-ZZZ1']) assert.equal((await review('operator', wrong)).status, 404)
+    assert.equal((await confirm('operator', 'ZZZZZZZZ')).status, 404)
+    const saved = h.db.attempts.get('operator')!
+    assert.equal(saved.failureTimes.length, 5)
+    assert.equal(h.codeAttempts.length, 5)
+    assert.equal(saved.blockedUntil?.getTime(), during.getTime() + 15 * 60_000)
+    // Suspendido: ni el código correcto responde, no se agregan fallos ni se extiende el plazo.
+    h.db.state.dbNow = new Date(during.getTime() + 60_000)
+    for (const blocked of [await review('operator', code), await confirm('operator', code), await review('operator', 'ZZZZZZZZ')]) {
+      assert.deepEqual([blocked.status, blocked.body.error.code, blocked.headers.get('retry-after')], [429, 'RATE_LIMITED', '840'])
+    }
+    assert.deepEqual([h.db.attempts.get('operator')!.failureTimes.length, h.db.attempts.get('operator')!.blockedUntil],
+      [5, saved.blockedUntil])
+    assert.equal(h.codeAttempts.length, 5)
+    assert.deepEqual([h.db.rows[0]!.status, h.db.deliveries.length], ['confirmed', 0])
+    // El límite es del operador, no del lote ni del establecimiento.
+    h.db.members.add('colleague')
+    assert.equal((await review('colleague', code)).status, 200)
+    // Al vencer la suspensión se vuelve a evaluar; un fallo nuevo limpia los antiguos.
+    h.db.state.dbNow = saved.blockedUntil!
+    assert.equal((await review('operator', code)).status, 200)
+    assert.equal((await review('operator', 'ZZZZZZZZ')).status, 404)
+    assert.deepEqual([h.db.attempts.get('operator')!.failureTimes.length, h.db.attempts.get('operator')!.blockedUntil], [1, null])
+    // Cada revisión o confirmación de un operador autorizado cobra el origen una vez; consultar no.
+    await h.call('holder', 'GET', `/reservations/${id}`)
+    assert.equal(h.codeAttempts.length, 8)
+    assert.ok(h.codeAttempts.every(ip => ip === '127.0.0.1' || ip === '::ffff:127.0.0.1'))
+  } finally { await h.close() }
+})
+
+test('K034: un código válido de una reserva terminada o una clave repetida no cuentan como fallo', async () => {
+  const h = await harness()
+  try {
+    const lotPath = `/lots/${h.db.lot.id}`
+    const cancelled = h.db.reserve('holder', 1)
+    assert.equal((await h.call('holder', 'POST', `/reservations/${cancelled.id}/cancel`, {})).status, 200)
+    const live = h.db.reserve('holder', 1)
+    const body = { reservationId: live.id, code: live.code, idempotencyKey: randomUUID() }
+    assert.equal((await h.call('operator', 'POST', `${lotPath}/pickups`, body)).status, 201)
+    for (let i = 0; i < 6; i++) {
+      assert.equal((await h.call('operator', 'POST', `${lotPath}/pickup-reviews`, { code: cancelled.code })).body.reservation.status, 'cancelled')
+      assert.equal((await h.call('operator', 'POST', `${lotPath}/pickups`, { ...body, code: 'ZZZZZZZZ' })).status, 409)
+    }
+    assert.equal(h.db.attempts.get('operator')!.failureTimes.length, 0)
+    // La clave repetida en otra ruta no compara el código: 409 sin cobrar el límite por origen.
+    const charged = h.codeAttempts.length
+    assert.equal((await h.call('operator', 'POST', `/lots/${randomUUID()}/pickups`, body)).status, 409)
+    assert.equal(h.codeAttempts.length, charged)
   } finally { await h.close() }
 })
 

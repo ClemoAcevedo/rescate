@@ -8,6 +8,9 @@ import type { ReservationStatus } from '../domain/reservations.js'
 import type { Actor } from '../application/lots/ports.js'
 import { notAuthenticated } from '../application/errors.js'
 import type { Authenticate } from './actor.js'
+import type { Log } from '../application/logging.js'
+import { clientAddress } from './rate-limits.js'
+import type { createTrafficLimits } from './rate-limits.js'
 import type { HttpSchemas } from './openapi.js'
 import { handleError, sendError } from './errors.js'
 
@@ -58,7 +61,7 @@ export type ActorRoute = (handler: (actor: Actor, request: Request, response: Re
 
 /** Autentica, protege los comandos y traduce los errores de una ruta del titular. */
 export function createActorRoute(authenticate: Authenticate, protectCommand: (request: Request) => Promise<void>,
-  log: (error: unknown) => void): ActorRoute {
+  log: Log): ActorRoute {
   return handler => async (request, response) => {
     try {
       const actor = await authenticate(request)
@@ -77,8 +80,13 @@ export function createActorRoute(authenticate: Authenticate, protectCommand: (re
   }
 }
 
+/**
+ * `limits.pickupCode` es el límite por origen de revisar y confirmar códigos (anexos H
+ * p. 21); Application lo cobra después del permiso y decide el límite persistido por operador.
+ */
 export function createReservationsRouter(cases: ReservationUseCases, authenticate: Authenticate,
-  protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = error => console.error(error)): Router {
+  protectCommand: (request: Request) => Promise<void>, limits: Pick<ReturnType<typeof createTrafficLimits>, 'pickupCode'>,
+  log: Log = event => console.error(event)): Router {
   const router = Router()
   const withActor = createActorRoute(authenticate, protectCommand, log)
 
@@ -97,12 +105,14 @@ export function createReservationsRouter(cases: ReservationUseCases, authenticat
   }))
   router.post('/lots/:lotId/pickup-reviews', withActor(async (actor, request, response) => {
     const { code } = readBody(request.body, { code: isCode })
-    const review = await cases.reviewPickup(actor, id(request.params.lotId), code!)
+    const review = await cases.reviewPickup(actor, id(request.params.lotId), code!,
+      () => limits.pickupCode(clientAddress(request)))
     response.json({ reservation: reservationFields(review.reservation), canConfirm: review.canConfirm } satisfies HttpSchemas['PickupReview'])
   }))
   router.post('/lots/:lotId/pickups', withActor(async (actor, request, response) => {
     const body = readBody(request.body, { reservationId: isUuid, code: isCode, idempotencyKey: isUuid })
-    const delivery = await cases.confirmPickup(actor, id(request.params.lotId), body.reservationId!, body.code!, body.idempotencyKey!)
+    const delivery = await cases.confirmPickup(actor, id(request.params.lotId), body.reservationId!, body.code!,
+      body.idempotencyKey!, () => limits.pickupCode(clientAddress(request)))
     response.status(201).json({ reservationId: delivery.reservationId, quantity: delivery.quantity,
       deliveredAt: delivery.deliveredAt.toISOString() } satisfies HttpSchemas['PickupResponse'])
   }))

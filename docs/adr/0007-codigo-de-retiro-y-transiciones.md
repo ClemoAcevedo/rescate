@@ -61,6 +61,7 @@ código en la primera consulta, bajo el bloqueo del lote.
 
 `PICKUP_CODE_KEY` es obligatoria para iniciar la API; perderla deja los códigos
 vigentes sin poder mostrarse ni verificarse. El límite de fallos de revisión por
-operador (cinco cada quince minutos, H p. 21) corresponde a K034 (#37). Cerrar o retirar
+operador (cinco cada quince minutos, H p. 21) se decide en
+[ADR 0013](0013-limite-de-codigos-de-retiro.md). Cerrar o retirar
 un lote por incidencia deberá terminar sus reservas confirmadas y borrar sus códigos
 de la misma forma.

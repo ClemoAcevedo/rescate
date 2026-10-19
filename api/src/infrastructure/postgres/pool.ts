@@ -2,6 +2,7 @@
 // clientes pg; los ports exponen operaciones, no la librería.
 
 import pg from "pg"
+import type { Log } from "../../application/logging.js"
 
 export type Pool = pg.Pool
 export type PoolClient = pg.PoolClient
@@ -12,6 +13,8 @@ export interface PoolOptions {
   max?: number
   connectionTimeoutMillis?: number
   statementTimeoutMillis?: number
+  /** Registro de la conexión ociosa perdida; por defecto, stderr. */
+  log?: Log
 }
 
 export function createPool(options: PoolOptions): Pool {
@@ -24,7 +27,8 @@ export function createPool(options: PoolOptions): Pool {
   })
   // pg retira el cliente ocioso perdido; sin listener el evento derriba Node.
   // No registrar el Error original: puede contener host, SQL o credenciales.
-  pool.on("error", () => { console.error({ event: "database_idle_connection_lost" }) })
+  const log = options.log ?? (event => console.error(event))
+  pool.on("error", () => { log({ event: "database_idle_connection_lost" }) })
   return pool
 }
 

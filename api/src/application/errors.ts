@@ -17,6 +17,7 @@ export type ApplicationErrorCode =
   | "pickup_code_not_found"
   | "waitlist_entry_not_found"
   | "notification_not_found"
+  | "pickup_review_suspended"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -71,6 +72,13 @@ export const photoStorageUnavailable = (): ApplicationError =>
 export class ConcurrentUploadsError extends ApplicationError {
   constructor(readonly retryAfter: number) {
     super("concurrent_photo_uploads", "El operador ya tiene el máximo de cargas simultáneas.")
+  }
+}
+
+/** Anexos H p. 21: cinco códigos inválidos en quince minutos suspenden la revisión del operador. */
+export class PickupReviewSuspendedError extends ApplicationError {
+  constructor(readonly retryAfter: number) {
+    super("pickup_review_suspended", "El operador superó los fallos de código permitidos.")
   }
 }
 

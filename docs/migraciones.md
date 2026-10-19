@@ -16,7 +16,9 @@ Después, `lots.status` pasa a ser el enum `lot_status` con `closed_at` para los
 cierres lógicos ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)) y se agrega
 `user_consents` ([ADR 0009](adr/0009-consentimiento-del-correo.md)).
 K032 agrega `commitments_lot_idx` para el cuadre de entregas del inventario
-([rendimiento](rendimiento.md#índices)).
+([rendimiento](rendimiento.md#índices)). K034 agrega `pickup_code_security_state` y
+`pickup_code_failures` para el límite de códigos de retiro por operador
+([ADR 0013](adr/0013-limite-de-codigos-de-retiro.md)).
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003
@@ -44,7 +46,8 @@ No ejecutar primero `db:migrate` sobre esa base de prueba: debe empezar vacía.
 
 El job Compose existente ejecuta la misma suite en CI. No hay migración automática
 al arrancar la API. Para migrar una base normal siguen vigentes `db:migrate` y
-`db:rollback`; este último revierte una migración. La más reciente borra los
+`db:rollback`; este último revierte una migración. La más reciente (K034) borra los
+fallos de código y levanta las suspensiones vigentes. La de consentimientos borra los
 consentimientos registrados. La del enum vuelve `lots.status` a `text` y falla si
 quedan lotes vencidos o retirados. La de K022 borra entregas y códigos de retiro y
 falla si quedan reservas canceladas, vencidas o retiradas. Revertir K015 elimina los ID públicos y claves de reserva; no hacerlo

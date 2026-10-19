@@ -386,7 +386,7 @@ paths:
     post:
       operationId: "reviewPickupCode"
       summary: "Revisar un código de retiro"
-      description: "Operador con membership actual sobre el establecimiento del lote. El código va en el cuerpo, nunca en la ruta. Muestra la reserva del lote con ese código, también si fue cancelada, venció o ya se retiró; no consume el código ni garantiza la entrega. Mayúsculas, espacios y guiones no importan; I/L se leen como 1 y O como 0. Un código inexistente, mal formado o de otro lote responde 404 sin más información. Usa POST porque el código no puede ir en la URL; no cambia estado."
+      description: "Operador con membership actual sobre el establecimiento del lote. El código va en el cuerpo, nunca en la ruta. Muestra la reserva del lote con ese código, también si fue cancelada, venció o ya se retiró; no consume el código ni garantiza la entrega. Mayúsculas, espacios y guiones no importan; I/L se leen como 1 y O como 0. Un código inexistente, mal formado o de otro lote responde 404 sin más información y cuenta como fallo del operador. Cinco fallos en 15 minutos, al revisar o al confirmar, suspenden al operador 15 minutos: revisar y confirmar responden 429 con Retry-After, también con el código correcto. Además, como máximo 30 revisiones o confirmaciones por IP cada minuto. Usa POST porque el código no puede ir en la URL; no cambia la reserva."
       tags: ["Reservations"]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -420,7 +420,7 @@ paths:
     post:
       operationId: "confirmPickup"
       summary: "Confirmar el retiro de una reserva"
-      description: "Operador con membership actual. Bajo bloqueo del lote vuelve a comprobar permiso, reserva, código y ventana aunque la revisión previa haya sido válida: se retira desde el inicio de la ventana y antes de su cierre. Registra una única entrega completa, consume el código y mueve los packs de reservados a retirados en la misma transacción. idempotencyKey es un UUID por operador: repetir la misma clave y parámetros reproduce 201 y el cuerpo original; con otros parámetros responde 409. Otro intento sobre una reserva ya retirada responde 409. Los errores no consumen la clave. 409 también si fue cancelada, venció o la ventana aún no comienza; 404 si el código no corresponde a esa reserva del lote."
+      description: "Operador con membership actual. Bajo bloqueo del lote vuelve a comprobar permiso, reserva, código y ventana aunque la revisión previa haya sido válida: se retira desde el inicio de la ventana y antes de su cierre. Registra una única entrega completa, consume el código y mueve los packs de reservados a retirados en la misma transacción. idempotencyKey es un UUID por operador: repetir la misma clave y parámetros reproduce 201 y el cuerpo original; con otros parámetros responde 409. Otro intento sobre una reserva ya retirada responde 409. Los errores no consumen la clave. 409 también si fue cancelada, venció o la ventana aún no comienza; 404 si el código no corresponde a esa reserva del lote, que cuenta como fallo del operador igual que al revisar. Con la revisión suspendida responde 429 con Retry-After, incluso para una clave ya usada."
       tags: ["Reservations"]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -1439,7 +1439,7 @@ components:
                     path: "/quantity"
                     message: "Debe ser un entero positivo."
     TooManyRequests:
-      description: "RATE_LIMITED: Límite de solicitudes o de intentos de login alcanzado según E1 H p. 21. Retry-After indica segundos de espera."
+      description: "RATE_LIMITED: Límite de solicitudes, de intentos de login o de códigos de retiro alcanzado según E1 H p. 21. Retry-After indica segundos de espera."
       headers:
         Cache-Control:
           $ref: "#/components/headers/NoStore"

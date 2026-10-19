@@ -265,7 +265,8 @@ lo cambia.
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
   vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
-  (K030), según OpenAPI.
+  (K030), según OpenAPI. Límites de login, códigos de retiro y tráfico, con los fallos
+  de login y de código persistidos, y registros sin secretos (K034).
 - **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
   (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
@@ -273,6 +274,9 @@ lo cambia.
   observados y repetición con el worker de fotos activo y detenido (K025); flujo de
   cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
   y en tres navegadores (K031).
+- **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
+  códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
+  secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
 - **Rendimiento:** semilla de escala del anexo H, planes reales con EXPLAIN y p50/p95 de
   búsqueda, reserva y cancelación con k6 ([rendimiento](docs/rendimiento.md), K032).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);

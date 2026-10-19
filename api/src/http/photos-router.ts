@@ -10,12 +10,13 @@ import type { PhotoVariant } from "../domain/photos.js"
 import type { Authenticate } from "./actor.js"
 import type { HttpSchemas } from "./openapi.js"
 import { handleError, sendError } from "./errors.js"
+import type { Log } from "../application/logging.js"
 
 export interface PhotosRouterOptions {
   useCases: PhotoUseCases
   authenticate: Authenticate
   protectCommand: (request: Request) => Promise<void>
-  log?: (error: unknown) => void
+  log?: Log
 }
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
@@ -72,7 +73,7 @@ function readLimited(request: Request, maxBytes: number): Promise<Uint8Array> {
 
 const id = (value: unknown): string => typeof value === "string" ? value : ""
 
-export function createPhotosRouter({ useCases, authenticate, protectCommand, log = console.error }: PhotosRouterOptions): Router {
+export function createPhotosRouter({ useCases, authenticate, protectCommand, log = event => console.error(event) }: PhotosRouterOptions): Router {
   const router = Router()
   const fail = (error: unknown, response: Response) => {
     if (error instanceof UploadTooLargeError) {
