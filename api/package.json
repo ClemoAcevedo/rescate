@@ -51,7 +51,8 @@
     "test:web:reservations": "node scripts/test-web-reservations.mjs",
     "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs",
     "test:web:notifications": "node --env-file-if-exists=.env scripts/test-web-notifications.mjs",
-    "test:web:queue-worker": "node --env-file-if-exists=.env scripts/test-web-queue-worker.mjs"
+    "test:web:queue-worker": "node --env-file-if-exists=.env scripts/test-web-queue-worker.mjs",
+    "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs"
   },
   "keywords": [],
   "author": "",

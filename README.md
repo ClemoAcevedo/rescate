@@ -273,6 +273,8 @@ lo cambia.
   observados y repetición con el worker de fotos activo y detenido (K025); flujo de
   cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
   y en tres navegadores (K031).
+- **Rendimiento:** semilla de escala del anexo H, planes reales con EXPLAIN y p50/p95 de
+  búsqueda, reserva y cancelación con k6 ([rendimiento](docs/rendimiento.md), K032).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 
