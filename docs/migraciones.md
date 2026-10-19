@@ -15,6 +15,8 @@ estados terminales de la reserva, el código de retiro cifrado y `deliveries`.
 Después, `lots.status` pasa a ser el enum `lot_status` con `closed_at` para los
 cierres lógicos ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)) y se agrega
 `user_consents` ([ADR 0009](adr/0009-consentimiento-del-correo.md)).
+K032 agrega `commitments_lot_idx` para el cuadre de entregas del inventario
+([rendimiento](rendimiento.md#índices)).
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003
