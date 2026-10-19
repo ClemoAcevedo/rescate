@@ -22,6 +22,7 @@ const migrations = [
   '1791200000000_waitlist',
   '1791300000000_lot-expiry-claims',
   '1791400000000_notifications-outbox',
+  '1791500000000_commitments-lot-index',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -366,6 +367,10 @@ try {
   await query('DELETE FROM notifications'); await query('DELETE FROM outbox_events')
   ok('outbox: tipos y estados válidos, una fila por transición; un aviso por evento y destinatario')
 
+  // K032: índice de compromisos por lote en cualquier estado, para el cuadre de entregas.
+  assert.ok((await query("SELECT to_regclass('public.commitments_lot_idx') AS name"))[0].name)
+  ok('K032: índice de compromisos por lote')
+
   // K014, K022, los consentimientos y la cola solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
   const withQueue = latest.filter(row => !['outbox_events', 'notifications'].includes(row.relname))
@@ -391,6 +396,12 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.commitments_lot_idx') AS name"))[0].name, null)
+  assert.ok((await query("SELECT to_regclass('public.commitments_lot_confirmed_idx') AS name"))[0].name)
+  assert.deepEqual(await snapshot(), latest)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  ok('rollback K032 retira solo el índice de compromisos por lote')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.notifications') AS name"))[0].name, null)
   assert.equal((await query("SELECT to_regclass('public.outbox_events') AS name"))[0].name, null)
