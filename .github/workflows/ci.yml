@@ -121,6 +121,8 @@ jobs:
         run: npm --prefix api run db:test:notifications:compose
       - name: K031 queue, expiry and notices flow with worker kill -9 and restart
         run: npm --prefix api run db:test:queue-worker:compose
+      - name: K034 attempt limits, cross-access isolation and secret-free logs
+        run: npm --prefix api run db:test:security:compose
       - name: Install Chromium for HTTPS cookie validation
         run: cd api && npx playwright install --with-deps chromium
       - name: K008 auth, restart and K010 integration over HTTPS
