@@ -4,7 +4,9 @@ import type { IdentityUseCases } from "../application/identity/use-cases.js"
 import { IdentityError } from "../application/identity/errors.js"
 import { CSRF_COOKIE, SESSION_COOKIE, readCookie, setCookie } from "./authentication.js"
 import type { Authentication } from "./authentication.js"
+import { clientAddress } from "./rate-limits.js"
 import type { createTrafficLimits } from "./rate-limits.js"
+import type { Log } from "../application/logging.js"
 import { handleError, sendError } from "./errors.js"
 import type { HttpSchemas } from "./openapi.js"
 
@@ -20,10 +22,11 @@ function credentials(value: unknown, operation: "register" | "login") {
   if (invalid.length) throw new IdentityError("invalid_input", invalid)
   return { email: body.email as string, password: body.password as string, privacyConsent: body.privacyConsent === true }
 }
-export function createAuthRouter(useCases: IdentityUseCases, auth: Authentication, limits: ReturnType<typeof createTrafficLimits>) {
+export function createAuthRouter(useCases: IdentityUseCases, auth: Authentication, limits: ReturnType<typeof createTrafficLimits>,
+  log: Log = event => console.error(event)) {
   const router = Router()
   const run = (handler: (req: Request, res: Response) => Promise<void>) => async (req: Request, res: Response) => {
-    try { await handler(req, res) } catch (error) { handleError(error, res, console.error) }
+    try { await handler(req, res) } catch (error) { handleError(error, res, log) }
   }
   router.get("/auth/session", run(async (req, res) => {
     const context = await auth.resolve(req)
@@ -33,7 +36,7 @@ export function createAuthRouter(useCases: IdentityUseCases, auth: Authenticatio
   }))
   for (const operation of ["register", "login"] as const) router.post(`/auth/${operation}`, run(async (req, res) => {
     auth.requireOrigin(req)
-    if (operation === "login") limits.login(req.ip ?? req.socket.remoteAddress ?? "unknown")
+    if (operation === "login") limits.login(clientAddress(req))
     auth.requireCsrf(req, await auth.resolve(req))
     if (!req.is("application/json")) { sendError(res, 415, "UNSUPPORTED_MEDIA_TYPE", "Se requiere application/json."); return }
     const { email, password, privacyConsent } = credentials(req.body, operation)

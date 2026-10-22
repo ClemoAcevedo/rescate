@@ -1,12 +1,18 @@
 // K022 · Application: consulta del titular, cancelación (RF05), revisión y retiro
 // (RF06). Coordina autorización, reglas de Domain y atomicidad. El vencimiento (RF08)
 // se decide aquí con el cierre del lote y se registra en expiries/ (K028).
-import { idempotencyConflict, lotNotFound, notAuthorized, pickupCodeNotFound, reservationNotFound } from '../errors.js'
+import {
+  PickupReviewSuspendedError, idempotencyConflict, lotNotFound, notAuthorized, pickupCodeNotFound, reservationNotFound,
+} from '../errors.js'
 import type { Actor } from '../lots/ports.js'
-import type { PickupCodes, ReservationRepository, ReviewedReservation, StoredReservation } from './ports.js'
+import type {
+  AdmitCodeAttempt, PickupAttemptSteps, PickupAttempts, PickupCodes, ReservationRepository, ReviewedReservation,
+  StoredReservation,
+} from './ports.js'
 import {
   canConfirmPickup, currentStatus, decideCancellation, endedAt, normalizePickupCode, requirePickup,
 } from '../../domain/reservations.js'
+import { blockAfterFailure, expiredFailuresCutoff, retryAfterSeconds } from '../../domain/attempts.js'
 
 /** Estado vigente: una confirmada cuyo lote cerró se muestra vencida aunque no esté registrada. */
 function present<R extends Omit<StoredReservation, 'lot'>>(reservation: R, window: { pickupEndsAt: Date }, at: Date) {
@@ -14,6 +20,23 @@ function present<R extends Omit<StoredReservation, 'lot'>>(reservation: R, windo
     status: currentStatus(reservation.status, window.pickupEndsAt, at),
     endedAt: endedAt(reservation.status, reservation.endedAt, window.pickupEndsAt, at) }
 }
+/**
+ * K034 (anexos H p. 21): mientras dure la suspensión no se busca ningún código, así que
+ * un código correcto tampoco responde y el límite no sirve de oráculo.
+ */
+function requireCodeAttempt(attempts: PickupAttempts): void {
+  const retryAfter = retryAfterSeconds(attempts.blockedUntil, attempts.now)
+  if (retryAfter > 0) throw new PickupReviewSuspendedError(retryAfter)
+}
+
+/** Un código que no corresponde a una reserva del lote cuenta como fallo; el quinto en la ventana suspende. */
+async function recordCodeFailure({ failureTimes, now }: PickupAttempts, steps: PickupAttemptSteps): Promise<void> {
+  const until = blockAfterFailure(failureTimes, now)
+  await steps.deleteFailuresThrough(expiredFailuresCutoff(now))
+  await steps.recordFailure(now)
+  await steps.setBlockedUntil(until)
+}
+
 /** Vista del titular: nunca incluye el código cifrado. */
 function forHolder(reservation: StoredReservation & { codeCiphertext?: unknown }, at: Date) {
   const { codeCiphertext: _hidden, ...visible } = reservation
@@ -68,15 +91,23 @@ export function createReservationUseCases(repository: ReservationRepository, cod
 
     /**
      * Revisar muestra la reserva del código sin consumirlo ni garantizar el retiro.
-     * Un código inexistente, mal formado o de otro lote responde igual.
+     * Un código inexistente, mal formado o de otro lote responde igual y cuenta como
+     * fallo del operador; el fallo se confirma antes de responder.
      */
-    async reviewPickup(actor: Actor, lotId: string, code: string) {
+    async reviewPickup(actor: Actor, lotId: string, code: string, admit: AdmitCodeAttempt) {
       const normalized = normalizePickupCode(code)
-      const found = await repository.findPickup(actor.userId, lower(lotId),
-        normalized === null ? null : codes.fingerprint(normalized))
-      if (!found) throw lotNotFound()
-      if (!found.member) throw notAuthorized()
-      if (!found.reservation) throw pickupCodeNotFound()
+      const fingerprint = normalized === null ? null : codes.fingerprint(normalized)
+      const found = await repository.withPickupAttempts(actor.userId, async (attempts, steps) => {
+        requireCodeAttempt(attempts)
+        const reviewed = await steps.review(lower(lotId), fingerprint)
+        if (!reviewed) throw lotNotFound()
+        if (!reviewed.member) throw notAuthorized()
+        admit()
+        if (reviewed.reservation) return { lot: reviewed.lot, reservation: reviewed.reservation }
+        await recordCodeFailure(attempts, steps)
+        return null
+      })
+      if (!found) throw pickupCodeNotFound()
       const at = now()
       return { reservation: present<ReviewedReservation>(found.reservation, found.lot, at),
         canConfirm: canConfirmPickup(found.reservation, found.lot, at) }
@@ -85,26 +116,39 @@ export function createReservationUseCases(repository: ReservationRepository, cod
     /**
      * RF06: confirmar vuelve a validar lote, permiso, reserva, código y ventana bajo
      * bloqueo, aunque la revisión previa haya sido válida. La clave del operador
-     * reproduce la entrega original; otro intento informa que ya se retiró.
+     * reproduce la entrega original; otro intento informa que ya se retiró. Un código
+     * que no corresponde a esa reserva del lote cuenta como fallo, igual que al revisar.
      */
-    async confirmPickup(actor: Actor, lotId: string, reservationId: string, code: string, idempotencyKey: string) {
+    async confirmPickup(actor: Actor, lotId: string, reservationId: string, code: string, idempotencyKey: string,
+      admit: AdmitCodeAttempt) {
       const lot = lower(lotId); const reservation = lower(reservationId)
       const normalized = normalizePickupCode(code)
       const fingerprint = normalized === null ? null : codes.fingerprint(normalized)
-      return repository.withPickupTransaction(actor.userId, lot, reservation, fingerprint, lower(idempotencyKey),
-        async (state, writer) => {
+      const delivery = await repository.withPickupAttempts(actor.userId, async (attempts, steps) => {
+        requireCodeAttempt(attempts)
+        return steps.confirm(lot, reservation, fingerprint, lower(idempotencyKey), async (state, writer) => {
           if (state.existing) {
             if (!state.member) throw notAuthorized()
             const { lotId: deliveredLot, codeMatches, ...delivery } = state.existing
-            if (deliveredLot !== lot || delivery.reservationId !== reservation || !codeMatches) throw idempotencyConflict()
+            if (deliveredLot !== lot || delivery.reservationId !== reservation) throw idempotencyConflict()
+            // Solo aquí se compara el código, contra la reserva ya retirada con esta clave.
+            admit()
+            if (!codeMatches) throw idempotencyConflict()
             return delivery
           }
           if (!state.lot) throw lotNotFound()
           if (!state.member) throw notAuthorized()
-          if (!state.reservation) throw pickupCodeNotFound()
+          admit()
+          if (!state.reservation) {
+            await recordCodeFailure(attempts, steps)
+            return null
+          }
           requirePickup(state.reservation, state.lot, state.now)
           return writer.deliver(state.now)
         })
+      })
+      if (!delivery) throw pickupCodeNotFound()
+      return delivery
     },
   }
 }

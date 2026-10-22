@@ -10,12 +10,13 @@ import type { Authenticate } from "./actor.js"
 import type { HttpSchemas } from "./openapi.js"
 import { handleError, sendError } from "./errors.js"
 import { photoPath } from "./photos-router.js"
+import type { Log } from "../application/logging.js"
 
 export interface LotsRouterOptions {
   useCases: LotUseCases
   authenticate: Authenticate
   protectCommand: (request: Request) => Promise<void>
-  log?: (error: unknown) => void
+  log?: Log
 }
 
 function toBody(lot: Lot): HttpSchemas["LotResponse"] {
@@ -112,7 +113,7 @@ function readVersion(payload: Payload): number {
 }
 function routeId(value: unknown): string { return typeof value === "string" ? value : "" }
 
-export function createLotsRouter({ useCases, authenticate, protectCommand, log = console.error }: LotsRouterOptions): Router {
+export function createLotsRouter({ useCases, authenticate, protectCommand, log = event => console.error(event) }: LotsRouterOptions): Router {
   const router = Router()
   const withActor = (handler: (actor: Actor, request: Request, response: Response) => Promise<void>) =>
     async (request: Request, response: Response): Promise<void> => {

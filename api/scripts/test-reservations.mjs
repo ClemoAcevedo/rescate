@@ -74,6 +74,8 @@ const reservations = createReservationUseCases(createReservationRepository(pool)
 const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date())
 const expiries = createExpiryUseCases(createLotExpiryRepository(pool), () => {})
 const settle = promise => promise.then(value => ({ value }), error => ({ error }))
+// Los casos de uso llamados sin HTTP no tienen origen que limitar (K034).
+const anyOrigin = () => {}
 // Cada contendiente debe esperar nuestro bloqueo, directamente o detrás de otro contendiente.
 async function lockedRace(lotId, actions, whileBlocked = async () => {}) {
   const pending = []
@@ -250,7 +252,7 @@ try {
   for (const [i, racer] of racers.entries()) {
     const actions = [
       () => reservations.cancel({ userId: racer.userId }, racer.id),
-      () => reservations.confirmPickup(operator, raceLot, racer.id, racer.code, randomUUID()),
+      () => reservations.confirmPickup(operator, raceLot, racer.id, racer.code, randomUUID(), anyOrigin),
     ]
     const results = await lockedRace(raceLot, i % 2 ? actions.reverse() : actions)
     outcomes.push(i % 2 ? results.reverse() : results)
@@ -332,14 +334,14 @@ try {
     const created = command === 'reserve' ? null : await discovery.reserve(holder, timedLot, 1, randomUUID())
     const pickupCode = created && (await reservations.get(holder, created.id)).pickupCode
     if (pickupCode) issuedCodes.add(pickupCode)
-    if (command === 'pickup') assert.equal((await reservations.reviewPickup(operator, timedLot, pickupCode)).canConfirm, true)
+    if (command === 'pickup') assert.equal((await reservations.reviewPickup(operator, timedLot, pickupCode, anyOrigin)).canConfirm, true)
     const boundary = command === 'start' ? 'pickup_starts_at' : 'pickup_ends_at'
     await database.query(`UPDATE lots SET ${boundary} = date_trunc('milliseconds', clock_timestamp() + interval '1200 milliseconds')
       WHERE public_id = $1`, [timedLot])
     const key = randomUUID()
     const action = command === 'reserve' ? () => discovery.reserve(holder, timedLot, 1, key)
       : command === 'cancel' ? () => reservations.cancel(holder, created.id)
-      : () => reservations.confirmPickup(operator, timedLot, created.id, pickupCode, key)
+      : () => reservations.confirmPickup(operator, timedLot, created.id, pickupCode, key, anyOrigin)
     const [result] = await lockedRace(timedLot, [action], async () => {
       assert.equal((await database.query(`SELECT clock_timestamp() < ${boundary} AS before
         FROM lots WHERE public_id = $1`, [timedLot])).rows[0].before, true, `${command} debe bloquearse antes del límite`)
@@ -367,7 +369,7 @@ try {
   const timeoutCode = (await reservations.get(holder, timeoutReservation.id)).pickupCode
   issuedCodes.add(timeoutCode)
   const timeoutKey = randomUUID()
-  const pickupAfterTimeout = () => reservations.confirmPickup(operator, timeoutLot, timeoutReservation.id, timeoutCode, timeoutKey)
+  const pickupAfterTimeout = () => reservations.confirmPickup(operator, timeoutLot, timeoutReservation.id, timeoutCode, timeoutKey, anyOrigin)
   await lockedRace(timeoutLot, [pickupAfterTimeout], async ([attempt]) => {
     assert.equal((await attempt).error?.code, '55P03')
   })
@@ -384,19 +386,20 @@ try {
   const rollbackCode = (await reservations.get({ userId: holder.userId }, rollbackReservation.id)).pickupCode
   const repository = createReservationRepository(pool)
   const failing = createReservationUseCases({ ...repository,
-    withPickupTransaction: (...args) => {
-      const operate = args.pop()
-      return repository.withPickupTransaction(...args, (state, writer) => operate(state, {
-        deliver: async at => { await writer.deliver(at); throw new Error('fallo posterior a la entrega') } }))
-    },
+    withPickupAttempts: (operatorUserId, operate) => repository.withPickupAttempts(operatorUserId, (attempts, steps) =>
+      operate(attempts, { ...steps, confirm: (...args) => {
+        const confirm = args.pop()
+        return steps.confirm(...args, (state, writer) => confirm(state, {
+          deliver: async at => { await writer.deliver(at); throw new Error('fallo posterior a la entrega') } }))
+      } })),
   }, codes, () => new Date())
   const rollbackKey = randomUUID()
-  await assert.rejects(failing.confirmPickup({ userId: operator.userId }, rollbackLot, rollbackReservation.id, rollbackCode, rollbackKey),
+  await assert.rejects(failing.confirmPickup({ userId: operator.userId }, rollbackLot, rollbackReservation.id, rollbackCode, rollbackKey, anyOrigin),
     /fallo posterior/)
   assert.deepEqual([(await status(rollbackReservation.id)).status, (await status(rollbackReservation.id)).readable], ['confirmed', true])
   assert.deepEqual(await counters(rollbackLot), { f: 1, r: 1, e: 0, x: 0 })
   assert.equal((await database.query('SELECT count(*)::int AS n FROM deliveries WHERE idempotency_key = $1', [rollbackKey])).rows[0].n, 0)
-  const recovered = await reservations.confirmPickup({ userId: operator.userId }, rollbackLot, rollbackReservation.id, rollbackCode, rollbackKey)
+  const recovered = await reservations.confirmPickup({ userId: operator.userId }, rollbackLot, rollbackReservation.id, rollbackCode, rollbackKey, anyOrigin)
   assert.equal(recovered.quantity, 1)
   ok('fallo tras escribir revierte entrega, estado, código y contadores; la misma clave se puede reintentar')
 

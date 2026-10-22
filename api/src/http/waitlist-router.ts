@@ -7,6 +7,7 @@ import type { WaitlistUseCases } from '../application/waitlist/use-cases.js'
 import type { Authenticate } from './actor.js'
 import type { HttpSchemas } from './openapi.js'
 import { createActorRoute, id, InvalidInput, isUuid, readBody, readPage } from './reservations-router.js'
+import type { Log } from '../application/logging.js'
 
 const iso = (value: Date | null) => value === null ? null : value.toISOString()
 
@@ -30,7 +31,7 @@ function readJoin(value: unknown): { quantity: number; idempotencyKey: string } 
 }
 
 export function createWaitlistRouter(cases: WaitlistUseCases, authenticate: Authenticate,
-  protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = error => console.error(error)): Router {
+  protectCommand: (request: Request) => Promise<void>, log: Log = event => console.error(event)): Router {
   const router = Router()
   const withActor = createActorRoute(authenticate, protectCommand, log)
 

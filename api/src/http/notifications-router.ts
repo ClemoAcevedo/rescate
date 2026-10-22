@@ -7,6 +7,7 @@ import type { NotificationUseCases } from '../application/notifications/use-case
 import type { Authenticate } from './actor.js'
 import type { HttpSchemas } from './openapi.js'
 import { createActorRoute, id, readBody, readPage } from './reservations-router.js'
+import type { Log } from '../application/logging.js'
 
 function notificationBody(notification: StoredNotification): HttpSchemas['Notification'] {
   const { payload } = notification
@@ -17,7 +18,7 @@ function notificationBody(notification: StoredNotification): HttpSchemas['Notifi
 }
 
 export function createNotificationsRouter(cases: NotificationUseCases, authenticate: Authenticate,
-  protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = error => console.error(error)): Router {
+  protectCommand: (request: Request) => Promise<void>, log: Log = event => console.error(event)): Router {
   const router = Router()
   const withActor = createActorRoute(authenticate, protectCommand, log)
 

@@ -4,6 +4,8 @@ import { notificationNotFound } from '../errors.js'
 import type { Actor } from '../lots/ports.js'
 import type { NotificationRepository, OutboxRepository } from './ports.js'
 import { OUTBOX_BATCH_SIZE, OUTBOX_LEASE_MS, nextAttempt } from '../../domain/notifications.js'
+import { errorCode } from '../logging.js'
+import type { Log } from '../logging.js'
 
 export function createNotificationUseCases(repository: NotificationRepository, now: () => Date) {
   return {
@@ -26,7 +28,7 @@ export function createNotificationUseCases(repository: NotificationRepository, n
  * creciente los que fallen. Devuelve cuántos eventos tomó; 0 indica que no había trabajo.
  */
 export function createOutboxProcessor(outbox: OutboxRepository, now: () => Date,
-  random: () => number = Math.random, log: (event: Record<string, unknown>) => void = () => {}) {
+  random: () => number = Math.random, log: Log = () => {}) {
   return {
     async processNext(): Promise<number> {
       const at = now()
@@ -36,11 +38,10 @@ export function createOutboxProcessor(outbox: OutboxRepository, now: () => Date,
           await outbox.deliver(event, now())
         } catch (error) {
           // Sin SQL ni datos personales en el registro; el evento queda para reintento o revisión.
-          const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
-          const errorCode = /^[A-Z0-9_]{2,30}$/.test(code) ? code : 'INTERNAL'
+          const code = errorCode(error)
           const decision = nextAttempt(event.attempts, now(), random())
-          await outbox.release(event.id, 'retryAt' in decision ? decision.retryAt : null, errorCode)
-          log({ event: 'outbox_event_failed', outboxEventId: event.id, attempts: event.attempts, errorCode,
+          await outbox.release(event.id, 'retryAt' in decision ? decision.retryAt : null, code)
+          log({ event: 'outbox_event_failed', outboxEventId: event.id, attempts: event.attempts, errorCode: code,
             final: !('retryAt' in decision) })
         }
       }

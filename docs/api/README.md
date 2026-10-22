@@ -109,8 +109,9 @@ JSON, y los reintentos reproducen 201 con el mismo cuerpo.
 Las operaciones de [reservas](../reservas.md) devuelven el estado vigente al
 responder: una confirmada cuyo lote cerró se informa `expired`. El código de retiro
 solo aparece en `getReservation` y solo se envía en cuerpos JSON, por eso revisarlo
-usa POST aunque no cambie estado. Una reserva ajena responde 404, igual que una
-inexistente; un código inexistente, mal escrito o de otro lote también. `confirmPickup`
+usa POST aunque no cambie la reserva. Una reserva ajena responde 404, igual que una
+inexistente; un código inexistente, mal escrito o de otro lote también, y cuenta como
+fallo del operador ([límite de códigos](../seguridad.md#límites)). `confirmPickup`
 lleva `idempotencyKey` por operador ([ADR 0007](../adr/0007-codigo-de-retiro-y-transiciones.md));
 cancelar es idempotente por efecto y no necesita clave.
 
@@ -248,10 +249,9 @@ copiar el valor rechazado. No hay SQL, trazas, hashes, secretos ni claves de obj
 | 503 | `SERVICE_UNAVAILABLE` | Dependencia temporalmente indisponible |
 
 E1 H p. 20 fija JSON 16 KB (S02 concreta 16384 bytes) y descripción de 2000
-caracteres. H p. 21 fija 120 solicitudes/minuto/usuario con ráfaga 20 y
-3000/minuto/IP con ráfaga 100; login bloquea 15 minutos tras cinco fallos por cuenta
-en 15 minutos y admite hasta 30 intentos/IP en 15 minutos. Documentar 429 no
-implementa limitadores. 400/413 de errores originados fuera de Express deberán
+caracteres. H p. 21 fija los límites de solicitudes, login, códigos de
+retiro y mensajes que responden 429; cifras y dónde se cobra cada uno en
+[seguridad](../seguridad.md#límites). 400/413 de errores originados fuera de Express deberán
 revisarse también en el proxy cuando exista, sin filtrar diagnósticos internos.
 
 ## Decisiones, fuentes y puntos abiertos

@@ -2,7 +2,9 @@
 import { IdentityError, PasswordHashingCapacityError } from "../application/identity/errors.js"
 import { TrafficLimitError, TrafficCapacityError } from "./rate-limits.js"
 import type { Response } from "express"
-import { ApplicationError, ConcurrentUploadsError, InventoryDiscrepancyError } from "../application/errors.js"
+import { ApplicationError, ConcurrentUploadsError, InventoryDiscrepancyError, PickupReviewSuspendedError } from "../application/errors.js"
+import { errorCode } from "../application/logging.js"
+import type { Log } from "../application/logging.js"
 import { PhotoRuleError } from "../domain/photos.js"
 import { LotRuleError } from "../domain/lots.js"
 import { ReservationRuleError, ReservationTransitionError } from "../domain/reservations.js"
@@ -32,6 +34,7 @@ const errors = {
   pickup_code_not_found: [404, "NOT_FOUND", "El código no corresponde a una reserva de este lote."],
   waitlist_entry_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   notification_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
+  pickup_review_suspended: [429, "RATE_LIMITED", "Se suspendió la revisión de códigos por intentos fallidos. Intenta nuevamente después del tiempo indicado."],
 } as const
 const transitions = {
   cancelled: "La reserva fue cancelada.",
@@ -54,7 +57,8 @@ const fields: Record<string, string> = {
   latitude_out_of_range: "latitude", longitude_out_of_range: "longitude", time_zone_invalid: "timeZone",
   pickup_window_invalid: "pickupEndsAt", pickup_window_already_ended: "pickupEndsAt",
 }
-export function handleError(error: unknown, response: Response, log: (error: unknown) => void): void {
+/** `log` recibe solo eventos primitivos: el error original nunca llega al registro. */
+export function handleError(error: unknown, response: Response, log: Log): void {
   if (error instanceof IdentityError) {
     if (error.code === "invalid_input") sendError(response, 422, "VALIDATION_ERROR", "Revisa los campos indicados.", error.fields.map(field => ({
       path: field ? `/${field.replaceAll("~", "~0").replaceAll("/", "~1")}` : "", message: "Campo desconocido, ausente o inválido.",
@@ -87,7 +91,9 @@ export function handleError(error: unknown, response: Response, log: (error: unk
     else sendError(response, 409, "CONFLICT", error.reason === "photo_limit_reached"
       ? "El lote ya tiene tres fotos." : "El estado del lote no permite cambiar sus fotos.")
   } else if (error instanceof ApplicationError) {
-    if (error instanceof ConcurrentUploadsError) response.set("Retry-After", String(error.retryAfter))
+    if (error instanceof ConcurrentUploadsError || error instanceof PickupReviewSuspendedError) {
+      response.set("Retry-After", String(error.retryAfter))
+    }
     // El registro es la señal de revisión; el lote sigue bloqueado hasta corregirlo.
     if (error instanceof InventoryDiscrepancyError) log({ event: "inventory_discrepancy", lotId: error.lotId })
     const [status, code, message] = errors[error.code]
@@ -100,8 +106,8 @@ export function handleError(error: unknown, response: Response, log: (error: unk
         ? { path: "", message: "Hay fotos en carga, en validación o rechazadas; espera o quítalas antes de publicar." }
         : { path: `/${fields[violation] ?? ""}`, message: "El valor no cumple las reglas del lote." })))
   } else {
-    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
-    log({ event: "request_failed", code: /^[A-Z0-9]{2,20}$/.test(code) ? code : "INTERNAL" })
+    const code = errorCode(error)
+    log({ event: "request_failed", code })
     const message = error instanceof Error ? error.message : ""
     const connectionTimeout = ["timeout exceeded when trying to connect", "Connection terminated due to connection timeout"].includes(message)
     const unavailable = connectionTimeout || /^(08|53|57P0)/.test(code) || ["55000", "55P03", "57014", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND"].includes(code)

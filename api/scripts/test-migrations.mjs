@@ -23,6 +23,7 @@ const migrations = [
   '1791300000000_lot-expiry-claims',
   '1791400000000_notifications-outbox',
   '1791500000000_commitments-lot-index',
+  '1791600000000_pickup-code-attempts',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -371,9 +372,29 @@ try {
   assert.ok((await query("SELECT to_regclass('public.commitments_lot_idx') AS name"))[0].name)
   ok('K032: índice de compromisos por lote')
 
-  // K014, K022, los consentimientos y la cola solo agregan tablas: las previas conservan OID.
+  // K034: fallos de código por operador. Sin estado no hay fallo; instantes finitos.
+  const failure = 'INSERT INTO pickup_code_failures (user_id, failed_at) VALUES ($1, $2)'
+  await rejected('fallo de código sin estado del operador', failure, [consentUser, new Date()],
+    '23503', 'pickup_code_failures_user_id_fkey')
+  await query('INSERT INTO pickup_code_security_state (user_id) VALUES ($1)', [consentUser])
+  await rejected('fallo de código en un instante infinito', failure, [consentUser, 'infinity'],
+    '23514', 'pickup_code_failures_failed_at_check')
+  await rejected('suspensión sin término', 'UPDATE pickup_code_security_state SET blocked_until = $2 WHERE user_id = $1',
+    [consentUser, 'infinity'], '23514', 'pickup_code_security_state_blocked_until_check')
+  await rejected('estado de intentos duplicado', 'INSERT INTO pickup_code_security_state (user_id) VALUES ($1)',
+    [consentUser], '23505', 'pickup_code_security_state_pkey')
+  await query(failure, [consentUser, new Date()])
+  assert.ok((await query("SELECT to_regclass('public.pickup_code_failures_user_time_idx') AS name"))[0].name)
+  assert.deepEqual(await query(`SELECT column_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'pickup_code_failures' ORDER BY ordinal_position`),
+    [{ column_name: 'id' }, { column_name: 'user_id' }, { column_name: 'failed_at' }])
+  await query('DELETE FROM pickup_code_failures'); await query('DELETE FROM pickup_code_security_state')
+  ok('K034: fallos de código por operador con estado propio, sin código ni lote, e índice por operador e instante')
+
+  // K014, K022, los consentimientos, la cola, los avisos y K034 solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const withQueue = latest.filter(row => !['outbox_events', 'notifications'].includes(row.relname))
+  const withIndex = latest.filter(row => !['pickup_code_security_state', 'pickup_code_failures'].includes(row.relname))
+  const withQueue = withIndex.filter(row => !['outbox_events', 'notifications'].includes(row.relname))
   const withConsents = withQueue.filter(row => row.relname !== 'waitlist_entries')
   const withDeliveries = withConsents.filter(row => row.relname !== 'user_consents')
   const withPhotos = withDeliveries.filter(row => row.relname !== 'deliveries')
@@ -383,7 +404,8 @@ try {
   assert.ok(latest.some(row => row.relname === 'user_consents'))
   assert.ok(latest.some(row => row.relname === 'waitlist_entries'))
   assert.ok(latest.some(row => row.relname === 'outbox_events') && latest.some(row => row.relname === 'notifications'))
-  ok('K014, K022, consentimientos, cola y avisos agregan tablas sin recrear las existentes; el enum no recrea lots')
+  assert.ok(latest.some(row => row.relname === 'pickup_code_security_state') && latest.some(row => row.relname === 'pickup_code_failures'))
+  ok('K014, K022, consentimientos, cola, avisos y K034 agregan tablas sin recrear las existentes; el enum no recrea lots')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), latest)
@@ -397,9 +419,15 @@ try {
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
   run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.pickup_code_failures') AS name"))[0].name, null)
+  assert.equal((await query("SELECT to_regclass('public.pickup_code_security_state') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), withIndex)
+  assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
+  ok('rollback K034 retira solo los intentos de código; conserva las demás tablas y los compromisos')
+  run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.commitments_lot_idx') AS name"))[0].name, null)
   assert.ok((await query("SELECT to_regclass('public.commitments_lot_confirmed_idx') AS name"))[0].name)
-  assert.deepEqual(await snapshot(), latest)
+  assert.deepEqual(await snapshot(), withIndex)
   assert.deepEqual(await query('SELECT id, user_id, lot_id, quantity, status, created_at FROM commitments ORDER BY id'), data)
   ok('rollback K032 retira solo el índice de compromisos por lote')
   run('down', '1')
@@ -504,7 +532,8 @@ try {
   assert.deepEqual((await history()).map(row => row.name), migrations)
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
-  await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries', 'outbox_events', 'notifications'])
+  await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries', 'outbox_events', 'notifications',
+    'pickup_code_security_state', 'pickup_code_failures'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

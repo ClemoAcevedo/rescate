@@ -4,6 +4,8 @@
 // instante del vencimiento, no el del proceso.
 import { isDueToExpire } from '../../domain/lots.js'
 import type { LotExpiryRepository } from './ports.js'
+import { errorCode } from '../logging.js'
+import type { Log } from '../logging.js'
 
 /**
  * Concesión de un reclamo, intentos máximos por lote y espera base entre intentos. Un
@@ -17,14 +19,7 @@ export interface ExpiryResult {
   closedEntries: number
 }
 
-export type ExpiryLog = (event: Record<string, unknown>) => void
-
-function errorCode(error: unknown): string {
-  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
-  return /^[A-Z0-9_]{2,30}$/.test(code) ? code : 'INTERNAL'
-}
-
-export function createExpiryUseCases(repository: LotExpiryRepository, log: ExpiryLog,
+export function createExpiryUseCases(repository: LotExpiryRepository, log: Log,
   limits: typeof EXPIRY_LIMITS = EXPIRY_LIMITS) {
   /**
    * Registra lo vencido de un lote: ofertas cuya hora pasó y, si el lote cerró, su

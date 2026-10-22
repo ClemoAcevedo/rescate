@@ -13,6 +13,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Contrato HTTP | [OpenAPI S02](api/openapi.yaml) y [su guía](api/README.md) |
 | Dominio y requisitos | [Modelo](modelo-inicial.md), [casos de uso](casos-de-uso.md) y [trazabilidad](k013-trazabilidad.md) |
 | Identidad y sesiones | [Identidad](k008-identidad.md) |
+| Límites, aislamiento y registros | [Seguridad](seguridad.md) |
 | Lotes | [Lotes](lotes.md) |
 | Reservas, cancelación y retiro | [Reservas](reservas.md) |
 | Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |
@@ -39,6 +40,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0010](adr/0010-cola-fifo-y-ofertas.md) | Cola FIFO y ofertas en `waitlist_entries`; la cola se asienta bajo el bloqueo del lote en cada comando que libera o lee inventario |
 | [0011](adr/0011-vencimientos-con-concesion.md) | Vencimientos reclamados por lote con concesión y reintentos acotados; el cierre pasa todo F, O y R a X |
 | [0012](adr/0012-avisos-y-outbox.md) | Avisos internos con outbox transaccional: el evento nace con la transición y el worker genera un aviso por evento y destinatario |
+| [0013](adr/0013-limite-de-codigos-de-retiro.md) | Cinco códigos de retiro inválidos por operador en 15 minutos suspenden revisar y confirmar; fallos persistidos y serializados por operador |
 
 ## Entregas y evidencia
 

@@ -36,8 +36,10 @@ import { createNotificationRepository, createOutboxRepository } from "./infrastr
 import { createNotificationsRouter } from "./http/notifications-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
-import { createTrafficLimits } from "./http/rate-limits.js"
+import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
 import { handleError } from "./http/errors.js"
+import { errorCode } from "./application/logging.js"
+import type { Log } from "./application/logging.js"
 
 export interface Api { app: Express; close(): Promise<void> }
 export function readDatabaseUrl(environment: NodeJS.ProcessEnv): string {
@@ -101,9 +103,10 @@ export function readPhotoStorage(environment: NodeJS.ProcessEnv): ObjectStore | 
   })
 }
 
-export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
+/** `log` es el único sumidero de la API: recibe eventos primitivos (docs/seguridad.md). */
+export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log = event => console.error(event)): Api {
   const config = readAuthConfiguration(environment)
-  const pool = createPool({ connectionString: readDatabaseUrl(environment) })
+  const pool = createPool({ connectionString: readDatabaseUrl(environment), log })
   const identities = createIdentityUseCases({ identities: createIdentityRepository(pool),
     canonicalizer: createEmailCanonicalizer(pool), passwords: createPasswordHasher(), tokens: createSessionCredentials(),
     sessions: createSessionRepository(pool), security: createLoginSecurityRepository(pool),
@@ -111,29 +114,29 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
   const limits = createTrafficLimits()
   const authentication = createAuthentication(identities, createCsrfTokens(config.key), config.origins, limits)
   const lotsRouter = createLotsRouter({ useCases: createLotUseCases(createLotRepository(pool), () => new Date()),
-    authenticate: authentication.authenticate, protectCommand: authentication.protectCommand })
+    authenticate: authentication.authenticate, protectCommand: authentication.protectCommand, log })
   // La API autoriza, recibe y sirve; decodificar y transformar corresponde al worker.
   const photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects: readPhotoStorage(environment),
-    images: null, now: () => new Date(), log: event => console.error(event) })
+    images: null, now: () => new Date(), log })
   const photosRouter = createPhotosRouter({ useCases: photos, authenticate: authentication.authenticate,
-    protectCommand: authentication.protectCommand })
+    protectCommand: authentication.protectCommand, log })
   const codes = createPickupCodes(readPickupCodeKey(environment))
   const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date()),
-    authentication.authenticate, authentication.protectCommand)
+    authentication.authenticate, authentication.protectCommand, log)
   const reservationsRouter = createReservationsRouter(
     createReservationUseCases(createReservationRepository(pool), codes, () => new Date()),
-    authentication.authenticate, authentication.protectCommand)
+    authentication.authenticate, authentication.protectCommand, limits, log)
   const waitlistRouter = createWaitlistRouter(
     createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date()),
-    authentication.authenticate, authentication.protectCommand)
+    authentication.authenticate, authentication.protectCommand, log)
   const notificationsRouter = createNotificationsRouter(
     createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
-    authentication.authenticate, authentication.protectCommand)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
+    authentication.authenticate, authentication.protectCommand, log)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
-      try { limits.ip(req.ip ?? req.socket.remoteAddress ?? "unknown"); next() }
-      catch (error) { handleError(error, res, console.error) }
+      try { limits.ip(clientAddress(req)); next() }
+      catch (error) { handleError(error, res, log) }
     },
   }), close: () => pool.end() }
 }
@@ -148,14 +151,14 @@ export interface Worker { tasks: string[]; run(): Promise<void>; stop(): void }
  * para pruebas que mueven plazos sobre una base compartida y esperan vencimientos sin registrar.
  */
 export function createWorker(environment: NodeJS.ProcessEnv = process.env,
-  log: (event: Record<string, unknown>) => void = event => console.log(JSON.stringify(event))): Worker | null {
+  log: Log = event => console.log(JSON.stringify(event))): Worker | null {
   const expiriesSetting = environment.WORKER_EXPIRIES?.trim() ?? ""
   if (!["", "on", "off"].includes(expiriesSetting)) throw new Error("WORKER_EXPIRIES admite on u off")
   const objects = readPhotoStorage(environment)
   const databaseUrl = environment.DATABASE_URL?.trim()
   if (!databaseUrl) return null
   // Anexos H p. 20: dos conexiones para el trabajador.
-  const pool = createPool({ connectionString: databaseUrl, max: 2 })
+  const pool = createPool({ connectionString: databaseUrl, max: 2, log })
   const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log)
   const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
@@ -183,8 +186,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
           if (!expired && !processed && !delivered) await pause(2000)
         } catch (error) {
           // Sin SQL, rutas ni credenciales en el registro; se reintenta más tarde.
-          const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
-          log({ event: "worker_error", code: /^[A-Z0-9_]{2,30}$/.test(code) ? code : "INTERNAL" })
+          log({ event: "worker_error", code: errorCode(error) })
           await pause(5000)
         }
       }
