@@ -93,7 +93,7 @@ WEB_URL=http://localhost:5173 npm --prefix api run test:web:logout
 ```
 
 Esta prueba intercepta HTTP en Chromium: no requiere API ni PostgreSQL y no crea
-cuentas. Comprueba errores de red y 403, mensajes distintos y visibles, conservación
+cuentas. Abre el menú cuando la navegación está contraída para acceder a cerrar sesión. Comprueba errores de red y 403, mensajes distintos y visibles, conservación
 de sesión, ausencia de reintento automático y de promesas rechazadas sin manejar.
 Después reintenta y verifica que la sesión se conserva hasta recibir el 204.
 
