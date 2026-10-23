@@ -399,8 +399,22 @@ try {
   await page.unroute(/\/api\/lots\/[^/]+\/photos\/[^/]+\/(display|thumbnail)$/)
   ok('fotos: el detalle público muestra la foto; si la imagen falla, hay reemplazo y las condiciones siguen visibles')
 
+  // Forzar la carrera: el detalle público llega antes que la sesión real.
+  // Al resolver la sesión, LotDetail vuelve a cargar para el actor autenticado.
+  let releaseSession
+  const sessionReady = new Promise(resolve => { releaseSession = resolve })
+  const delayedSession = async route => {
+    const response = await route.fetch()
+    await sessionReady
+    await route.fulfill({ response })
+  }
+  await page.route('**/api/auth/session', delayedSession)
   await page.reload()
   const thumbs = page.getByRole('button', { name: /^Ver foto \d$/ })
+  await thumbs.nth(1).waitFor()
+  releaseSession()
+  await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).waitFor()
+  await page.unroute('**/api/auth/session', delayedSession)
   await thumbs.nth(1).waitFor()
   assert.equal(await thumbs.count(), 2)
   assert.equal(await thumbs.nth(0).getAttribute('aria-pressed'), 'true')
