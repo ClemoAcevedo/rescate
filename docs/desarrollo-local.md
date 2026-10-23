@@ -168,6 +168,34 @@ El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incl
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 `continue-on-error`. Los comandos del job Compose están en el workflow.
 
+## Revisión de PR con Copilot
+
+La regla [Copilot PR Review](https://github.com/ClemoAcevedo/rescate/rules/24928011)
+solicita una revisión al abrir un PR listo para revisión y al subir nuevos commits,
+en todas las ramas. Los borradores quedan excluidos hasta marcarlos listos.
+GitHub condiciona la revisión automática al acceso del autor a Copilot code review
+y a su cuota disponible; activar la regla no concede una licencia al equipo.
+Ver [disponibilidad y revisiones automáticas de GitHub](https://docs.github.com/en/copilot/concepts/agents/code-review).
+
+Si la solicitud no genera una revisión ni una ejecución de Copilot, comprobar
+el plan y la cuota en [la configuración de Copilot](https://github.com/settings/copilot).
+Copilot Free no incluye reviews de PR. Para una cuenta personal se necesita un
+plan con esa función, como Copilot Student para estudiantes verificados.
+
+Las instrucciones del reviewer están en
+[`.github/copilot-instructions.md`](../.github/copilot-instructions.md) y remiten a
+las reglas compartidas de `AGENTS.md`. La revisión del bot complementa la revisión
+de otro integrante exigida por la protección de ramas.
+
+Si no aparece una revisión, una persona con acceso a Copilot code review puede
+solicitarla desde **Reviewers → Copilot → Request**, también en PR de otros autores.
+Para repetir una revisión, usar el mismo control después del nuevo commit.
+Ver [solicitud y repetición de revisiones](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-code-review).
+
+La comprobación es una revisión publicada por `copilot-pull-request-reviewer[bot]`
+sobre el commit vigente del PR. Una solicitud pendiente o un job de Actions verde
+por sí solos no acreditan que el bot haya publicado su revisión.
+
 ## Evidencia y aceptación en el PR
 
 Consulta [el registro de verificación K006](evidencia/k006.md), con resultados
