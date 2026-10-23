@@ -26,6 +26,7 @@
     "api:types:check": "node scripts/generate-http-types.mjs --check",
     "db:test:auth": "npm run build && node --import tsx --env-file-if-exists=.env scripts/test-auth.mjs",
     "db:test:auth:compose": "node scripts/test-auth-compose.mjs",
+    "test:web:responsive": "node scripts/test-web-responsive.mjs",
     "test:web:accessibility": "node scripts/test-web-accessibility.mjs",
     "test:web:auth": "node scripts/test-web-auth.mjs",
     "test:deploy": "node scripts/test-deploy.mjs",

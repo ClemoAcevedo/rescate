@@ -37,6 +37,19 @@ Para revisión manual, repetir los cinco recorridos siguientes en ambos anchos:
 - Comprobar que conservar devuelve el foco a cancelar y que confirmar lo lleva al
   resultado. Navegar a otra pantalla lleva el foco al contenido principal.
 
+## Distribución adaptable
+
+La cabecera usa menú hasta 1280 px para conservar accesibles todos los enlaces del
+operador. Las tarjetas pasan de una columna en móvil a dos o tres según el espacio,
+con un mínimo de 18 rem cuando cabe. El panel del lote se apila bajo la galería
+hasta 1024 px; en escritorio se sitúa a su lado.
+
+Con Vite iniciado, `npm --prefix api run test:web:responsive` comprueba cabecera,
+menú, columnas y dimensiones del panel de 320 a 1920 px con HTTP controlado.
+Redimensiona la misma página en ambos sentidos y verifica que las acciones quedan
+dentro de sus contenedores. Se incluye en Compose. La revisión visual y con zoom
+complementa estas aserciones de distribución.
+
 ## Protocolo de cinco recorridos con participantes
 
 Reclutar cinco personas que no hayan implementado la aplicación. Cada una realiza

@@ -260,7 +260,8 @@ lo cambia.
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
   avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
-  1366 px y [protocolo de cinco recorridos](docs/accesibilidad.md) (K033). La medición
+  1366 px, distribución y menú de operador de 320 a 1920 px y
+  [protocolo de cinco recorridos](docs/accesibilidad.md) (K033). La medición
   de comprensión con cinco participantes requiere ejecutar las sesiones y registrar sus resultados.
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote

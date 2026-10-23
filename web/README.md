@@ -149,3 +149,8 @@ El [protocolo de accesibilidad y comprensión](../docs/accesibilidad.md) reúne 
 revisión manual y los cinco recorridos con participantes ajenos a la implementación.
 Con Vite iniciado, `npm --prefix api run test:web:accessibility` comprueba teclado,
 foco, etiquetas y desborde a 360 y 1366 px con HTTP controlado.
+
+La navegación se contrae también en tablet; las tarjetas ajustan el número de
+columnas al espacio y el panel de reserva se apila hasta 1024 px. Con Vite iniciado,
+`npm --prefix api run test:web:responsive` comprueba la distribución de 320 a
+1920 px, incluida la cabecera del operador y el redimensionado sin recargar.
