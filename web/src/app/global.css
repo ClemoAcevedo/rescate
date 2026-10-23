@@ -600,3 +600,17 @@ code, kbd, samp { font-family: var(--font-mono); }
 .reservation-detail { display: grid; gap: var(--sp-3); margin-block: var(--sp-4); }
 .pickup-code { padding: var(--sp-4); background: var(--surface-brand-soft); border-radius: var(--radius-md); }
 .pickup-code p { font-family: var(--font-mono); font-size: var(--fs-display-md); letter-spacing: var(--ls-caps); overflow-wrap: anywhere; }
+
+/* Acceso directo al contenido para navegación por teclado. */
+.skip-link {
+  position: absolute;
+  z-index: 10;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-card);
+  border: var(--border-width-strong) solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: translateY(0); }

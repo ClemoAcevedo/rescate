@@ -139,3 +139,13 @@ respuestas perdidas en [reservas](../docs/reservas.md#vista-del-titular).
 Con Vite iniciado sin mocks de identidad, `npm --prefix api run test:web:reservations`
 prueba el flujo de navegador con respuestas HTTP controladas. `test:web:compose`
 lo incluye junto con los recorridos reales de reserva y cancelación.
+
+## Accesibilidad y claridad
+
+El enlace «Saltar al contenido principal» evita repetir la cabecera. La navegación
+entre rutas enfoca el contenido; los resultados de reserva, cancelación y acciones
+sobre ofertas reciben el foco. Conservar una reserva devuelve el foco a cancelar.
+El [protocolo de accesibilidad y comprensión](../docs/accesibilidad.md) reúne la
+revisión manual y los cinco recorridos con participantes ajenos a la implementación.
+Con Vite iniciado, `npm --prefix api run test:web:accessibility` comprueba teclado,
+foco, etiquetas y desborde a 360 y 1366 px con HTTP controlado.

@@ -22,6 +22,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
 | Rendimiento y carga | [Rendimiento](rendimiento.md) |
+| Accesibilidad y comprensión | [Revisión y protocolo](accesibilidad.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 
 ## Decisiones (ADR)
