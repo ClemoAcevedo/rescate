@@ -19,7 +19,8 @@ El recorrido usa respuestas HTTP controladas, Tab y Enter a 360 × 900 y
 1366 × 900 px, con movimiento reducido. Comprueba etiquetas de filtros y cantidad,
 acceso directo al contenido, foco al navegar y al recibir resultados, reserva,
 conservar/cancelar, espera y aceptación de oferta parcial, ausencia de desborde y
-Escape del menú móvil. Se incluye en `test:web:compose`. Las pruebas de
+Escape del menú móvil. Las aserciones de foco esperan la actualización de React y
+el siguiente frame sin enfocar controles desde la prueba. Se incluye en `test:web:compose`. Las pruebas de
 `test:web:reservations` y `test:web:waitlist` cubren además respuestas perdidas,
 errores, vencimiento y recuperación. Las pruebas con API y PostgreSQL reales
 se ejecutan mediante [Compose](desarrollo-local.md).

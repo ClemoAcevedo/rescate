@@ -48,13 +48,21 @@ try {
       await tabTo(page.getByRole(role, { name, exact: true }))
       await page.keyboard.press('Enter')
     }
+    async function expectFocus(locator) {
+      // Esperar el efecto de React o requestAnimationFrame sin mover el foco desde el test.
+      await locator.waitFor({ state: 'visible' })
+      const element = await locator.elementHandle()
+      try {
+        await page.waitForFunction(el => el === document.activeElement, element, { timeout: 3000 })
+      } finally { await element.dispose() }
+    }
     async function fits() {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `Sin desborde a ${width}`)
     }
     await page.goto(base + '/lotes')
     await page.getByRole('heading', { name: 'Pack de panes' }).waitFor()
     await activate('link', 'Saltar al contenido principal')
-    assert.equal(await page.locator('main').evaluate(el => el === document.activeElement), true)
+    await expectFocus(page.locator('main'))
     await tabTo(page.getByLabel('Categoría', { exact: true }))
     await page.keyboard.type('Panadería')
     await activate('button', 'Buscar lotes')
@@ -62,25 +70,24 @@ try {
     await fits()
     await activate('link', 'Pack de panes')
     await page.getByLabel('Cantidad de packs (obligatorio)', { exact: true }).waitFor()
-    assert.equal(await page.locator('main').evaluate(el => el === document.activeElement), true)
+    await expectFocus(page.locator('main'))
     await fits()
     await activate('button', 'Confirmar reserva')
     await page.getByRole('heading', { name: 'Solicitud registrada por 1 pack' }).waitFor()
-    assert.equal(await page.locator('.reservation-confirmation').evaluate(el => el === document.activeElement), true)
+    await expectFocus(page.locator('.reservation-confirmation'))
     await activate('link', 'Ver mi reserva')
     await page.getByText(current.pickupCode, { exact: true }).waitFor()
     await fits()
     await activate('button', 'Cancelar reserva')
     const confirm = page.getByRole('button', { name: 'Confirmar cancelación', exact: true })
-    await confirm.waitFor()
-    assert.equal(await confirm.evaluate(el => el === document.activeElement), true)
+    await expectFocus(confirm)
     await activate('button', 'Conservar reserva')
-    assert.equal(await page.getByRole('button', { name: 'Cancelar reserva', exact: true }).evaluate(el => el === document.activeElement), true)
+    await expectFocus(page.getByRole('button', { name: 'Cancelar reserva', exact: true }))
     await page.keyboard.press('Enter')
-    await confirm.waitFor()
+    await expectFocus(confirm)
     await page.keyboard.press('Enter')
     await page.getByText('Cancelada', { exact: true }).waitFor()
-    assert.equal(await page.locator('.reservation-result').evaluate(el => el === document.activeElement), true)
+    await expectFocus(page.locator('.reservation-result'))
     assert.equal(await page.locator('.pickup-code').count(), 0)
     await fits()
     await page.goto(base + '/espera/w_test')
@@ -100,7 +107,7 @@ try {
       await activate('button', 'Abrir menú')
       await tabTo(page.getByRole('link', { name: 'Mis esperas', exact: true }))
       await page.keyboard.press('Escape')
-      assert.equal(await page.getByRole('button', { name: 'Abrir menú' }).evaluate(el => el === document.activeElement), true)
+      await expectFocus(page.getByRole('button', { name: 'Abrir menú' }))
     }
     await fits()
     assert.deepEqual(errors, [])
