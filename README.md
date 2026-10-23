@@ -261,8 +261,10 @@ lo cambia.
   avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
   1366 px, distribución y menú de operador de 320 a 1920 px y
-  [protocolo de cinco recorridos](docs/accesibilidad.md) (K033). La medición
-  de comprensión con cinco participantes requiere ejecutar las sesiones y registrar sus resultados.
+  [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
+  de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para
+  medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
+  ajenas a la implementación.
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,

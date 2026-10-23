@@ -1,112 +1,106 @@
 # Accesibilidad y claridad de estados
 
-La revisión cubre exploración, reserva directa, cancelación, espera y oferta.
+K033 revisa teclado, foco, etiquetas y pantallas a **360 y 1366 px**, con ausencia
+de bloqueos en explorar, reservar y cancelar. Incluye la preparación de un protocolo
+de cinco recorridos con personas ajenas a la implementación para medir comprensión
+de espera, oferta y reserva y registrar obstáculos.
+
 [Reservas](reservas.md) y [cola de espera](cola-de-espera.md) explican las reglas;
 [OpenAPI](api/openapi.yaml) determina las respuestas del servidor.
 
-## Revisión técnica reproducible
+## Verificación exclusiva de K033
 
 Con las dependencias de `api/` y `web/` y Chromium de Playwright instalados,
 iniciar Vite sin mocks de identidad y ejecutar:
 
 ```bash
+# Terminal 1, desde la raíz:
 npm --prefix web run dev
-# En otra terminal:
-WEB_URL=http://localhost:5173 npm --prefix api run test:web:accessibility
+# Terminal 2, desde la raíz:
+WEB_URL=http://localhost:5173 npm --prefix api run test:web:k033
 ```
 
-El recorrido usa respuestas HTTP controladas, Tab y Enter a 360 × 900 y
-1366 × 900 px, con movimiento reducido. Comprueba etiquetas de filtros y cantidad,
-acceso directo al contenido, foco al navegar y al recibir resultados, reserva,
-conservar/cancelar, espera y aceptación de oferta parcial, ausencia de desborde y
-Escape del menú móvil. Las aserciones de foco esperan la actualización de React y
-el siguiente frame sin enfocar controles desde la prueba. Se incluye en `test:web:compose`. Las pruebas de
-`test:web:reservations` y `test:web:waitlist` cubren además respuestas perdidas,
-errores, vencimiento y recuperación. Las pruebas con API y PostgreSQL reales
-se ejecutan mediante [Compose](desarrollo-local.md).
+Usar en `WEB_URL` el esquema y puerto que indique Vite; por ejemplo,
+`https://localhost:5174` si se inició con HTTPS en ese puerto.
 
-Para revisión manual, repetir los cinco recorridos siguientes en ambos anchos:
+El comando ejecuta únicamente `test:web:accessibility`, con HTTP controlado;
+requiere Vite, sin API, PostgreSQL ni worker. Recorre exploración, reserva y
+cancelación con teclado a 360 × 900 y 1366 × 900 px. Comprueba etiquetas de filtros
+y cantidad, foco visible y destino del foco al navegar y recibir resultados,
+conservar/cancelar, ausencia de desborde y Escape del menú móvil. También presenta
+espera, oferta y reserva para comprobar sus mensajes y la navegación entre estados.
+Las aserciones esperan la actualización de React sin enfocar controles desde el test.
 
-- Usar Tab y Shift+Tab: todos los controles se alcanzan en orden comprensible,
-  con foco visible, sin trampas ni controles ocultos enfocables. Activar enlaces
-  con Enter y botones con Enter/Espacio; cerrar el menú con Escape.
-- Verificar etiquetas visibles asociadas, nombres de botones, errores y resultados
-  con lector de pantalla; el contador de segundos no debe anunciarse cada segundo.
-- Revisar que el texto, código, fechas y botones no queden cortados ni se superpongan;
-  repetir con zoom al 200 %. El significado de un estado debe entenderse sin color.
-- Comprobar que conservar devuelve el foco a cancelar y que confirmar lo lleva al
-  resultado. Navegar a otra pantalla lleva el foco al contenido principal.
+Para la revisión manual, recorrer explorar, reservar y cancelar en ambos anchos:
 
-## Distribución adaptable
+- Usar Tab y Shift+Tab: controles alcanzables en orden comprensible, foco visible
+  y sin trampas. Activar enlaces con Enter y botones con Enter/Espacio; cerrar el
+  menú con Escape.
+- Verificar etiquetas visibles asociadas a filtros y cantidad, nombres de botones
+  y texto de resultados y estados.
+- Comprobar que texto, código, fechas y acciones no queden cortados ni superpuestos.
+- Abrir cancelación, conservar y volver a cancelar: el foco llega a la confirmación,
+  vuelve a cancelar al conservar y llega al resultado tras confirmar.
 
-La cabecera usa menú hasta 1280 px para conservar accesibles todos los enlaces del
-operador. Las tarjetas pasan de una columna en móvil a dos o tres según el espacio,
-con un mínimo de 18 rem cuando cabe. El panel del lote se apila bajo la galería
-hasta 1024 px; en escritorio se sitúa a su lado.
+La evidencia del PR distingue el comando ejecutado, la revisión manual realizada y
+el protocolo preparado. K033 pide preparar el protocolo; no fija un número de
+participantes ni exige ejecutar las sesiones para cerrar la tarjeta.
 
-Con Vite iniciado, `npm --prefix api run test:web:responsive` comprueba cabecera,
-menú, columnas y dimensiones del panel de 320 a 1920 px con HTTP controlado.
-Redimensiona la misma página en ambos sentidos y verifica que las acciones quedan
-dentro de sus contenedores. Se incluye en Compose. La revisión visual y con zoom
-complementa estas aserciones de distribución.
+## Distribución y regresiones independientes
 
-## Protocolo de cinco recorridos con participantes
+La cabecera usa menú hasta 1280 px. Las tarjetas ajustan columnas al espacio y el
+panel del lote se apila bajo la galería hasta 1024 px; en escritorio va a su lado.
+`test:web:responsive` conserva la regresión ampliada de 320 a 1920 px.
+`test:web:compose` conserva la suite general, incluidos backend, fotos, reservas,
+cola y worker. Ambas pruebas son independientes de la verificación exclusiva de K033.
 
-Reclutar cinco personas que no hayan implementado la aplicación. Cada una realiza
-los cinco recorridos, en una sesión individual de unos 30 minutos. Asignar 360 px
-a P01/P03/P05 y 1366 px a P02/P04; alternar teclado y dispositivo apuntador,
-con al menos una sesión completa solo con teclado. Registrar familiaridad con
-aplicaciones y tecnología de asistencia usada, sin solicitar diagnósticos.
+## Protocolo de cinco recorridos
 
-Usar cuentas y lotes ficticios en un entorno de prueba HTTPS con API, base y worker
-activos. Preparar un lote disponible, otro agotado con cola y una oferta parcial
-vigente por 4 de 10 packs. Para producirla, reservar el stock con otra cuenta,
-incorporar al participante a la espera y cancelar una reserva de 4 packs desde la cuenta de apoyo.
-Mantener suficiente ventana de retiro y plazo de oferta para la sesión. Preparar
-otra oferta para rechazar o dejar vencer. Separar cuentas y datos por participante;
-no usar reservas reales ni interceptaciones HTTP para medir comprensión.
+Invitar a personas ajenas a la implementación. Preparar sesiones a 360 o 1366 px
+para observar ambos anchos. El moderador lee la consigna sin indicar botones,
+observa y registra obstáculos antes de ayudar.
+
+Usar cuentas y lotes ficticios en una instancia HTTPS de prueba con sus servicios
+activos. Preparar un lote disponible y otro agotado con cola. Para producir una
+oferta parcial por 4 de 10 packs, reservar los 4 packs con una cuenta de apoyo,
+incorporar al participante a la espera por 10 y cancelar la reserva de apoyo.
+Conservar suficiente ventana de retiro y generar la oferta justo antes de revisarla.
+Separar cuentas y datos por participante.
 
 Explicar: «Estamos evaluando la aplicación. Piensa en voz alta; puedes detenerte
-cuando quieras». Pedir consentimiento para notas y, separadamente, grabación.
-Usar identificadores P01–P05; no registrar contraseñas ni códigos de retiro.
-El moderador lee la tarea, observa sin indicar botones y solo ayuda tras registrar
-el bloqueo. Medir desde la lectura hasta que la persona declara haber terminado.
+cuando quieras». Pedir consentimiento para notas y, separadamente, para grabación
+si se utiliza. Identificar participantes como P01, P02, etc., sin registrar
+contraseñas ni códigos de retiro.
 
-| Recorrido: consigna neutral | Preguntas al terminar | Respuesta esperada para puntuar |
+| Recorrido: consigna neutral | Preguntas de comprensión | Respuesta esperada |
 | --- | --- | --- |
-| 1. Encuentra un pack que puedas retirar y averigua dónde y cuándo. | ¿Cuántos packs puedes pedir? ¿Dónde y hasta cuándo retirarías? | Distingue stock libre de cantidad publicada e identifica dirección y ventana. |
-| 2. Consigue un pack del lote disponible y encuentra lo necesario para retirarlo. | ¿Ya tienes una reserva? ¿Qué prueba lo confirma? ¿Qué presentarías y cuándo? | Identifica reserva confirmada, cantidad, código y ventana en el detalle vigente. |
-| 3. Ya no puedes ir. Primero revisa cómo desistir sin perder la reserva; después cancélala. | ¿Qué ocurrió con los packs y con el código? ¿Podrías usarlo aún? | Conservar mantiene la reserva; cancelación confirmada libera packs e invalida el código. |
-| 4. Necesitas 10 packs del lote agotado. Averigua cómo esperar y consulta tu situación. | ¿Tienes packs asegurados? ¿Qué significa tu posición? ¿Qué debe pasar para reservar? | Espera sin reserva ni packs retenidos; orden de cola y futura oferta que debe aceptar. |
-| 5. Recibiste una oferta de 4 de los 10 packs. Revísala y decide aceptarla. Después revisa otra oferta que termina. | Antes de aceptar: ¿ya hay reserva y hasta cuándo puedes decidir? Después: ¿cuántos reservaste y qué pasa con los otros 6? Al rechazar/vencer: ¿sigues esperando? | Oferta con plazo, aún sin reserva; aceptación explícita crea reserva por 4 y cierra solicitud sin saldo ni prioridad; rechazo/vencimiento cierra sin reingreso automático. |
+| 1. Encuentra un pack que puedas retirar y averigua dónde y cuándo. | ¿Cuántos packs puedes pedir? ¿Dónde y hasta cuándo retirarías? | Identifica disponibilidad, dirección y ventana. |
+| 2. Consigue un pack del lote disponible y encuentra lo necesario para retirarlo. | ¿Ya tienes una reserva? ¿Qué lo confirma? ¿Qué presentarías y cuándo? | Identifica reserva confirmada, cantidad, código y ventana en el detalle vigente. |
+| 3. Ya no puedes ir. Revisa cómo desistir sin perder la reserva y después cancélala. | ¿Qué ocurrió al conservar? ¿Qué cambió al cancelar? ¿El código sigue sirviendo? | Conservar mantiene la reserva; la cancelación confirmada invalida el código y libera los packs. |
+| 4. Necesitas 10 packs del lote agotado. Averigua cómo esperar y consulta tu situación. | ¿Tienes packs asegurados? ¿Qué significa tu posición? ¿Qué falta para reservar? | La espera no crea reserva ni retiene packs; requiere recibir y aceptar una oferta. |
+| 5. Recibiste una oferta de 4 de los 10 packs. Revísala, acéptala y consulta el resultado. | Antes: ¿ya tienes reserva y hasta cuándo puedes decidir? Después: ¿cuántos reservaste y qué ocurre con los otros 6? | La oferta tiene plazo y requiere aceptación; aceptar crea reserva por 4 y cierra la solicitud sin saldo ni prioridad por los restantes. |
 
-En el recorrido 5, preguntar antes de aceptar sin explicar el significado del estado.
-Para la última parte, alternar rechazo (P01/P03/P05) y vencimiento (P02/P04).
-Si la persona responde mal, registrar su respuesta antes de aclararla.
+Preguntar antes de explicar el significado del estado. Registrar la respuesta
+original antes de cualquier aclaración.
 
-## Registro y evaluación
+## Registro de comprensión y obstáculos
 
-Copiar esta ficha por participante y recorrido a la descripción del PR o al registro
-de la sesión enlazado desde el PR; conservar los resultados fuera de `docs/`.
-Los espacios vacíos son datos por recoger, no resultados satisfactorios.
+Copiar esta ficha por participante y recorrido al registro de la sesión enlazado
+desde el PR. Los campos vacíos corresponden a datos por recoger.
 
 | Campo | Valor a registrar |
 | --- | --- |
 | Participante / recorrido / ancho / navegador / modo de entrada | |
-| Tiempo / completó sin ayuda, con ayuda o no completó | |
+| Resultado | Completó sin ayuda / con ayuda / no completó |
+| Respuestas textuales | |
 | Comprensión de espera / oferta / reserva | 0 = incorrecta, 1 = parcial, 2 = correcta sin explicación; N/A si no se observa |
-| Respuesta textual a cada pregunta | |
 | Obstáculo / pantalla y paso / comportamiento observado | |
 | Severidad / ayuda entregada / recuperación | Bloqueo = no puede continuar; mayor = error de estado o requiere ayuda; menor = demora recuperable |
-| Hallazgo / issue / corrección / repetición del recorrido | |
 
-Informar por recorrido éxitos sin ayuda sobre cinco, tiempos individuales y mediana,
-ayudas y obstáculos por severidad. Para cada estado informar puntuaciones y número
-de respuestas correctas sobre las personas que lo observaron; no convertir N/A en 0.
-Una muestra de cinco sirve para detectar problemas, no para estimar a toda la población.
+Al ejecutar sesiones, informar resultados sobre el número real de participantes,
+con respuestas y obstáculos por recorrido. Mantener N/A separado de las respuestas
+incorrectas. Guardar las fichas anonimizadas fuera de `docs/` y enlazarlas desde el PR.
 
-El cierre exige cero bloqueos abiertos en explorar, reservar y cancelar en ambos
-anchos. Toda confusión entre espera, oferta y reserva se registra, se corrige y se
-vuelve a evaluar con la misma consigna. Adjuntar al PR los checks ejecutados y las
-fichas anonimizadas; enlazar issues para otros obstáculos. La automatización verifica
-interacciones, mientras las sesiones aportan la medición de comprensión.
+El cierre de K033 reúne la revisión de teclado, foco, etiquetas y pantallas a ambos
+anchos, cero bloqueos en explorar, reservar y cancelar y este protocolo preparado
+con cinco recorridos, medición de comprensión y registro de obstáculos.
