@@ -130,6 +130,7 @@ function Detail({ id }: { id: string }) {
   }, [load])
   const deadline = entry ? Math.min(Date.parse(entry.lot.pickupEndsAt), entry.offerExpiresAt ? Date.parse(entry.offerExpiresAt) : Infinity) : 0
   const closed = deadline <= now
+  const outcomeRef = useRef<HTMLDivElement>(null)
   async function command(action: 'accept' | 'decline' | 'leave') {
     if (busy.current || loading || uncertain || !csrfToken || !entry || Date.now() >= deadline) return
     if (action === 'leave' ? entry.status !== 'waiting' : entry.status !== 'offered') return
@@ -142,14 +143,17 @@ function Detail({ id }: { id: string }) {
       if (e instanceof HttpError && e.status === 401) void refreshSession()
     } finally {
       busy.current = false
-      if (version === generation.current.value) setSending(false)
+      if (version === generation.current.value) {
+        setSending(false)
+        requestAnimationFrame(() => outcomeRef.current?.focus())
+      }
     }
   }
   const offered = entry?.status === 'offered' && !closed
   return <section className="reservation-detail-content" aria-busy={loading || sending}>
     {loading && <Alert role="status">Consultando estado vigente…</Alert>}
     {message && <Alert role="alert" tone="warning">{message}</Alert>}
-    {entry && <Card className="reservation-detail"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge>
+    {entry && <Card className="reservation-detail"><div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
       <h2>{lotTitle(entry.lot.description)}</h2><p>{entry.lot.description}</p>
       <dl className="reservation-detail__facts"><div><dt>Cantidad solicitada</dt><dd>{entry.requestedQuantity} packs</dd></div>{entry.offeredQuantity !== null && <div><dt>Cantidad ofrecida</dt><dd>{entry.offeredQuantity} packs</dd></div>}<div><dt>Lugar de retiro</dt><dd>{entry.lot.address}</dd></div><div><dt>Ventana de retiro</dt><dd>{formatWindow(entry.lot.pickupStartsAt, entry.lot.pickupEndsAt, entry.lot.timeZone)} ({entry.lot.timeZone})</dd></div></dl>
       <p>{entry.lot.conditions ?? 'Sin condiciones adicionales.'}</p>

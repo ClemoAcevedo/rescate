@@ -38,6 +38,12 @@ async function browserFor(label) {
   return { label, context, call, page, errors }
 }
 
+async function openNotifications(page) {
+  const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+  if (await menu.isVisible()) await menu.click()
+  await page.getByRole('link', { name: /^Avisos/ }).click()
+}
+
 const workers = []
 function startWorker() {
   const { PHOTO_STORAGE: _storage, WORKER_EXPIRIES: _expiries, ...env } = process.env
@@ -127,13 +133,13 @@ try {
   ok('worker reiniciado: retoma el lote, la oferta pasa a Cata y cada una recibe su aviso')
 
   // Cata entra por su aviso, acepta y ve su código de retiro.
-  await cata.page.getByRole('link', { name: /^Avisos/ }).click()
+  await openNotifications(cata.page)
   await cata.page.getByRole('article', { name: 'Tienes una oferta por 2 packs' }).getByRole('button', { name: 'Ver oferta' }).click()
   await cata.page.getByRole('button', { name: 'Aceptar explícitamente 2 packs' }).click()
   await cata.page.getByText('Oferta aceptada', { exact: true }).waitFor()
   await cata.page.getByRole('link', { name: 'Consultar mi reserva y código de retiro' }).click()
   await cata.page.locator('.pickup-code').waitFor()
-  await bea.page.getByRole('link', { name: /^Avisos/ }).click()
+  await openNotifications(bea.page)
   await bea.page.getByRole('article', { name: 'Tu oferta venció' }).getByRole('button', { name: 'Ver solicitud' }).click()
   await bea.page.getByText('No puedes aceptar una oferta vencida', { exact: false }).waitFor()
   assert.deepEqual(await counters(), { f: 0, o: 0, r: 2, x: 0 })

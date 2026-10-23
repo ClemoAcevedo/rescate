@@ -66,6 +66,7 @@ Probar teclado, 360/1366 px y movimiento reducido al cambiar interacciones.
 
 Solo tema claro. Fuentes locales compatibles con el diseño: Trebuchet/Helvetica
 para títulos, Helvetica/Arial para interfaz y monospace de sistema; no se cargan
-Bricolage Grotesque, Public Sans ni IBM Plex Mono desde Google. El único breakpoint
-de aplicación sigue siendo 48 rem en `global.css`; no hay un token CSS ficticio
-para media queries. No introducir una galería o framework de demos sin necesidad.
+Bricolage Grotesque, Public Sans ni IBM Plex Mono desde Google. En `global.css`, el contenido móvil cambia a 48 rem, el panel del lote se apila
+hasta 64 rem y la navegación se contrae hasta 80 rem para admitir todos los enlaces
+del operador. Las tarjetas usan columnas según su ancho mínimo; no hay un token
+CSS ficticio para media queries. No introducir una galería o framework de demos sin necesidad.
