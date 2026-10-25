@@ -7,6 +7,7 @@ import type {
 import type { WaitlistStatus } from '../../domain/waitlist.js'
 import { isAssignable } from '../../domain/waitlist.js'
 import { lockIntent, lockLot } from './lot-lock.js'
+import { appendEvent } from './outbox.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
 import { lotReconciledSql, settleQueue } from './waitlist-queue.js'
@@ -75,8 +76,9 @@ export function createWaitlistRepository(pool: Pool): WaitlistRepository {
           `SELECT ${entryColumns} ${entryFrom} WHERE e.user_id = $1 AND e.idempotency_key = $2`, [userId, key])
         if (prior.rows[0]) return operate({ existing: { ...toEntry(prior.rows[0]), lotId: prior.rows[0].lot_id } }, unavailable)
         const locked = await lockLot(client, lotId)
+        // Vencido ya registrado (K028) responde igual que cerrado sin registrar.
         const published = locked && await client.query(
-          "SELECT 1 FROM public.lots WHERE id = $1 AND status = 'published'", [locked.lotId])
+          "SELECT 1 FROM public.lots WHERE id = $1 AND status IN ('published', 'expired')", [locked.lotId])
         if (!locked || published?.rowCount !== 1) return operate({ existing: null, lot: null }, unavailable)
         // Una oferta vencida aún retiene packs: se registra antes de medir lo libre.
         await settleQueue(client, locked.lotId, locked.at)
@@ -138,6 +140,10 @@ export function createWaitlistRepository(pool: Pool): WaitlistRepository {
             await client.query(
               `UPDATE public.lots SET offered_quantity = offered_quantity - $2,
                  reserved_quantity = reserved_quantity + $2 WHERE id = $1`, [locked.lotId, quantity])
+            // K030: el aviso de la reserva confirmada nace con la aceptación (ADR 0012); sin código.
+            await appendEvent(client, reservation.rows[0]!.id, { kind: 'reservation_confirmed', recipientUserId: row.user_id,
+              payload: { lot: { id: row.lot_id, description: row.description }, quantity, waitlistEntryId: row.id,
+                reservationId: reservation.rows[0]!.public_id, offerExpiresAt: null } }, at)
             return reservation.rows[0]!.public_id
           },
           async decline(at) {
@@ -162,25 +168,6 @@ export function createWaitlistRepository(pool: Pool): WaitlistRepository {
           },
         })
       })
-    },
-
-    async listSettleable(limit) {
-      const { rows } = await pool.query<{ id: string }>(
-        `SELECT l.public_id::text AS id FROM public.lots l
-         WHERE EXISTS (SELECT 1 FROM public.waitlist_entries e WHERE e.lot_id = l.id
-             AND e.status = 'offered' AND e.offer_expires_at <= clock_timestamp())
-           OR ((l.status <> 'published' OR l.pickup_ends_at <= clock_timestamp())
-             AND EXISTS (SELECT 1 FROM public.waitlist_entries e WHERE e.lot_id = l.id
-               AND e.status IN ('waiting', 'offered')))
-         ORDER BY l.pickup_ends_at, l.id LIMIT $1`, [limit])
-      return rows.map(row => row.id)
-    },
-
-    async settleLot(lotId) {
-      return withTransaction(pool, async (client) => {
-        const locked = await lockLot(client, lotId)
-        return locked ? settleQueue(client, locked.lotId, locked.at) : 0
-      })
-    },
+    }
   }
 }

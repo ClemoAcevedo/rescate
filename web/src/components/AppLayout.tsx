@@ -1,13 +1,26 @@
-import { Outlet } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { RescateLogo } from './RescateLogo'
 import { SiteHeader } from './SiteHeader'
 import { Alert } from './ui/Alert'
 
 export function AppLayout() {
-  const { status, error, refreshSession } = useAuth()
+  const { status, session, error, refreshSession } = useAuth()
+  const { key } = useLocation()
+  const previousKey = useRef(key)
+  useEffect(() => {
+    const main = document.querySelector('main')
+    if (main) {
+      main.id = 'contenido-principal'
+      main.tabIndex = -1
+      if (previousKey.current !== key) main.focus()
+    }
+    previousKey.current = key
+  }, [key, session?.user.id])
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#contenido-principal">Saltar al contenido principal</a>
       <SiteHeader />
       {error && (
         <div className="session-notice" role="region" aria-label="Estado de la sesión">

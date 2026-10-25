@@ -1,13 +1,15 @@
-// K022 · Infrastructure: cancelación, retiro y vencimiento bajo el bloqueo común del
+// K022 · Infrastructure: cancelación y retiro bajo el bloqueo común del
 // lote (ADR 0006). Cada transición cambia el estado, el código y el contador con el
 // mismo cliente; la condición status = 'confirmed' impide una segunda transición.
 import type {
-  HolderReservation, PickupState, ReservationRepository, ReviewedReservation, StoredReservation,
+  HolderReservation, PickupReviewState, PickupState, PickupWriter, ReservationRepository, ReviewedReservation,
+  StoredReservation,
 } from '../../application/reservations/ports.js'
 import type { ReservationStatus } from '../../domain/reservations.js'
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
+import { appendEvent } from './outbox.js'
 import { settleQueue } from './waitlist-queue.js'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -56,6 +58,72 @@ async function endReservation(client: PoolClient, commitmentId: string, status: 
 const membership = `EXISTS (SELECT 1 FROM public.memberships m
   WHERE m.user_id = $1 AND m.establishment_id = l.establishment_id)`
 
+/** Revisión sin bloquear el lote: permiso sobre el lote y la reserva del lote con esa huella. */
+async function findPickup(client: PoolClient, userId: string, lotId: string,
+  fingerprint: Uint8Array | null): Promise<PickupReviewState | null> {
+  if (!uuid.test(lotId)) return null
+  const { rows } = await client.query<{ member: boolean; pickup_starts_at: Date; pickup_ends_at: Date
+    id: string | null; quantity: number; status: ReservationStatus; created_at: Date; ended_at: Date | null }>(
+    `SELECT ${membership} AS member, l.pickup_starts_at, l.pickup_ends_at,
+       c.public_id::text AS id, c.quantity, c.status, c.created_at, c.ended_at
+     FROM public.lots l
+     LEFT JOIN public.commitments c ON c.lot_id = l.id AND c.pickup_code_fingerprint = $3
+     WHERE l.public_id = $2`, [userId, lotId, bytes(fingerprint)])
+  const row = rows[0]
+  if (!row) return null
+  const reservation: ReviewedReservation | null = row.id === null ? null : { id: row.id, quantity: row.quantity,
+    status: row.status, createdAt: row.created_at, endedAt: row.ended_at }
+  return { member: row.member, lot: { pickupStartsAt: row.pickup_starts_at, pickupEndsAt: row.pickup_ends_at }, reservation }
+}
+
+/** Serializa la clave del operador, bloquea el lote y relee reserva, permiso y reloj con el mismo cliente. */
+async function withPickup<T>(client: PoolClient, operatorUserId: string, lotId: string, reservationId: string,
+  fingerprint: Uint8Array | null, key: string,
+  operate: (state: PickupState, writer: PickupWriter) => Promise<T>): Promise<T> {
+  const unavailable = { deliver: async () => { throw new Error('No se entrega sin reserva válida') } }
+  // Dos operadores pueden competir por la misma reserva; la clave solo serializa al mismo operador.
+  await lockIntent(client, 'pickup', operatorUserId, key)
+  const prior = await client.query<{ reservation_id: string; lot_id: string; quantity: number
+    delivered_at: Date; code_matches: boolean; member: boolean }>(
+    `SELECT c.public_id::text AS reservation_id, l.public_id::text AS lot_id, d.quantity, d.delivered_at,
+       COALESCE(c.pickup_code_fingerprint = $3, false) AS code_matches, ${membership} AS member
+     FROM public.deliveries d
+     JOIN public.commitments c ON c.id = d.commitment_id JOIN public.lots l ON l.id = c.lot_id
+     WHERE d.operator_user_id = $1 AND d.idempotency_key = $2`, [operatorUserId, key, bytes(fingerprint)])
+  const previous = prior.rows[0]
+  if (previous) {
+    return operate({ member: previous.member, existing: { reservationId: previous.reservation_id,
+      lotId: previous.lot_id, quantity: previous.quantity, deliveredAt: previous.delivered_at,
+      codeMatches: previous.code_matches } } satisfies PickupState, unavailable)
+  }
+  const locked = await lockLot(client, lotId)
+  if (!locked) return operate({ existing: null, lot: null }, unavailable)
+  const { rows } = await client.query<{ member: boolean; pickup_starts_at: Date; pickup_ends_at: Date
+    commitment_id: string | null; status: ReservationStatus; quantity: number }>(
+    `SELECT ${membership} AS member, l.pickup_starts_at, l.pickup_ends_at,
+       c.id::text AS commitment_id, c.status, c.quantity
+     FROM public.lots l
+     LEFT JOIN public.commitments c ON c.lot_id = l.id AND c.public_id = $3 AND c.pickup_code_fingerprint = $4
+     WHERE l.id = $2`,
+    [operatorUserId, locked.lotId, uuid.test(reservationId) ? reservationId : null, bytes(fingerprint)])
+  const row = rows[0]!
+  return operate({ existing: null, member: row.member, now: locked.at,
+    lot: { pickupStartsAt: row.pickup_starts_at, pickupEndsAt: row.pickup_ends_at },
+    reservation: row.commitment_id === null ? null : { status: row.status, quantity: row.quantity } }, {
+    async deliver(at) {
+      const quantity = await endReservation(client, row.commitment_id!, 'delivered', at)
+      // R → E y la entrega que lo respalda, juntos (ADR 0006).
+      await client.query(
+        `UPDATE public.lots SET reserved_quantity = reserved_quantity - $2,
+           delivered_quantity = delivered_quantity + $2 WHERE id = $1`, [locked.lotId, quantity])
+      await client.query(
+        `INSERT INTO public.deliveries (commitment_id, operator_user_id, quantity, delivered_at, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5)`, [row.commitment_id, operatorUserId, quantity, at, key])
+      return { reservationId, quantity, deliveredAt: at }
+    },
+  })
+}
+
 export function createReservationRepository(pool: Pool): ReservationRepository {
   return {
     async listByHolder(userId, page) {
@@ -88,6 +156,10 @@ export function createReservationRepository(pool: Pool): ReservationRepository {
             // R → F en la misma transacción (ADR 0006).
             await client.query('UPDATE public.lots SET reserved_quantity = reserved_quantity - $2 WHERE id = $1',
               [row.lot_internal_id, quantity])
+            // K030: el aviso de la cancelación nace con ella (ADR 0012).
+            await appendEvent(client, row.internal_id, { kind: 'reservation_cancelled', recipientUserId: userId,
+              payload: { lot: { id: row.lot_id, description: row.description }, quantity, waitlistEntryId: null,
+                reservationId: row.id, offerExpiresAt: null } }, at)
             // Lo liberado se ofrece a quien sigue en la cola (RF07) bajo el mismo bloqueo.
             await settleQueue(client, row.lot_internal_id, at)
           },
@@ -102,97 +174,37 @@ export function createReservationRepository(pool: Pool): ReservationRepository {
       })
     },
 
-    async findPickup(userId, lotId, fingerprint) {
-      if (!uuid.test(lotId)) return null
-      const { rows } = await pool.query<{ member: boolean; pickup_starts_at: Date; pickup_ends_at: Date
-        id: string | null; quantity: number; status: ReservationStatus; created_at: Date; ended_at: Date | null }>(
-        `SELECT ${membership} AS member, l.pickup_starts_at, l.pickup_ends_at,
-           c.public_id::text AS id, c.quantity, c.status, c.created_at, c.ended_at
-         FROM public.lots l
-         LEFT JOIN public.commitments c ON c.lot_id = l.id AND c.pickup_code_fingerprint = $3
-         WHERE l.public_id = $2`, [userId, lotId, bytes(fingerprint)])
-      const row = rows[0]
-      if (!row) return null
-      const reservation: ReviewedReservation | null = row.id === null ? null : { id: row.id, quantity: row.quantity,
-        status: row.status, createdAt: row.created_at, endedAt: row.ended_at }
-      return { member: row.member, lot: { pickupStartsAt: row.pickup_starts_at, pickupEndsAt: row.pickup_ends_at }, reservation }
-    },
-
-    async withPickupTransaction(operatorUserId, lotId, reservationId, fingerprint, key, operate) {
+    async withPickupAttempts(operatorUserId, operate) {
       return withTransaction(pool, async (client) => {
-        const unavailable = { deliver: async () => { throw new Error('No se entrega sin reserva válida') } }
-        // Dos operadores pueden competir por la misma reserva; la clave solo serializa al mismo operador.
-        await lockIntent(client, 'pickup', operatorUserId, key)
-        const prior = await client.query<{ reservation_id: string; lot_id: string; quantity: number
-          delivered_at: Date; code_matches: boolean; member: boolean }>(
-          `SELECT c.public_id::text AS reservation_id, l.public_id::text AS lot_id, d.quantity, d.delivered_at,
-             COALESCE(c.pickup_code_fingerprint = $3, false) AS code_matches, ${membership} AS member
-           FROM public.deliveries d
-           JOIN public.commitments c ON c.id = d.commitment_id JOIN public.lots l ON l.id = c.lot_id
-           WHERE d.operator_user_id = $1 AND d.idempotency_key = $2`, [operatorUserId, key, bytes(fingerprint)])
-        const previous = prior.rows[0]
-        if (previous) {
-          return operate({ member: previous.member, existing: { reservationId: previous.reservation_id,
-            lotId: previous.lot_id, quantity: previous.quantity, deliveredAt: previous.delivered_at,
-            codeMatches: previous.code_matches } } satisfies PickupState, unavailable)
-        }
-        const locked = await lockLot(client, lotId)
-        if (!locked) return operate({ existing: null, lot: null }, unavailable)
-        const { rows } = await client.query<{ member: boolean; pickup_starts_at: Date; pickup_ends_at: Date
-          commitment_id: string | null; status: ReservationStatus; quantity: number }>(
-          `SELECT ${membership} AS member, l.pickup_starts_at, l.pickup_ends_at,
-             c.id::text AS commitment_id, c.status, c.quantity
-           FROM public.lots l
-           LEFT JOIN public.commitments c ON c.lot_id = l.id AND c.public_id = $3 AND c.pickup_code_fingerprint = $4
-           WHERE l.id = $2`,
-          [operatorUserId, locked.lotId, uuid.test(reservationId) ? reservationId : null, bytes(fingerprint)])
-        const row = rows[0]!
-        return operate({ existing: null, member: row.member, now: locked.at,
-          lot: { pickupStartsAt: row.pickup_starts_at, pickupEndsAt: row.pickup_ends_at },
-          reservation: row.commitment_id === null ? null : { status: row.status, quantity: row.quantity } }, {
-          async deliver(at) {
-            const quantity = await endReservation(client, row.commitment_id!, 'delivered', at)
-            // R → E y la entrega que lo respalda, juntos (ADR 0006).
-            await client.query(
-              `UPDATE public.lots SET reserved_quantity = reserved_quantity - $2,
-                 delivered_quantity = delivered_quantity + $2 WHERE id = $1`, [locked.lotId, quantity])
-            await client.query(
-              `INSERT INTO public.deliveries (commitment_id, operator_user_id, quantity, delivered_at, idempotency_key)
-               VALUES ($1, $2, $3, $4, $5)`, [row.commitment_id, operatorUserId, quantity, at, key])
-            return { reservationId, quantity, deliveredAt: at }
+        // K034: primer bloqueo de todo intento de código, antes de la clave y del lote, con
+        // el límite de espera de anexos H p. 20. ON CONFLICT espera una inicialización concurrente.
+        await client.query("SET LOCAL lock_timeout = '2s'")
+        await client.query(`INSERT INTO public.pickup_code_security_state (user_id) VALUES ($1)
+          ON CONFLICT (user_id) DO NOTHING`, [operatorUserId])
+        await client.query('SELECT user_id FROM public.pickup_code_security_state WHERE user_id = $1 FOR UPDATE',
+          [operatorUserId])
+        // Relectura en otra sentencia: su snapshot ya incluye lo confirmado por quien tenía el bloqueo.
+        const { rows } = await client.query<{ blocked_until: Date | null; failure_times: Date[]; now: Date }>(
+          `SELECT s.blocked_until, clock_timestamp() AS now, ARRAY(SELECT f.failed_at FROM public.pickup_code_failures f
+             WHERE f.user_id = s.user_id ORDER BY f.failed_at, f.id) AS failure_times
+           FROM public.pickup_code_security_state s WHERE s.user_id = $1`, [operatorUserId])
+        const state = rows[0]
+        if (!state) throw new Error('No se pudo releer el estado de intentos bloqueado')
+        return operate({ blockedUntil: state.blocked_until, failureTimes: state.failure_times, now: state.now }, {
+          review: (lotId, fingerprint) => findPickup(client, operatorUserId, lotId, fingerprint),
+          confirm: (lotId, reservationId, fingerprint, key, confirm) =>
+            withPickup(client, operatorUserId, lotId, reservationId, fingerprint, key, confirm),
+          async deleteFailuresThrough(cutoff) {
+            await client.query('DELETE FROM public.pickup_code_failures WHERE user_id = $1 AND failed_at <= $2',
+              [operatorUserId, cutoff])
           },
-        })
-      })
-    },
-
-    async listExpirable(limit) {
-      const { rows } = await pool.query<{ id: string }>(
-        `SELECT l.public_id::text AS id FROM public.lots l
-         WHERE l.pickup_ends_at <= clock_timestamp() AND EXISTS (SELECT 1 FROM public.commitments c
-           WHERE c.lot_id = l.id AND c.status = 'confirmed')
-         ORDER BY l.pickup_ends_at, l.id LIMIT $1`, [limit])
-      return rows.map(row => row.id)
-    },
-
-    async withExpiryTransaction(lotId, operate) {
-      return withTransaction(pool, async (client) => {
-        const locked = await lockLot(client, lotId)
-        if (!locked) return operate(null, { expireConfirmed: async () => { throw new Error('Sin lote no se vence') } })
-        const { rows } = await client.query<{ pickup_ends_at: Date }>(
-          'SELECT pickup_ends_at FROM public.lots WHERE id = $1', [locked.lotId])
-        return operate({ pickupEndsAt: rows[0]!.pickup_ends_at, now: locked.at }, {
-          async expireConfirmed(at) {
-            const expired = await client.query<{ quantity: number }>(
-              `UPDATE public.commitments SET status = 'expired', ended_at = $2, pickup_code_ciphertext = NULL
-               WHERE lot_id = $1 AND status = 'confirmed' RETURNING quantity`, [locked.lotId, at])
-            const packs = expired.rows.reduce((total, row) => total + row.quantity, 0)
-            // Tras el cierre el lote ya no es asignable: R → X (anexos B p. 4).
-            if (packs > 0) await client.query(
-              `UPDATE public.lots SET reserved_quantity = reserved_quantity - $2,
-                 expired_quantity = expired_quantity + $2 WHERE id = $1`, [locked.lotId, packs])
-            // El lote ya no asigna: la cola termina con él, sin ofertas nuevas (ADR 0002).
-            await settleQueue(client, locked.lotId, locked.at)
-            return expired.rows.length
+          async recordFailure(at) {
+            await client.query('INSERT INTO public.pickup_code_failures (user_id, failed_at) VALUES ($1, $2)',
+              [operatorUserId, at])
+          },
+          async setBlockedUntil(until) {
+            await client.query('UPDATE public.pickup_code_security_state SET blocked_until = $2 WHERE user_id = $1',
+              [operatorUserId, until])
           },
         })
       })

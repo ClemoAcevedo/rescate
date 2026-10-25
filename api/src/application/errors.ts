@@ -16,6 +16,8 @@ export type ApplicationErrorCode =
   | "reservation_not_found"
   | "pickup_code_not_found"
   | "waitlist_entry_not_found"
+  | "notification_not_found"
+  | "pickup_review_suspended"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -73,9 +75,19 @@ export class ConcurrentUploadsError extends ApplicationError {
   }
 }
 
+/** Anexos H p. 21: cinco códigos inválidos en quince minutos suspenden la revisión del operador. */
+export class PickupReviewSuspendedError extends ApplicationError {
+  constructor(readonly retryAfter: number) {
+    super("pickup_review_suspended", "El operador superó los fallos de código permitidos.")
+  }
+}
+
 /** Anexos B p. 4: contadores distintos de sus registros bloquean asignar y exigen revisión. */
 export class InventoryDiscrepancyError extends ApplicationError {
   constructor(readonly lotId: string) {
     super("inventory_discrepancy", "Los contadores del lote no coinciden con sus compromisos.")
   }
 }
+
+export const notificationNotFound = (): ApplicationError =>
+  new ApplicationError("notification_not_found", "El aviso no existe.")

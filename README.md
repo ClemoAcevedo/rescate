@@ -257,17 +257,34 @@ lo cambia.
   reserva directa con API real (K016); historial, detalle vigente, código de retiro
   y cancelación con resultado comprobado (K023); revisión de código y confirmación
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
-  parcial, aceptación explícita y vencimiento con estado comprobado (K029).
+  parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
+  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030).
+- **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
+  1366 px, distribución y menú de operador de 320 a 1920 px y
+  [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
+  de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para
+  medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
+  ajenas a la implementación.
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
-  vencimiento (K027), según OpenAPI.
-- **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
-  (K014).
+  vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
+  (K030), según OpenAPI. Límites de login, códigos de retiro y tráfico, con los fallos
+  de login y de código persistidos, y registros sin secretos (K034).
+- **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
+  reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
+  (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
-  observados y repetición con el worker activo y detenido (K025).
+  observados y repetición con el worker de fotos activo y detenido (K025); flujo de
+  cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
+  y en tres navegadores (K031).
+- **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
+  códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
+  secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
+- **Rendimiento:** semilla de escala del anexo H, planes reales con EXPLAIN y p50/p95 de
+  búsqueda, reserva y cancelación con k6 ([rendimiento](docs/rendimiento.md), K032).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

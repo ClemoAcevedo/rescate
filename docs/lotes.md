@@ -49,8 +49,10 @@ Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. La
   leída bajo bloqueo y Domain valida el resultado completo.
 - Publicar recibe solo `{ "version": N }`.
 - Vencido (`expired`) y retirado (`withdrawn`) son cierres lógicos: el lote no se
-  borra, deja de aparecer en la búsqueda pública y queda con `closed_at`. Ningún
-  comando los asigna todavía; ver [ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md).
+  borra, deja de aparecer en la búsqueda pública y queda con `closed_at`
+  ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)). El worker vence un lote
+  publicado al llegar su cierre ([vencimientos](vencimientos.md)); retirar aún no
+  tiene comando.
 - Se rechazan propiedades desconocidas, cambio de establecimiento y campos del
   servidor. Las fechas son RFC 3339 con zona explícita; las respuestas usan UTC.
 - Las respuestas exponen solo `LotResponse`, con `Cache-Control: no-store`. Los

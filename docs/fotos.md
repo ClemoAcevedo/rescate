@@ -141,7 +141,7 @@ Ley 19.628):
 
 | Variable | API | Worker | Uso |
 | --- | --- | --- | --- |
-| `PHOTO_STORAGE` | ✓ | ✓ | `s3` (bucket privado) o `local` (solo desarrollo). Vacía: cargar responde 503 y el worker queda inactivo. |
+| `PHOTO_STORAGE` | ✓ | ✓ | `s3` (bucket privado) o `local` (solo desarrollo). Vacía: cargar responde 503 y el worker no procesa fotos (sigue generando avisos). |
 | `PHOTO_LOCAL_DIR` | ✓ | ✓ | Directorio compartido con `local`; Compose usa el volumen `photo_data`. |
 | `PHOTO_S3_ENDPOINT`, `PHOTO_S3_REGION`, `PHOTO_S3_BUCKET` | ✓ | ✓ | Bucket S3 compatible. Endpoint HTTPS sin credenciales. |
 | `PHOTO_S3_ACCESS_KEY_ID`, `PHOTO_S3_SECRET_ACCESS_KEY` | ✓ | ✓ | Application key limitada al bucket. |
@@ -199,7 +199,7 @@ respaldo.
 | Comando | Qué comprueba |
 | --- | --- |
 | `npm --prefix api test` | Firmas, APNG, SVG, animaciones, 20 MP, truncados, EXIF eliminado, orientación y límites de salida con sharp real; transporte HTTP (401, 403, 413 declarado y por streaming, 415, 422, 429) contra OpenAPI; D-05 en Domain. |
-| `npm --prefix api run test:web:compose` | Formulario del operador en Chromium con la API y un worker reales: tipo no permitido sin enviar, archivo falso (422), imagen animada rechazada por el worker, JPEG listo con miniatura, quitar, 422 por foto no lista desde otra pestaña, publicación con fotos, galería con ambas fotos y reemplazo en el detalle público. |
+| `npm --prefix api run test:web:compose` | Formulario del operador en Chromium con la API y un worker reales: tipo no permitido sin enviar, archivo falso (422), imagen animada rechazada por el worker, JPEG listo con miniatura, quitar, 422 por foto no lista desde otra pestaña, publicación con fotos, galería con ambas fotos y reemplazo en el detalle público. La comprobación de galería retrasa la respuesta de sesión real para verificar también la recarga del detalle al autenticar al actor. |
 | `npm --prefix api run db:test:photos:compose` | PostgreSQL real y objetos en disco: acceso ajeno, archivos falsos y grandes, límites de 3 fotos y 2 cargas, publicación bloqueada hasta quitar la rechazada, reinicio con reclamo vencido sin duplicar, tres intentos, carga vencida limpiada, foto quitada durante la validación, recorrido HTTP con sesión/CSRF y proceso real del worker con un archivo de 20 MP y 4,3 MiB (memoria máxima medida y SIGTERM). Termina con un inventario: solo quedan salidas de fotos listas. |
 
 Ambos corren en CI.

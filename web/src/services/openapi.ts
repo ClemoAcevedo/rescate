@@ -97,6 +97,10 @@ export type WaitlistStatus = "waiting" | "offered" | "accepted" | "declined" | "
  * Código tal como lo dicta la persona; el servidor ignora espacios, guiones y mayúsculas. Nunca en URL ni logs.
  */
 export type PickupCode = string
+/**
+ * offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva.
+ */
+export type NotificationKind = "offer_issued" | "offer_expired" | "reservation_confirmed" | "reservation_cancelled"
 
 export interface HttpSchemas {
   LoginRequest: LoginRequest
@@ -130,6 +134,8 @@ export interface HttpSchemas {
   LotPhotoList: LotPhotoList
   ErrorResponse: ErrorResponse
   ValidationIssue: ValidationIssue
+  Notification: Notification
+  NotificationPage: NotificationPage
 }
 export interface LoginRequest {
   email: EmailInput
@@ -545,4 +551,48 @@ export interface ValidationIssue {
    * Descripción segura del problema.
    */
   message: string
+}
+/**
+ * Aviso del titular con los datos de la transición. Sin código de retiro ni datos de otras personas.
+ */
+export interface Notification {
+  id: PublicId
+  kind: NotificationKind
+  createdAt: Instant
+  /**
+   * null hasta su primera lectura.
+   */
+  readAt: string | null
+  lot: {
+    id: PublicId
+    description: string
+  }
+  /**
+   * Packs ofrecidos, confirmados o cancelados según el tipo.
+   */
+  quantity: number
+  /**
+   * Solicitud de espera relacionada; null en una cancelación.
+   */
+  waitlistEntryId: string | null
+  /**
+   * Reserva relacionada; null en avisos de oferta.
+   */
+  reservationId: string | null
+  /**
+   * Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo.
+   */
+  offerExpiresAt: string | null
+}
+export interface NotificationPage {
+  /**
+   * @maxItems 20
+   */
+  items: Notification[]
+  page: number
+  hasNextPage: boolean
+  /**
+   * Avisos propios sin leer, en todas las páginas.
+   */
+  unreadCount: number
 }

@@ -93,7 +93,7 @@ WEB_URL=http://localhost:5173 npm --prefix api run test:web:logout
 ```
 
 Esta prueba intercepta HTTP en Chromium: no requiere API ni PostgreSQL y no crea
-cuentas. Comprueba errores de red y 403, mensajes distintos y visibles, conservación
+cuentas. Abre el menú cuando la navegación está contraída para acceder a cerrar sesión. Comprueba errores de red y 403, mensajes distintos y visibles, conservación
 de sesión, ausencia de reintento automático y de promesas rechazadas sin manejar.
 Después reintenta y verifica que la sesión se conserva hasta recibir el 204.
 
@@ -139,3 +139,20 @@ respuestas perdidas en [reservas](../docs/reservas.md#vista-del-titular).
 Con Vite iniciado sin mocks de identidad, `npm --prefix api run test:web:reservations`
 prueba el flujo de navegador con respuestas HTTP controladas. `test:web:compose`
 lo incluye junto con los recorridos reales de reserva y cancelación.
+
+## Accesibilidad y claridad
+
+El enlace «Saltar al contenido principal» evita repetir la cabecera. La navegación
+entre rutas enfoca el contenido; los resultados de reserva, cancelación y acciones
+sobre ofertas reciben el foco. Conservar una reserva devuelve el foco a cancelar.
+El [protocolo de accesibilidad y comprensión](../docs/accesibilidad.md) reúne la
+revisión manual y los cinco recorridos con participantes ajenos a la implementación.
+Con Vite iniciado, `npm --prefix api run test:web:k033` ejecuta exclusivamente la
+verificación de K033: teclado, foco, etiquetas y desborde a 360 y 1366 px con HTTP
+controlado.
+
+La navegación se contrae también en tablet; las tarjetas ajustan el número de
+columnas al espacio y el panel de reserva se apila hasta 1024 px. Con Vite iniciado,
+`npm --prefix api run test:web:responsive` comprueba la distribución de 320 a
+1920 px, incluida la cabecera del operador y el redimensionado sin recargar. Esta
+regresión ampliada se conserva independiente de la aceptación de K033.

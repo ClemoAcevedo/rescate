@@ -29,6 +29,10 @@ try {
       if (path === '/api/public/lots') {
         return route.fulfill({ json: { items: [], page: 1, hasNextPage: false } })
       }
+      // K030: la cabecera consulta la bandeja con sesión; una vacía aísla el recorrido de logout.
+      if (path === '/api/notifications') {
+        return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
+      }
       if (path === '/api/auth/logout') {
         attempts += 1
         if (attempts === 1) {
@@ -42,6 +46,9 @@ try {
       throw new Error(`Solicitud inesperada: ${path}`)
     })
     await page.goto(`${baseUrl}/lotes`)
+    await page.locator('.session-status').waitFor({ state: 'attached' })
+    const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+    if (await menu.isVisible()) await menu.click()
     const logout = page.getByRole('button', { name: 'Cerrar sesión' })
     await logout.click()
     const alert = page.getByRole('alert')

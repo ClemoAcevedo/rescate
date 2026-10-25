@@ -26,9 +26,14 @@ establecimiento o vencida al cierre del lote. El contrato HTTP está en
   ventana y antes de su cierre. Registra una única entrega completa (R → E). La
   misma clave del operador reproduce el resultado; otro intento informa que ya se
   retiró.
-- **Vencer.** El registro mueve R → X con el cierre como instante de término. Repetirlo no
-  libera de nuevo. `expireDue` de Application lo aplica por lotes para el
-  trabajador de K028 (#31).
+- **Vencer.** El worker registra el cierre del lote: R → X con el cierre como instante
+  de término y el código borrado. Repetirlo no libera de nuevo
+  ([vencimientos](vencimientos.md)).
+- **Límite de códigos.** Un código que no corresponde a una reserva del lote cuenta
+  como fallo del operador, al revisar o al confirmar. Cinco fallos en quince minutos
+  suspenden ambas acciones quince minutos (429), también con el código correcto. La
+  suspensión se guarda en PostgreSQL y sigue tras reiniciar la API
+  ([seguridad](seguridad.md#límites), [ADR 0013](adr/0013-limite-de-codigos-de-retiro.md)).
 - **Privacidad.** El código solo viaja en cuerpos JSON: nunca en rutas, consultas,
   listados ni registros. Una reserva ajena responde 404 igual que una inexistente.
 
@@ -43,7 +48,8 @@ establecimiento o vencida al cierre del lote. El contrato HTTP está en
 | POST | `/lots/:lotId/pickups` | Operador | 201, entrega; cuerpo con `reservationId`, `code` e `idempotencyKey` |
 
 Los comandos exigen sesión, `Origin` y CSRF. La revisión usa POST para que el
-código no vaya en la URL; no cambia estado. `canConfirm` es `false` con estado
+código no vaya en la URL; no cambia la reserva, y un código que no corresponde
+registra un fallo del operador. `canConfirm` es `false` con estado
 `confirmed` cuando la ventana aún no comienza. Revisar de nuevo el código muestra
 el estado que provocó un 409 al confirmar.
 
@@ -128,6 +134,7 @@ huella. Compose trae una clave ficticia que la API rechaza en producción
 | `npm --prefix api test` | Reglas de plazo y transición, normalización, cifrado y huella, y recorrido HTTP contra OpenAPI con repositorio en memoria. |
 | `npm --prefix api run db:test:reservations:compose` | PostgreSQL real: última unidad, reintentos, dos operadores, cancelación contra retiro, plazos tras esperar el bloqueo, vencimiento repetido, rollback y conciliación del inventario con reservas y entregas. Repite la suite con el worker activo y detenido. |
 | `npm --prefix api run db:test:compose` | Restricciones de estado, término, código y entregas, y rollback de la migración. |
+| `npm --prefix api run db:test:security:compose` | Límite de códigos por operador con PostgreSQL y reinicio de la API, y retiro rechazado a operadores ajenos ([seguridad](seguridad.md#pruebas)). |
 
 Con el servicio `db` de Compose iniciado, el wrapper crea y migra una base dedicada.
 El script siembra usuarios, membresías, lotes y reservas ficticios; cada ejecución
@@ -138,15 +145,11 @@ el resultado de cada carrera y el nombre de la base, que se conserva para inspec
 Primero inicia un worker de fotos con esa misma base y almacenamiento temporal.
 Comprueba su conexión, ejecuta la suite, envía `SIGTERM` y verifica la salida y el
 cierre de sus conexiones. Después repite la suite en la misma base con datos nuevos.
-El worker actual procesa fotos; el registro programado de vencimientos corresponde
-a [K028](https://github.com/ClemoAcevedo/rescate/issues/31). Las pruebas de plazos
-exigen que la API rechace operaciones vencidas aunque el registro siga confirmado.
+Ese worker corre con `WORKER_EXPIRIES=off`: las pruebas de plazos exigen que la API
+rechace operaciones vencidas aunque el registro siga confirmado, y registran el
+cierre ellas mismas. El worker real con vencimientos se prueba en
+[vencimientos](vencimientos.md#pruebas).
 
 CI ejecuta ambas fases. `test:web:compose` también incluye la suite de reservas.
 La prueba de navegador acepta el certificado HTTPS autofirmado del entorno local
 en sus contextos de Playwright.
-
-## Limitaciones
-
-- El límite de cinco fallos de revisión por operador cada quince minutos es K034 (#37).
-- El trabajador que registra vencimientos es K028 (#31).

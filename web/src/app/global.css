@@ -79,20 +79,22 @@ code, kbd, samp { font-family: var(--font-mono); }
 .site-header .menu-toggle { display: none; }
 
 .main-navigation {
+  min-width: 0;
+  max-width: 100%;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--sp-1) var(--sp-2);
 }
-.main-navigation__cta { min-height: 2.5rem; padding-inline: var(--sp-4); font-size: var(--fs-meta); text-decoration: none; }
+.main-navigation__cta { min-height: var(--control-h); padding-inline: var(--sp-4); font-size: var(--fs-meta); text-decoration: none; }
 .main-navigation__cta.ui-button--primary:hover { color: var(--text-inverse); }
 
 .main-navigation__link {
   display: flex;
   align-items: center;
   min-height: var(--control-h);
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2);
   border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: var(--fs-meta);
@@ -110,12 +112,25 @@ code, kbd, samp { font-family: var(--font-mono); }
   color: var(--text-success);
 }
 
+.notifications-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-1);
+  border-radius: var(--radius-pill);
+  background: var(--action-primary);
+  color: var(--text-inverse);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+}
 .session-status {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
-  max-width: 16rem;
+  max-width: 10rem;
   padding-inline-start: var(--sp-3);
   border-inline-start: var(--border-width) solid var(--border-subtle);
   color: var(--text-muted);
@@ -313,7 +328,7 @@ code, kbd, samp { font-family: var(--font-mono); }
 .explore-results__heading p { margin: 0; }
 .explore-results__order { margin: var(--sp-2) 0 var(--sp-5); }
 .explore-results > .ui-alert { margin-top: var(--sp-4); }
-.explore-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); }
+.explore-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--sp-5); }
 .explore-empty { margin-top: var(--sp-5); padding: var(--sp-8); text-align: center; }
 .explore-empty p { max-width: 55ch; margin: var(--sp-3) auto var(--sp-5); color: var(--text-muted); }
 .explore-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--sp-5); margin-top: var(--sp-8); }
@@ -523,8 +538,8 @@ code, kbd, samp { font-family: var(--font-mono); }
 .app-shell { display: flex; flex-direction: column; }
 .app-shell > main { flex: 1 0 auto; }
 
-/* Breakpoint de navegación existente. Las variables CSS no sirven en media queries. */
-@media (max-width: 48rem) {
+/* La cabecera necesita más espacio que el contenido para todos los roles. */
+@media (max-width: 80rem) {
   .site-header {
     flex-wrap: wrap;
     gap: var(--sp-3);
@@ -547,6 +562,21 @@ code, kbd, samp { font-family: var(--font-mono); }
 
   .main-navigation--open { display: flex; }
   .main-navigation__link { padding: var(--sp-3); }
+  .session-status { max-width: none; padding: var(--sp-2) var(--sp-3); border: 0; }
+  .main-navigation__cta { justify-content: center; }
+}
+
+/* El panel de reserva conserva espacio para cantidad y acciones en tablet. */
+@media (max-width: 64rem) {
+  .public-lot__layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "gallery" "panel" "info";
+    grid-template-rows: auto;
+  }
+}
+
+/* Formularios y contenido en móvil. */
+@media (max-width: 48rem) {
   .page-content { padding-top: var(--sp-5); }
   .lot-form__row, .lot-summary__row { grid-template-columns: minmax(0, 1fr); }
   .lot-summary__row { gap: var(--sp-1); }
@@ -554,8 +584,6 @@ code, kbd, samp { font-family: var(--font-mono); }
   .public-lot__layout { grid-template-areas: "gallery" "panel" "info"; grid-template-rows: auto; }
   .explore-hero { padding: var(--sp-5); }
   .explore-hero__steps { display: none; }
-  .session-status { max-width: none; padding: var(--sp-2) var(--sp-3); border: 0; }
-  .main-navigation__cta { justify-content: center; }
   .my-lot { grid-template-columns: 5.5rem minmax(0, 1fr); gap: var(--sp-3) var(--sp-4); }
   .my-lot__actions { grid-column: 1 / -1; justify-content: stretch; padding: 0; }
   .my-lot__actions .ui-button { flex: 1 1 auto; }
@@ -563,7 +591,7 @@ code, kbd, samp { font-family: var(--font-mono); }
   .my-lots__toolbar { align-items: stretch; flex-direction: column; }
   .segmented { display: flex; }
   .segmented__item { flex: 1; justify-content: center; }
-    .explore-filters__location { align-items: stretch; flex-direction: column; }
+  .explore-filters__location { align-items: stretch; flex-direction: column; }
   .explore-zone summary { font-size: var(--fs-meta); }
   .public-lot__header { margin-bottom: var(--sp-5); }
   .public-lot__layout { gap: var(--sp-5); }
@@ -587,3 +615,17 @@ code, kbd, samp { font-family: var(--font-mono); }
 .reservation-detail { display: grid; gap: var(--sp-3); margin-block: var(--sp-4); }
 .pickup-code { padding: var(--sp-4); background: var(--surface-brand-soft); border-radius: var(--radius-md); }
 .pickup-code p { font-family: var(--font-mono); font-size: var(--fs-display-md); letter-spacing: var(--ls-caps); overflow-wrap: anywhere; }
+
+/* Acceso directo al contenido para navegación por teclado. */
+.skip-link {
+  position: absolute;
+  z-index: 10;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-card);
+  border: var(--border-width-strong) solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: translateY(0); }

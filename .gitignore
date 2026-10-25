@@ -3,6 +3,7 @@ dist/
 coverage/
 .vercel/
 .k005-storage/
+.k032-results/
 
 .env
 .env.*

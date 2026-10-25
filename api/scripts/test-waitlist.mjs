@@ -9,6 +9,8 @@ import { createPool } from '../dist/infrastructure/postgres/pool.js'
 import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 import { createWaitlistRepository } from '../dist/infrastructure/postgres/waitlist-repository.js'
 import { createWaitlistUseCases } from '../dist/application/waitlist/use-cases.js'
+import { createExpiryUseCases } from '../dist/application/expiries/use-cases.js'
+import { createLotExpiryRepository } from '../dist/infrastructure/postgres/expiry-repository.js'
 
 const connectionString = process.env.DATABASE_URL
 assert.ok(connectionString && /^rescate_k027_test_/.test(new URL(connectionString).pathname.slice(1)),
@@ -57,6 +59,7 @@ async function person(label) {
 }
 
 const pool = createPool({ connectionString })
+const expiries = createExpiryUseCases(createLotExpiryRepository(pool), () => {})
 const codes = createPickupCodes(pickupKey)
 const waitlist = createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date())
 
@@ -174,7 +177,7 @@ try {
   assert.equal((await join(juan, lot, 1)).status, 409)
   ok('una oferta vencida no se acepta sin trabajador; el intento registra el vencimiento y libera solo lo retenido a F')
 
-  // --- El trabajador (K028/K031) registra por tandas lo vencido y ofrece lo liberado.
+  // --- El trabajador (K028) registra lo vencido de un lote abierto y ofrece lo liberado.
   const rejoined = await view(pedro, rejoin.body.id)
   assert.equal(rejoined.status, 'offered')
   await database.query(`UPDATE waitlist_entries SET offered_at = offered_at - interval '1 hour',
@@ -183,11 +186,13 @@ try {
   assert.equal((await reserve(luis, queued, 4)).status, 201)
   const waiting = await join(marta, queued, 2)
   assert.deepEqual([waiting.body.status, waiting.body.position], ['waiting', 1])
-  assert.ok(await waitlist.settleDue(50) >= 1)
+  assert.deepEqual(await expiries.expireLot(lot), { lotClosed: false, expiredReservations: 0, closedEntries: 1 })
   assert.equal((await stored(rejoin.body.id)).status, 'expired')
   assert.deepEqual(await counters(lot), { f: 6, o: 0, r: 4, e: 0, x: 0 })
-  assert.equal(await waitlist.settleDue(50), 0)
-  ok('settleDue registra vencimientos una sola vez y repetirlo no cambia nada')
+  assert.deepEqual(await expiries.expireLot(lot), { lotClosed: false, expiredReservations: 0, closedEntries: 0 })
+  assert.deepEqual(await expiries.expireLot(queued), { lotClosed: false, expiredReservations: 0, closedEntries: 0 })
+  assert.equal((await stored(waiting.body.id)).status, 'waiting')
+  ok('registrar vencimientos de un lote abierto cierra la oferta vencida una vez y no toca la espera vigente')
 
   // --- Salir de la cola: solo quien espera, sin packs que liberar.
   const leaver = await person('salida')
@@ -241,8 +246,11 @@ try {
   assert.deepEqual(await counters(ending), { f: 0, o: 0, r: 2, e: 0, x: 1 })
   assert.equal((await stored(heldOffer.body.id)).status, 'expired')
   assert.equal((await join(marta, ending, 1)).status, 409)
-  await waitlist.settleDue(50)
+  // El ingreso rechazado ya asentó la cola bajo el bloqueo; el registro cierra reservas y lote.
+  assert.deepEqual(await expiries.expireLot(ending), { lotClosed: true, expiredReservations: 1, closedEntries: 0 })
   assert.equal((await stored(behind.body.id)).status, 'expired')
+  // Anexos B p. 4: al cerrar, todo F, O y R pendiente pasa a X.
+  assert.deepEqual(await counters(ending), { f: 0, o: 0, r: 0, e: 0, x: 3 })
   assert.equal((await database.query(`SELECT count(*)::int AS n FROM waitlist_entries w JOIN lots l ON l.id = w.lot_id
     WHERE l.public_id = $1 AND w.status IN ('waiting', 'offered')`, [ending])).rows[0].n, 0)
   ok('al cerrar el lote la oferta pasa a X, la espera termina sin prioridad y no se admiten solicitudes nuevas')

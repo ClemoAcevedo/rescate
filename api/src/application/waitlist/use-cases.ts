@@ -104,18 +104,6 @@ export function createWaitlistUseCases(repository: WaitlistRepository, codes: Pi
         return { entry: present({ ...entry, status: 'left', endedAt: at, position: null }, at) }
       }))
     },
-
-    /** RF08: registra ofertas vencidas y colas de lotes cerrados, y ofrece lo liberado a quien sigue. */
-    async settleLot(lotId: string): Promise<number> {
-      return repository.settleLot(lower(lotId))
-    },
-
-    /** Lote de trabajo para el trabajador de vencimientos (K028). Devuelve solicitudes cerradas. */
-    async settleDue(limit = 50): Promise<number> {
-      let closed = 0
-      for (const lotId of await repository.listSettleable(limit)) closed += await repository.settleLot(lotId)
-      return closed
-    },
   }
 }
 

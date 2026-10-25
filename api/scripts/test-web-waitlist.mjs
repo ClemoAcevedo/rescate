@@ -30,6 +30,8 @@ try {
       const url = new URL(req.url())
       const path = url.pathname
       if (path === '/api/auth/session') return route.fulfill({ json: { session: scenario === 'anonymous' ? null : session, csrfToken: 'controlled' } })
+      // K030: la cabecera consulta la bandeja con sesión; una vacía aísla este recorrido.
+      if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
       if (path === '/api/waitlist') return route.fulfill({ json: { page: Number(url.searchParams.get('page')), hasNextPage: url.searchParams.get('page') === '1', items: [current] } })
       if (path === '/api/waitlist/w_test') return route.fulfill({ status: scenario === 'missing' ? 404 : 200, json: current })
       assert.equal(req.headers()['x-csrf-token'], 'controlled')

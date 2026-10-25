@@ -1,5 +1,5 @@
 // K022 · Application: límites hacia Infrastructure para cancelar, revisar códigos,
-// retirar y vencer reservas. No exponen pg, SQL ni criptografía concreta.
+// retirar reservas. No exponen pg, SQL ni criptografía concreta.
 import type { ReservationStatus } from '../../domain/reservations.js'
 
 /** Lote de la reserva tal como lo consulta su titular. */
@@ -97,9 +97,35 @@ export type PickupState =
   | { existing: null; lot: PickupWindow; member: boolean
       reservation: { status: ReservationStatus; quantity: number } | null; now: Date }
 
-export interface ExpiryWriter {
-  /** RF08: todas las confirmadas del lote pasan a vencidas y R → X. Devuelve cuántas. */
-  expireConfirmed(at: Date): Promise<number>
+/**
+ * K034: cobra el límite por origen de un intento de código de un operador autorizado y
+ * lanza si se agotó. Lo provee HTTP; se cobra después del permiso para que una cuenta
+ * sin membership no gaste el cupo de los operadores que comparten origen.
+ */
+export type AdmitCodeAttempt = () => void
+
+/** K034: fallos de código del operador releídos bajo su bloqueo, con el reloj de la base. */
+export interface PickupAttempts {
+  blockedUntil: Date | null
+  failureTimes: Date[]
+  now: Date
+}
+
+/**
+ * Pasos de un intento de código con el mismo cliente y transacción que el bloqueo del
+ * operador. Application decide el orden; ninguno decide permisos ni límites.
+ */
+export interface PickupAttemptSteps {
+  /** `null` si el lote no existe. Una huella `null` no corresponde a ninguna reserva. No bloquea el lote. */
+  review(lotId: string, fingerprint: Uint8Array | null): Promise<PickupReviewState | null>
+  /** Serializa la clave por operador, bloquea el lote y relee reserva, permiso y reloj. */
+  confirm<T>(lotId: string, reservationId: string, fingerprint: Uint8Array | null, idempotencyKey: string,
+    operate: (state: PickupState, writer: PickupWriter) => Promise<T>): Promise<T>
+  /** Borra inclusive hasta el límite elegido por Application. */
+  deleteFailuresThrough(cutoff: Date): Promise<void>
+  /** Registra el instante del fallo; nunca el código intentado ni su huella. */
+  recordFailure(at: Date): Promise<void>
+  setBlockedUntil(until: Date | null): Promise<void>
 }
 
 export interface ReservationRepository {
@@ -109,15 +135,11 @@ export interface ReservationRepository {
   /** Bloquea el lote de una reserva del titular y la relee; otra persona recibe `null`. */
   withHolderTransaction<T>(userId: string, reservationId: string,
     operate: (state: HolderState, writer: HolderWriter) => Promise<T>): Promise<T>
-  /** `null` si el lote no existe. Una huella `null` no corresponde a ninguna reserva. */
-  findPickup(userId: string, lotId: string, fingerprint: Uint8Array | null): Promise<PickupReviewState | null>
-  /** Serializa la clave por operador, bloquea el lote y relee reserva, permiso y reloj. */
-  withPickupTransaction<T>(operatorUserId: string, lotId: string, reservationId: string,
-    fingerprint: Uint8Array | null, idempotencyKey: string,
-    operate: (state: PickupState, writer: PickupWriter) => Promise<T>): Promise<T>
-  /** Lotes cerrados que aún tienen reservas confirmadas, cierre más antiguo primero. */
-  listExpirable(limit: number): Promise<string[]>
-  /** Bloquea el lote y entrega su cierre con el reloj de la base; `null` si no existe. */
-  withExpiryTransaction<T>(lotId: string,
-    operate: (state: { pickupEndsAt: Date; now: Date } | null, writer: ExpiryWriter) => Promise<T>): Promise<T>
+  /**
+   * Inicializa y bloquea los intentos de código del operador antes de cualquier otro
+   * bloqueo, relee fallos y reloj y ejecuta los pasos en esa transacción. Lo que escriba
+   * el callback se confirma solo si termina sin lanzar.
+   */
+  withPickupAttempts<T>(operatorUserId: string,
+    operate: (attempts: PickupAttempts, steps: PickupAttemptSteps) => Promise<T>): Promise<T>
 }

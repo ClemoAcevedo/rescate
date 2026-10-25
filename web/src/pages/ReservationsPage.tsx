@@ -77,7 +77,11 @@ function Detail({ id }: { id: string }) {
   const [now, setNow] = useState(Date.now)
   const busy = useRef(false)
   const generation = useRef({ value: 0 })
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (confirming) confirmRef.current?.focus() }, [confirming])
   const resultRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (message && !cancelling) resultRef.current?.focus() }, [message, cancelling])
   const load = useCallback(async () => {
     if (busy.current) return
     const version = ++generation.current.value
@@ -116,7 +120,7 @@ function Detail({ id }: { id: string }) {
         ? reservationError(error)
         : 'No se recibió la confirmación. La cancelación pudo aplicarse. Consulta el estado o reintenta la misma cancelación.')
       if (error instanceof HttpError && error.status === 401) void refreshSession()
-    } finally { busy.current = false; if (version === generation.current.value) { setCancelling(false); resultRef.current?.focus() } }
+    } finally { busy.current = false; if (version === generation.current.value) { setCancelling(false) } }
   }
   const closed = reservation ? Date.parse(reservation.lot.pickupEndsAt) <= now : false
   const current = reservation?.status === 'confirmed' && !closed
@@ -139,11 +143,11 @@ function Detail({ id }: { id: string }) {
       <div className="reservation-detail__conditions"><h3>Condiciones de retiro</h3><p>{reservation.lot.conditions ?? 'Sin condiciones adicionales.'}</p></div>
       {current && !loading && !uncertain && reservation.pickupCode && <div className="pickup-code"><h3>Código de retiro</h3><p>{reservation.pickupCode}</p><span>Muéstralo al operador durante la ventana de retiro.</span></div>}
       {closed && reservation.status === 'confirmed' && <Alert>La ventana terminó. Consulta el estado actualizado; el código ya no se muestra.</Alert>}
-      {current && !loading && !uncertain && !confirming && <Button className="reservation-detail__cancel" variant="danger" disabled={!csrfToken} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
+      {current && !loading && !uncertain && !confirming && <Button ref={cancelRef} className="reservation-detail__cancel" variant="danger" disabled={!csrfToken} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
       {(confirming || uncertain) && <Alert className="reservation-cancel" tone="warning"><p>{uncertain ? 'El código se oculta hasta comprobar el resultado.' : '¿Cancelar esta reserva? Los packs quedarán disponibles y el código dejará de servir.'}</p>
         <div className="reservation-cancel__actions">
-        <Button className="reservation-cancel__confirm" variant="danger" loading={cancelling} disabled={!csrfToken || loading} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
-        {!uncertain && <Button variant="secondary" onClick={() => setConfirming(false)}>Conservar reserva</Button>}
+        <Button ref={confirmRef} className="reservation-cancel__confirm" variant="danger" loading={cancelling} disabled={!csrfToken || loading} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
+        {!uncertain && <Button variant="secondary" onClick={() => { setConfirming(false); requestAnimationFrame(() => cancelRef.current?.focus()) }}>Conservar reserva</Button>}
         </div>
       </Alert>}
     </Card>}
