@@ -46,7 +46,7 @@ try {
 
   await page.goto(`${baseUrl}/conexion`)
   const healthResponse = await waitForApiResponse(page, '/api/health', () => page.getByRole('button', { name: 'Comprobar conexión' }).click())
-  await assertJson(healthResponse, 200, ['status'])
+  await assertJson(healthResponse, 200, ['status', 'database', 'worker'])
 
   // El formulario se habilita sin esperar el token CSRF; un envío temprano espera la comprobación de sesión.
   await page.route('**/api/auth/session', async (route) => { await new Promise((resolve) => setTimeout(resolve, 1500)); await route.continue() })

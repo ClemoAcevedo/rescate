@@ -57,7 +57,8 @@
     "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs",
     "test:web:notifications": "node --env-file-if-exists=.env scripts/test-web-notifications.mjs",
     "test:web:queue-worker": "node --env-file-if-exists=.env scripts/test-web-queue-worker.mjs",
-    "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs"
+    "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs",
+    "ops:status": "npm run build && node --env-file-if-exists=.env scripts/ops-status.mjs"
   },
   "keywords": [],
   "author": "",

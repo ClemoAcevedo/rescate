@@ -136,6 +136,7 @@ export interface HttpSchemas {
   ValidationIssue: ValidationIssue
   Notification: Notification
   NotificationPage: NotificationPage
+  HealthStatus: HealthStatus
 }
 export interface LoginRequest {
   email: EmailInput
@@ -595,4 +596,9 @@ export interface NotificationPage {
    * Avisos propios sin leer, en todas las páginas.
    */
   unreadCount: number
+}
+export interface HealthStatus {
+  status: "ok" | "unavailable"
+  database: "ok" | "unavailable"
+  worker: "ok" | "stopped" | "unknown"
 }

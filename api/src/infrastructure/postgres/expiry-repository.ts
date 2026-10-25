@@ -9,21 +9,25 @@ import { withTransaction } from './pool.js'
 import type { Pool } from './pool.js'
 import { settleQueue } from './waitlist-queue.js'
 
+/**
+ * Lotes con un vencimiento sin registrar (cierre de un lote publicado u oferta cuya hora
+ * pasó) y el más antiguo de cada uno. La consulta de tareas pendientes de K036 usa la misma.
+ */
+export const DUE_LOTS = `SELECT lot_id, min(due_at) AS due_at FROM (
+    SELECT id AS lot_id, pickup_ends_at AS due_at FROM public.lots
+    WHERE status = 'published' AND pickup_ends_at <= clock_timestamp()
+    UNION ALL
+    SELECT lot_id, offer_expires_at FROM public.waitlist_entries
+    WHERE status = 'offered' AND offer_expires_at <= clock_timestamp()) due GROUP BY lot_id`
+
 export function createLotExpiryRepository(pool: Pool): LotExpiryRepository {
   return {
     async claimNext(leaseMs, maxAttempts) {
       return withTransaction(pool, async (client) => {
-        // Pendiente: cierre de un lote publicado u oferta cuya hora pasó, la más antigua
-        // primero. SKIP LOCKED salta lotes que otro trabajador o un comando tienen bloqueados.
+        // El vencimiento pendiente más antiguo primero. SKIP LOCKED salta lotes que otro
+        // trabajador o un comando tienen bloqueados.
         const picked = await client.query<{ id: string }>(
-          `WITH due AS (
-             SELECT id AS lot_id, pickup_ends_at AS due_at FROM public.lots
-             WHERE status = 'published' AND pickup_ends_at <= clock_timestamp()
-             UNION ALL
-             SELECT lot_id, offer_expires_at FROM public.waitlist_entries
-             WHERE status = 'offered' AND offer_expires_at <= clock_timestamp())
-           SELECT l.id FROM public.lots l
-           JOIN (SELECT lot_id, min(due_at) AS due_at FROM due GROUP BY lot_id) d ON d.lot_id = l.id
+          `SELECT l.id FROM public.lots l JOIN (${DUE_LOTS}) d ON d.lot_id = l.id
            WHERE l.expiry_attempts < $1
              AND (l.expiry_claimed_until IS NULL OR l.expiry_claimed_until <= clock_timestamp())
            ORDER BY d.due_at, l.id LIMIT 1 FOR UPDATE OF l SKIP LOCKED`, [maxAttempts])

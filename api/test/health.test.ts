@@ -21,3 +21,22 @@ test("GET /health responde 200 con el estado de la API", async () => {
     })
   }
 })
+
+test("K036: la salud informa la base y el worker; sin base responde 503", async () => {
+  const cases = [
+    [{ database: "ok", worker: "ok" }, 200, "ok"],
+    [{ database: "ok", worker: "stopped" }, 200, "ok"],
+    [{ database: "unavailable", worker: "unknown" }, 503, "unavailable"],
+  ] as const
+  for (const [health, status, overall] of cases) {
+    const server = createApp({ health: async () => health }).listen(0, "127.0.0.1")
+    try {
+      await once(server, "listening")
+      const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/health`)
+      assert.equal(response.status, status)
+      assert.deepEqual(await response.json(), { status: overall, ...health })
+    } finally {
+      await new Promise(resolve => { server.close(resolve); server.closeAllConnections() })
+    }
+  }
+})

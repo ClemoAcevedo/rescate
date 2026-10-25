@@ -30,7 +30,30 @@ tags:
   -
     name: "Notifications"
     description: "RF09: avisos internos persistentes del titular y su lectura."
+  -
+    name: "Operations"
+    description: "RNF04: salud del proceso, de la base y del worker."
 paths:
+  "/health":
+    get:
+      operationId: "getHealth"
+      summary: "Comprobar el proceso, la base y el worker"
+      description: "Consulta PostgreSQL y el último ciclo exitoso del worker. El estado general depende solo del proceso y la base: un worker detenido responde 200. Sin respuesta de la base en 3 s, 503. No pasa por el límite por IP ni se registra."
+      tags: ["Operations"]
+      security: []
+      responses:
+        "200":
+          description: "Proceso y base disponibles. `worker` es `stopped` sin un ciclo exitoso en 60 s y `unknown` si falta la migración de K036."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+              example: { status: "ok", database: "ok", worker: "ok" }
+        "503":
+          description: "La base no responde. No incluye host, credenciales ni el error."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+              example: { status: "unavailable", database: "unavailable", worker: "unknown" }
   "/public/lots":
     get:
       operationId: "searchPublicLots"
@@ -2144,6 +2167,14 @@ components:
           items:
             $ref: "#/components/schemas/ValidationIssue"
       description: "Detalle opcional para validación. Nunca incluye entradas sensibles, secretos ni diagnósticos internos."
+    HealthStatus:
+      type: "object"
+      additionalProperties: false
+      required: ["status", "database", "worker"]
+      properties:
+        status: { type: "string", enum: ["ok", "unavailable"] }
+        database: { type: "string", enum: ["ok", "unavailable"] }
+        worker: { type: "string", enum: ["ok", "stopped", "unknown"] }
     ErrorResponse:
       type: "object"
       additionalProperties: false

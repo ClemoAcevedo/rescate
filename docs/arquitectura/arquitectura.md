@@ -82,14 +82,14 @@ servicios, las migraciones previas y el pipeline de producción.
 | API | [app.ts](../../api/src/app.ts) expone salud, cuatro rutas auth, cinco de operador, cuatro de fotos, tres de descubrimiento/reserva y cinco de reservas y retiro. [Composition](../../api/src/composition.ts) ensambla Pool, repositorio, casos de uso y router. K008 aporta credenciales, sesiones persistentes y protección HTTP. |
 | Base | [compose.yaml](../../compose.yaml) declara `postgis/postgis:16-3.5` y volumen persistente. Las [migraciones](../../api/migrations) definen la tabla técnica K002 y las cinco tablas de K003: users, establishments, memberships, lots y commitments. K008 añade credenciales, sesiones y protección de login; K015 crea reservas directas en commitments con clave idempotente por actor; K021 agrega los contadores de inventario del lote; K022 agrega estados terminales, código de retiro cifrado y la tabla de entregas. Después `lots.status` pasa a enum con cierre lógico, se agregan `user_consents` y la cola `waitlist_entries`, y K028 guarda en `lots` el reclamo de vencimientos. |
 | Migraciones y scripts | [package.json](../../api/package.json) expone node-pg-migrate; [test-migrations.mjs](../../api/scripts/test-migrations.mjs) consulta PostgreSQL con pg y verifica integridad/historial. [El wrapper Compose](../../api/scripts/test-migrations-compose.mjs) crea una base de prueba desde template0 en el servidor existente; esa base no hereda PostGIS; la migración K015 instala la extensión y el índice GiST. La búsqueda usa ST_DWithin y ST_Distance. |
-| Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createWorker` de Composition: registra vencimientos de lotes, reservas y ofertas, genera los avisos del outbox, valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Sin base queda inactivo; sin almacenamiento no procesa fotos. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
+| Worker | [worker.ts](../../api/src/worker.ts) ejecuta `createWorker` de Composition: registra vencimientos de lotes, reservas y ofertas, genera los avisos del outbox, valida una foto por vez y limpia objetos cada minuto con los casos de uso de Application. Escribe su latido y registra la demora de cada cola ([operación](../operacion.md)). Sin base queda inactivo; sin almacenamiento no procesa fotos. Comparte paquete e imagen con API, pero es otro proceso con Pool de 2 conexiones. |
 | Fotos | [Router](../../api/src/http/photos-router.ts), [casos de uso](../../api/src/application/photos/use-cases.ts), [reglas](../../api/src/domain/photos.ts), [repositorio](../../api/src/infrastructure/postgres/photo-repository.ts), adaptadores [S3](../../api/src/infrastructure/objects/s3-object-store.ts), [local](../../api/src/infrastructure/objects/local-object-store.ts) y [sharp](../../api/src/infrastructure/images/sharp-image-processor.ts). La [CLI K005](../../api/src/prototypes/photos/cli.ts) conserva el smoke del bucket. Ver [fotos](../fotos.md). |
 | CI/CD | [ci.yml](../../.github/workflows/ci.yml) valida el origen development de los PR a main y ejecuta web (tipos/lint/build), API (OpenAPI/tipos generados/tests HTTP y Domain/build) y después Compose (imágenes, web/API/proxy, PostGIS, migraciones, publicación concurrente y worker). Incluye login, publicación y reserva desde Chromium HTTPS. [deploy.yml](../../.github/workflows/deploy.yml) publica API, worker y web tras CI exitoso de main; verifica el sitio por HTTPS antes de crear el tag/release. |
 
 Compose no ejecuta migraciones al arrancar. Inyecta DATABASE_URL y el volumen
 local de fotos a API y worker.
-`/health` comprueba el proceso HTTP, no la base; esa diferencia frente a la salud
-propuesta en anexos H p. 22 queda pendiente de integración futura.
+`/health` comprueba el proceso, PostgreSQL y el último ciclo del worker, como pide
+anexos H p. 22 ([operación](../operacion.md)).
 
 La estructura real añade `http/`, `application/lots/`, `domain/`,
 `infrastructure/postgres/` y `composition.ts` para K010; conserva `app.ts`,
@@ -385,7 +385,7 @@ Ejemplo de trazabilidad que ya puede mostrarse:
 
 | Evidencia | Código/documento real | Qué demuestra y qué falta |
 | --- | --- | --- |
-| Web → API | ConnectionPage, proxy, app.ts y [health.test.ts](../../api/test/health.test.ts) | Recorrido de salud; no negocio ni acceso HTTP a base. |
+| Web → API | ConnectionPage, proxy, app.ts y [health.test.ts](../../api/test/health.test.ts) | Recorrido de salud con acceso a la base; `db:test:operations:compose` la prueba con PostgreSQL real. |
 | Persistencia inicial | [Modelo K003](../modelo-inicial.md), migraciones y [evidencia K003](../evidencia/k003.md) | Restricciones e historial probados previamente; no publicación/reserva implementadas. |
 | Fotos | [Fotos](../fotos.md) y `db:test:photos:compose` | Carga, validación, reinicio, limpieza y lectura con PostgreSQL real y worker real; `test:web:compose` recorre el formulario web con fotos (K017). |
 | Entorno y CI | Compose, workflow y [evidencia K006](../evidencia/k006.md) | Configuración y resultados históricos con sus límites; no certificación de un nuevo run remoto. |

@@ -275,11 +275,12 @@ try {
     const discrepancyKey = randomUUID()
     await assert.rejects(cases.reserve({ userId: buyerId }, tampered, 1, discrepancyKey), { code: 'inventory_discrepancy', lotId: tampered })
     const logged = []
-    const originalError = console.error
-    console.error = entry => logged.push(entry)
+    // La API escribe una línea JSON por evento en la salida estándar (K036).
+    const originalLog = console.log
+    console.log = line => logged.push(JSON.parse(line))
     let refused
     try { refused = await other('POST', `/public/lots/${tampered}/reservations`, { quantity: 1, idempotencyKey: randomUUID() }) }
-    finally { console.error = originalError }
+    finally { console.log = originalLog }
     assert.equal(refused.status, 409)
     assert.ok(logged.some(entry => entry?.event === 'inventory_discrepancy' && entry.lotId === tampered), JSON.stringify(logged))
     assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE lot_id=(SELECT id FROM lots WHERE public_id=$1)', [tampered])).rows[0].n, 0)

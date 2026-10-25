@@ -47,6 +47,7 @@ async function stopWorker(worker, signal = 'SIGTERM') {
   return { code, signal: received }
 }
 const events = worker => worker.output.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line))
+  .filter(event => event.event.startsWith('lot_expiry'))
 
 const database = new pg.Client({ connectionString })
 const pool = createPool({ connectionString })
