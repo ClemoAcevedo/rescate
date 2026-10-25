@@ -1,5 +1,6 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 export const MODEL = 'gemini-3.8-flash';
 export const MAX_PATCH_CHARS = 60_000;
@@ -75,7 +76,7 @@ export function formatReview(result, selection, repository, sha) {
 }
 
 export async function runReview({ repository, prNumber, expectedSha, githubToken, apiKey, rules,
-  fetchImpl = fetch, report = async () => {} }) {
+  fetchImpl = fetch, sleepImpl = sleep, report = async () => {} }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !Number.isInteger(prNumber) || prNumber < 1 ||
       !/^[a-f0-9]{40}$/.test(expectedSha) || !githubToken) {
     throw new Error('Configuración inválida del PR o falta GITHUB_TOKEN.');
@@ -114,8 +115,8 @@ export async function runReview({ repository, prNumber, expectedSha, githubToken
   }
   const selection = selectPatches(files);
   if (!selection.included.length) throw new Error('No hay diffs revisables dentro del límite de tamaño. Divide el PR.');
-  const response = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(120_000),
+  const request = {
+    method: 'POST', redirect: 'error',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: `Eres un reviewer de código. Responde en español.
@@ -143,7 +144,25 @@ Reglas del repositorio:\n${rules}` }] },
           },
         } },
     }),
-  });
+  };
+  let response;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      response = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+        ...request, signal: AbortSignal.timeout(120_000),
+      });
+    } catch (error) {
+      if (error.name !== 'TimeoutError') throw error;
+      if (attempt === 3) throw new Error('Gemini agotó el tiempo de espera en tres intentos; no se publicó una revisión.');
+      response = null;
+    }
+    if (response && response.status !== 503) break;
+    if (attempt === 3) break;
+    const delay = 10_000 * 2 ** (attempt - 1);
+    await report(`Gemini: ${response ? 'HTTP 503' : 'tiempo de espera agotado'} en intento ${attempt}/3. Reintento en ${delay / 1000} s.`);
+    await sleepImpl(delay);
+    if (!current(await github(root))) return report('Resultado descartado: el PR cambió entre reintentos.');
+  }
   if (!response.ok) {
     if (response.status === 429) throw new Error('Cuota de Gemini agotada (HTTP 429). Consulta AI Studio y reejecuta el job cuando haya cuota.');
     if (response.status === 503) throw new Error('Servicio de Gemini temporalmente no disponible (HTTP 503). Reejecuta el job más tarde.');

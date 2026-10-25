@@ -198,8 +198,12 @@ productos; las condiciones de pago son distintas.
 
 El script envía las reglas de `AGENTS.md`, las
 [instrucciones compartidas](../.github/review-instructions.md), el título,
-la descripción y los diffs del PR. Hace una solicitud a Gemini por ejecución,
-sin herramientas ni ejecución del código recibido. El presupuesto de diffs es de
+la descripción y los diffs del PR. Consulta Gemini sin herramientas ni ejecución
+del código recibido. Ante un `503` o un tiempo de espera agotado, reintenta hasta
+dos veces, esperando 10 y 20 segundos y comprobando que el SHA sigue vigente.
+Cada intento tiene un límite de 120 segundos; el job completo, ocho minutos.
+Los errores de clave, cuota y formato no se reintentan automáticamente.
+El presupuesto de diffs es de
 60 000 caracteres: omite archivos completos que no caben o no tienen patch y
 los identifica en la revisión como cobertura parcial. GitHub puede limitar el
 patch de archivos grandes; el reviewer solo conoce los fragmentos recibidos.
@@ -208,7 +212,7 @@ El workflow cancela la ejecución anterior al llegar otro commit y comprueba el
 SHA antes de publicar. Reejecutar un SHA que ya tiene revisión no consume otra
 consulta. Un resultado sin hallazgos solo se refiere a los diffs enviados.
 
-Si falta la clave, Gemini rechaza el acceso, se agota la cuota (`429`) o devuelve
+Si se agotan los reintentos, falta la clave, Gemini rechaza el acceso, se agota la cuota (`429`) o devuelve
 una respuesta incompleta o ubicaciones inválidas, el job falla con un mensaje en
 Actions y no publica una revisión. Corregir la configuración o esperar la
 renovación de cuota y usar **Re-run failed jobs** en la ejecución de **Gemini PR

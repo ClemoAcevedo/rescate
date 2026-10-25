@@ -15,23 +15,30 @@ const pr = { state: 'open', draft: false, changed_files: 1, title: 'Un cambio', 
 
 // The fake transport exercises the entire request-to-publication path without credentials.
 function harness({ initial = pr, final = pr, reviews = [], files = [file], geminiStatus = 200,
-  geminiResponse = response() } = {}) {
+  geminiResponse = response(), geminiStatuses = [geminiStatus] } = {}) {
   const requests = [];
   const messages = [];
+  const waits = [];
   let reads = 0;
+  let modelRequests = 0;
   const options = { repository, prNumber: 135, expectedSha: sha, githubToken: 'github-test-token',
     apiKey: 'gemini-test-key', rules: 'Reglas de prueba', report: (message) => messages.push(message),
+    sleepImpl: async (delay) => { waits.push(delay); },
     fetchImpl: async (url, init) => {
       requests.push({ url, ...init });
       const reply = (value, status = 200) => ({ ok: status >= 200 && status < 300,
         status, json: async () => value });
-      if (url.includes('generativelanguage.googleapis.com')) return reply(geminiResponse, geminiStatus);
+      if (url.includes('generativelanguage.googleapis.com')) {
+        const status = geminiStatuses[Math.min(modelRequests++, geminiStatuses.length - 1)];
+        if (status instanceof Error) throw status;
+        return reply(geminiResponse, status);
+      }
       if (init.method === 'POST') return reply({ id: 42 });
       if (url.includes('/reviews?')) return reply(reviews);
       if (url.includes('/files?')) return reply(files);
       return reply(reads++ === 0 ? initial : final);
     } };
-  return { options, requests, messages, posts: () => requests.filter((r) => r.method === 'POST' && r.url.endsWith('/reviews')),
+  return { options, requests, messages, waits, posts: () => requests.filter((r) => r.method === 'POST' && r.url.endsWith('/reviews')),
     modelCalls: () => requests.filter((r) => r.url.includes('generativelanguage.googleapis.com')) };
 }
 
@@ -121,7 +128,7 @@ test('missing secret fails explicitly without publishing', async () => {
   assert.equal(h.posts().length, 0);
 });
 
-for (const status of [400, 403, 429, 503]) {
+for (const status of [400, 403, 429]) {
   test(`Gemini HTTP ${status} fails without a fake review or automatic quota-consuming retries`, async () => {
     const h = harness({ geminiStatus: status });
     await assert.rejects(runReview(h.options), new RegExp(`HTTP ${status}`));
@@ -129,6 +136,55 @@ for (const status of [400, 403, 429, 503]) {
     assert.equal(h.posts().length, 0);
   });
 }
+
+test('503 recovers with backoff and publishes exactly one review', async () => {
+  const h = harness({ geminiStatuses: [503, 503, 200] });
+  await runReview(h.options);
+  assert.equal(h.modelCalls().length, 3);
+  assert.deepEqual(h.waits, [10_000, 20_000]);
+  assert.equal(h.posts().length, 1);
+  assert.equal(new Set(h.modelCalls().map((request) => request.signal)).size, 3);
+});
+
+test('persistent 503 stops after three attempts without a fake review', async () => {
+  const h = harness({ geminiStatus: 503 });
+  await assert.rejects(runReview(h.options), /HTTP 503/);
+  assert.equal(h.modelCalls().length, 3);
+  assert.deepEqual(h.waits, [10_000, 20_000]);
+  assert.equal(h.posts().length, 0);
+});
+
+test('a timeout retries with a fresh signal and can recover', async () => {
+  const h = harness({ geminiStatuses: [new DOMException('Timed out', 'TimeoutError'), 200] });
+  await runReview(h.options);
+  assert.equal(h.modelCalls().length, 2);
+  assert.deepEqual(h.waits, [10_000]);
+  assert.equal(h.posts().length, 1);
+});
+
+test('persistent timeouts stop after three attempts without publication', async () => {
+  const h = harness({ geminiStatuses: [new DOMException('Timed out', 'TimeoutError')] });
+  await assert.rejects(runReview(h.options), /tiempo de espera en tres intentos/);
+  assert.equal(h.modelCalls().length, 3);
+  assert.equal(h.posts().length, 0);
+});
+
+test('a new push while waiting cancels retries before using more quota', async () => {
+  const h = harness({ geminiStatuses: [503, 200],
+    final: { ...pr, head: { ...pr.head, sha: 'b'.repeat(40) } } });
+  await runReview(h.options);
+  assert.equal(h.modelCalls().length, 1);
+  assert.equal(h.posts().length, 0);
+  assert.match(h.messages.at(-1), /cambió entre reintentos/);
+});
+
+test('a quota error after a temporary failure is not retried', async () => {
+  const h = harness({ geminiStatuses: [503, 429, 200] });
+  await assert.rejects(runReview(h.options), /HTTP 429/);
+  assert.equal(h.modelCalls().length, 2);
+  assert.deepEqual(h.waits, [10_000]);
+  assert.equal(h.posts().length, 0);
+});
 
 test('malformed model output never posts a review', async () => {
   const h = harness({ geminiResponse: response({ ...result, findings: [{ ...finding, line: 999 }] }) });
