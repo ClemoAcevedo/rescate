@@ -146,6 +146,7 @@ Reglas del repositorio:\n${rules}` }] },
   });
   if (!response.ok) {
     if (response.status === 429) throw new Error('Cuota de Gemini agotada (HTTP 429). Consulta AI Studio y reejecuta el job cuando haya cuota.');
+    if (response.status === 503) throw new Error('Servicio de Gemini temporalmente no disponible (HTTP 503). Reejecuta el job más tarde.');
     throw new Error(`Gemini devolvió HTTP ${response.status}. Comprueba la clave y el acceso a ${MODEL}.`);
   }
   const result = parseReview(await response.json(), selection.included);

@@ -186,8 +186,8 @@ protección de ramas.
    job que usa el secreto.
 
 Gemini 2.5 Flash está [limitado a proyectos con uso previo](https://ai.google.dev/gemini-api/docs/deprecations).
-El reviewer usa la [API de Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash)
-ofrece entrada y salida gratuitas dentro de la cuota del proyecto. Consultar los
+El reviewer usa la [API de Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash),
+que ofrece entrada y salida gratuitas dentro de la cuota del proyecto. Consultar los
 [límites efectivos en AI Studio](https://ai.google.dev/gemini-api/docs/rate-limits).
 La capa gratuita permite a Google usar el contenido enviado para mejorar sus
 productos; las condiciones de pago son distintas.
