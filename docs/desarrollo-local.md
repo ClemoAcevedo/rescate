@@ -171,7 +171,7 @@ ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 ## Revisión de PR con Gemini
 
 [Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
-nuevos commits con `gemini-3.8-flash`. Publica una revisión de tipo comentario
+nuevos commits con `gemini-3.5-flash-lite`. Publica una revisión de tipo comentario
 mediante `github-actions[bot]`, con hallazgos en español y enlaces a líneas del
 commit revisado. Complementa la revisión de otro integrante exigida por la
 protección de ramas.
@@ -187,8 +187,7 @@ protección de ramas.
    un commit. Los borradores, forks y pushes de Dependabot quedan excluidos del
    job que usa el secreto.
 
-Gemini 2.5 Flash está [limitado a proyectos con uso previo](https://ai.google.dev/gemini-api/docs/deprecations).
-El reviewer usa la [API de Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash),
+El reviewer usa la [API de Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite),
 que ofrece entrada y salida gratuitas dentro de la cuota del proyecto. Consultar los
 [límites efectivos en AI Studio](https://ai.google.dev/gemini-api/docs/rate-limits).
 La capa gratuita permite a Google usar el contenido enviado para mejorar sus
@@ -219,7 +218,7 @@ renovación de cuota y usar **Re-run failed jobs** en la ejecución de **Gemini 
 Review**. Este job es independiente del CI del producto.
 
 Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
-título **Revisión de Gemini 3.8 Flash** y el SHA vigente. Un job verde por sí solo
+título **Revisión de Gemini 3.5 Flash-Lite** y el SHA vigente. Un job verde por sí solo
 no acredita una revisión: también puede haber omitido un commit reemplazado.
 Las pruebas del reviewer se ejecutan sin claves con:
 

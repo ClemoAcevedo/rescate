@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addedLines, formatReview, parseReview, runReview, selectPatches } from './gemini-review.mjs';
+import { MODEL, MODEL_LABEL, addedLines, formatReview, parseReview, runReview, selectPatches } from './gemini-review.mjs';
 
 const sha = 'a'.repeat(40);
 const repository = 'example/rescate';
@@ -76,6 +76,8 @@ test('publishes one COMMENT review for the expected SHA and separates provider c
   await runReview(h.options);
   assert.equal(h.modelCalls().length, 1);
   assert.equal(h.posts().length, 1);
+  assert.ok(h.modelCalls()[0].url.endsWith(`/models/${MODEL}:generateContent`));
+  assert.ok(JSON.parse(h.posts()[0].body).body.includes(`## Revisión de ${MODEL_LABEL}`));
   assert.deepEqual(Object.keys(JSON.parse(h.posts()[0].body)).sort(), ['body', 'commit_id', 'event']);
   assert.equal(JSON.parse(h.posts()[0].body).commit_id, sha);
   assert.equal(JSON.parse(h.posts()[0].body).event, 'COMMENT');

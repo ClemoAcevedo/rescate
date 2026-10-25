@@ -2,7 +2,8 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-export const MODEL = 'gemini-3.8-flash';
+export const MODEL = 'gemini-3.5-flash-lite';
+export const MODEL_LABEL = 'Gemini 3.5 Flash-Lite';
 export const MAX_PATCH_CHARS = 60_000;
 const marker = (sha) => `<!-- gemini-pr-review:${sha} -->`;
 
@@ -58,7 +59,7 @@ export function parseReview(response, files) {
 }
 
 export function formatReview(result, selection, repository, sha) {
-  const lines = [marker(sha), '## Revisión de Gemini 3.8 Flash', '',
+  const lines = [marker(sha), `## Revisión de ${MODEL_LABEL}`, '',
     `Commit: \`${sha}\` · Archivos con diff enviados: ${selection.included.length}.`, '',
     result.summary, ''];
   for (const finding of result.findings) {
