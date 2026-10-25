@@ -168,6 +168,68 @@ El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incl
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 `continue-on-error`. Los comandos del job Compose están en el workflow.
 
+## Revisión de PR con Gemini
+
+[Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
+nuevos commits con `gemini-3.5-flash-lite`. Publica una revisión de tipo comentario
+mediante `github-actions[bot]`, con hallazgos en español y enlaces a líneas del
+commit revisado. Complementa la revisión de otro integrante exigida por la
+protección de ramas.
+
+### Configuración
+
+1. Crear una clave de Gemini API en [Google AI Studio](https://aistudio.google.com/api-keys)
+   en un proyecto con la capa gratuita disponible.
+2. Guardarla como `GEMINI_API_KEY` en **Settings → Secrets and variables → Actions**
+   del repositorio. `GITHUB_TOKEN` lo proporciona Actions con permisos de lectura
+   de contenido y escritura de revisiones.
+3. Abrir un PR listo para revisión desde una rama del mismo repositorio o subir
+   un commit. Los borradores, forks y pushes de Dependabot quedan excluidos del
+   job que usa el secreto.
+
+El reviewer usa la [API de Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite),
+que ofrece entrada y salida gratuitas dentro de la cuota del proyecto. Consultar los
+[límites efectivos en AI Studio](https://ai.google.dev/gemini-api/docs/rate-limits).
+La capa gratuita permite a Google usar el contenido enviado para mejorar sus
+productos; las condiciones de pago son distintas.
+
+### Alcance y diagnóstico
+
+El script envía las reglas de `AGENTS.md`, las
+[instrucciones compartidas](../.github/review-instructions.md), el título,
+la descripción y los diffs del PR. Consulta Gemini sin herramientas ni ejecución
+del código recibido. Ante un `503` o un tiempo de espera agotado, reintenta hasta
+dos veces, esperando 10 y 20 segundos y comprobando que el SHA sigue vigente.
+Cada intento tiene un límite de 120 segundos; el job completo, ocho minutos.
+Los errores de clave, cuota y formato no se reintentan automáticamente.
+El presupuesto de diffs es de
+60 000 caracteres: omite archivos completos que no caben o no tienen patch y
+los identifica en la revisión como cobertura parcial. GitHub puede limitar el
+patch de archivos grandes; el reviewer solo conoce los fragmentos recibidos.
+
+El workflow cancela la ejecución anterior al llegar otro commit y comprueba el
+SHA antes de publicar. Reejecutar un SHA que ya tiene revisión no consume otra
+consulta. Un resultado sin hallazgos solo se refiere a los diffs enviados.
+
+Si se agotan los reintentos, falta la clave, Gemini rechaza el acceso, se agota la cuota (`429`) o devuelve
+una respuesta incompleta o ubicaciones inválidas, el job falla con un mensaje en
+Actions y no publica una revisión. Corregir la configuración o esperar la
+renovación de cuota y usar **Re-run failed jobs** en la ejecución de **Gemini PR
+Review**. Este job es independiente del CI del producto.
+
+Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
+título **Revisión de Gemini 3.5 Flash-Lite** y el SHA vigente. Un job verde por sí solo
+no acredita una revisión: también puede haber omitido un commit reemplazado.
+Las pruebas del reviewer se ejecutan sin claves con:
+
+```bash
+node --test .github/scripts/gemini-review.test.mjs
+```
+
+Las instrucciones de Copilot remiten al mismo archivo compartido. Su regla de
+revisión sigue dependiendo del acceso y la cuota de Copilot; Gemini funciona
+mediante su propio workflow.
+
 ## Evidencia y aceptación en el PR
 
 Consulta [el registro de verificación K006](evidencia/k006.md), con resultados
