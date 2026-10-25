@@ -1,7 +1,7 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-export const MODEL = 'gemini-2.5-flash';
+export const MODEL = 'gemini-3.8-flash';
 export const MAX_PATCH_CHARS = 60_000;
 const marker = (sha) => `<!-- gemini-pr-review:${sha} -->`;
 
@@ -57,7 +57,7 @@ export function parseReview(response, files) {
 }
 
 export function formatReview(result, selection, repository, sha) {
-  const lines = [marker(sha), '## Revisión de Gemini 2.5 Flash', '',
+  const lines = [marker(sha), '## Revisión de Gemini 3.8 Flash', '',
     `Commit: \`${sha}\` · Archivos con diff enviados: ${selection.included.length}.`, '',
     result.summary, ''];
   for (const finding of result.findings) {
@@ -131,7 +131,7 @@ Reglas del repositorio:\n${rules}` }] },
         files: selection.included.map(({ filename, status, patch }) => ({ path: filename, status, patch })),
         omitted: selection.omitted,
       }) }] }],
-      generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 },
+      generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' },
         responseMimeType: 'application/json', responseSchema: {
           type: 'OBJECT', required: ['summary', 'findings'], properties: {
             summary: { type: 'STRING' }, findings: { type: 'ARRAY', maxItems: 8, items: {
