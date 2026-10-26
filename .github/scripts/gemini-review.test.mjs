@@ -294,6 +294,19 @@ for (const [name, change] of [['draft', { draft: true }], ['closed', { state: 'c
   });
 }
 
+test('a history-only PR is skipped without keys, Git, model requests or comments', async () => {
+  for (const apiKey of [undefined, 'gemini-test-key']) {
+    const h = harness({ files: [], sourceError: true });
+    await runReview({ ...h.options, apiKey, openRouterApiKey: undefined });
+    assert.equal(h.requests.length, 1);
+    assert.equal(h.models().length, 0);
+    assert.equal(h.openRouterRequests().length, 0);
+    assert.equal(h.posts().length, 0);
+    assert.equal(h.artifacts.length, 0);
+    assert.match(h.messages.at(-1), /Omitido: PR sin cambios de archivos/);
+  }
+});
+
 test('head or base movement during generation discards the result', async () => {
   for (const change of [{ head: { sha: 'c'.repeat(40), repo: { full_name: repository } } }, { base: { sha: 'd'.repeat(40) } }]) {
     const h = harness({ model: payload => { h.setCurrent(change); return review([], payload.files); } });
