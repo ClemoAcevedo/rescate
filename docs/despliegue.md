@@ -73,7 +73,8 @@ sin cancelar un despliegue a medio ejecutar:
    La CLI devuelve JSON plano en CI y envuelto en modo no interactivo; se admiten
    ambas respuestas y se exige `READY` y una URL HTTPS antes de continuar.
 5. Con worker y web listos, Chromium (en caché, con reintentos) comprueba SHA en el dominio estable, rutas SPA, botón de conexión,
-   PostGIS, cookies, login, sesión persistida y logout.
+   PostGIS, cookies, login, sesión persistida y logout. Antes del logout confirma
+   que la aplicación restauró la sesión y el token CSRF, y que el botón está disponible.
 6. Crea `deploy-<SHA>` y un release con commit, IDs de Railway, URL de Vercel y
    enlaces de CI/CD. Reejecutar el mismo commit actualiza ese release.
 
