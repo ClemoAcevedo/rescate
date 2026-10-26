@@ -100,11 +100,11 @@ test('worker: vencimientos y avisos activos con base; sin base queda inactivo', 
   assert.throws(() => createWorker({ DATABASE_URL: database, WORKER_EXPIRIES: 'no' }), /on u off/)
   // Con los vencimientos apagados, la base sigue alimentando los avisos internos (K030).
   const withoutExpiries = createWorker({ DATABASE_URL: database, WORKER_EXPIRIES: 'off' })
-  assert.deepEqual(withoutExpiries?.tasks, ['avisos internos'])
+  assert.deepEqual(withoutExpiries?.tasks, ['avisos internos', 'retención del chat'])
   withoutExpiries!.stop()
   await withoutExpiries!.run()
   const worker = createWorker({ DATABASE_URL: database })
-  assert.deepEqual(worker?.tasks, ['vencimientos', 'avisos internos'])
+  assert.deepEqual(worker?.tasks, ['vencimientos', 'avisos internos', 'retención del chat'])
   worker!.stop()
   await worker!.run()
 })
