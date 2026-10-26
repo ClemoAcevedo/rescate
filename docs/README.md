@@ -44,6 +44,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0011](adr/0011-vencimientos-con-concesion.md) | Vencimientos reclamados por lote con concesión y reintentos acotados; el cierre pasa todo F, O y R a X |
 | [0012](adr/0012-avisos-y-outbox.md) | Avisos internos con outbox transaccional: el evento nace con la transición y el worker genera un aviso por evento y destinatario |
 | [0013](adr/0013-limite-de-codigos-de-retiro.md) | Cinco códigos de retiro inválidos por operador en 15 minutos suspenden revisar y confirmar; fallos persistidos y serializados por operador |
+| [0015](adr/0015-deploy-de-worker-y-web-en-paralelo.md) | Tras la API migrada, worker y web se despliegan en paralelo; la verificación pública espera a ambos |
 
 ## Entregas y evidencia
 
