@@ -1,4 +1,4 @@
-// K032: planes reales de búsqueda, reserva, cola, compromisos y worker sobre la semilla de escala.
+// K032: planes reales de búsqueda, reserva, cola, compromisos, panel y worker sobre la semilla de escala.
 // Intercepta pg para analizar cada sentencia que emite la API con EXPLAIN (ANALYZE, BUFFERS)
 // dentro de un savepoint que se revierte; luego la sentencia corre normalmente. Así el plan
 // corresponde al SQL de los repositorios y no a una copia que pueda quedar desactualizada.
@@ -97,6 +97,11 @@ export async function explainScale(connectionString, seed, environment) {
   const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date())
   const soon = new Date(Date.now() + 6 * 3600000).toISOString()
   const [lot] = seed.reserveLots
+  // K035: el panel exige membership; la sonda (cuenta 61) pasa a operar el primer establecimiento.
+  const { rows: [operated] } = await pool.query(`INSERT INTO memberships (user_id, establishment_id)
+    SELECT u.id, e.id FROM users u, (SELECT id, public_id FROM establishments ORDER BY id LIMIT 1) e
+    WHERE u.email = 'k032-0061@example.invalid' RETURNING (SELECT public_id::text FROM establishments WHERE id = establishment_id) AS id`)
+  const establishment = `/establishments/${operated.id}`
   const operations = [
     ['búsqueda sin filtros', () => call('GET', '/public/lots'), 200],
     ['búsqueda por ubicación y radio', () => call('GET', '/public/lots?latitude=-33.45&longitude=-70.66&radiusKm=5'), 200],
@@ -108,6 +113,12 @@ export async function explainScale(connectionString, seed, environment) {
     ['cancelación', () => call('POST', `/reservations/${seed.probe.cancels[0]}/cancel`, {}), 200],
     ['ingreso a la espera', () => call('POST', `/public/lots/${seed.queuedLots[0]}/waitlist`, { quantity: 1, idempotencyKey: randomUUID() }), 201],
     ['avisos', () => call('GET', '/notifications'), 200],
+    ['panel del establecimiento', () => call('GET', `${establishment}/panel`), 200],
+    ['panel con período de 60 días', () => call('GET', `${establishment}/panel?from=${new Date(Date.now() - 59 * 86400000).toISOString().slice(0, 10)}`), 200],
+    ['compromisos del establecimiento', () => call('GET', `${establishment}/commitments`), 200],
+    ['compromisos vigentes', () => call('GET', `${establishment}/commitments?state=active`), 200],
+    ['historial del establecimiento', () => call('GET', `${establishment}/activity`), 200],
+    ['historial, página 5', () => call('GET', `${establishment}/activity?page=5`), 200],
     ['vencimientos (worker)', () => expiries.expireNext(), undefined],
     ['outbox (worker)', () => outbox.processNext(), undefined],
   ]

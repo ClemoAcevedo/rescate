@@ -37,7 +37,8 @@ try {
     if (width <= 1280) {
       await menu.click()
       const links = page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link')
-      assert.equal(await links.count(), 6)
+      // Explorar, esperas, reservas, avisos, Mi establecimiento, Mis lotes y Publicar lote.
+      assert.equal(await links.count(), 7)
       const boxes = await links.evaluateAll(elements => elements.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y, bottom: r.bottom, height: r.height } }))
       for (let i = 0; i < boxes.length; i++) {
         assert.ok(boxes[i].x >= 0 && boxes[i].right <= width && boxes[i].height >= 44, `${width}: enlace ${i} fuera de pantalla o pequeño: ${JSON.stringify(boxes[i])}`)
