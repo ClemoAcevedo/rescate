@@ -238,6 +238,7 @@ export async function runReview({ repository, prNumber, expectedSha, githubToken
   const current = value => value.state === 'open' && !value.draft && value.head.repo?.full_name === repository &&
     value.head.sha === expectedSha && value.base.sha === pr.base.sha;
   if (!current(pr)) return report('Omitido: PR cerrado, borrador, fork o commit reemplazado.');
+  if (pr.changed_files === 0) return report('Omitido: PR sin cambios de archivos; no hay contenido que revisar.');
   const assertCurrent = async () => {
     if (!current(await github(root))) throw new Superseded('Resultado descartado: cambió el HEAD, la base o el estado del PR.');
   };
