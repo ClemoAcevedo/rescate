@@ -166,7 +166,8 @@ navegador. Un push nuevo a un PR cancela la ejecución anterior de ese PR; los p
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
   web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reservas K022/K025, cola K027, vencimientos K028 con procesos reales del worker, avisos, seguridad, panel y operación; verifica worker y siempre recoge logs y limpia.
 - `browser`: levanta solo el PostgreSQL de Compose, instala Chromium (en caché por
-  lockfile, con tres intentos de 3 minutos porque la descarga a veces se cuelga) y
+  lockfile) con [`install-chromium.sh`](../.github/scripts/install-chromium.sh), que da
+  timeouts de red a apt y reintenta tras terminar un apt-get colgado, y
   ejecuta la autenticación HTTPS con reinicio de API y `test:web:compose`. No es
   un check obligatorio mientras no se agregue a la protección de ramas.
 

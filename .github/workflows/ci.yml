@@ -170,14 +170,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('api/package-lock.json') }}
       - name: Install Chromium
-        # La descarga a veces se cuelga y agotaba el timeout del job: tres intentos de 3 minutos.
-        run: |
-          cd api
-          for attempt in 1 2 3; do
-            timeout 180 npx playwright install --with-deps chromium && exit 0
-            echo "Intento $attempt de instalar Chromium falló o se colgó"
-          done
-          exit 1
+        run: .github/scripts/install-chromium.sh
       - name: K008 auth, restart and K010 integration over HTTPS
         run: npm --prefix api run db:test:auth:compose
       - name: K009 auth, K011 lot form, K015 discovery/reservation, K022 cancellation/pickup, K031 three-browser queue flow and K035 panel

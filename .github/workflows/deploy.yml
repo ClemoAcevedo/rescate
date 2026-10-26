@@ -156,13 +156,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('api/package-lock.json') }}
       - name: Install Chromium
-        run: |
-          cd api
-          for attempt in 1 2 3; do
-            timeout 180 npx playwright install --with-deps chromium && exit 0
-            echo "Intento $attempt de instalar Chromium falló o se colgó"
-          done
-          exit 1
+        run: .github/scripts/install-chromium.sh
       - name: Browser smoke against the public deployment
         run: |
           test -n "$DEPLOY_SMOKE_EMAIL"
