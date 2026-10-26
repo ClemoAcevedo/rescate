@@ -80,9 +80,10 @@ jobs:
         id: deploy
         run: node api/scripts/deploy-railway.mjs "$SERVICE_ID"
 
+  # La web solo depende de la API migrada: se publica en paralelo con el worker.
   web:
     name: Vercel / web
-    needs: worker
+    needs: api
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -131,7 +132,7 @@ jobs:
 
   verify:
     name: Public HTTPS / web, API and PostGIS
-    needs: web
+    needs: [worker, web]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -149,8 +150,19 @@ jobs:
           cache: npm
           cache-dependency-path: api/package-lock.json
       - run: npm --prefix api ci
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('api/package-lock.json') }}
       - name: Install Chromium
-        run: cd api && npx playwright install --with-deps chromium
+        run: |
+          cd api
+          for attempt in 1 2 3; do
+            timeout 180 npx playwright install --with-deps chromium && exit 0
+            echo "Intento $attempt de instalar Chromium falló o se colgó"
+          done
+          exit 1
       - name: Browser smoke against the public deployment
         run: |
           test -n "$DEPLOY_SMOKE_EMAIL"

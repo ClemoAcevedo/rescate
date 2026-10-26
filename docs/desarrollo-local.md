@@ -155,14 +155,20 @@ npm --prefix api run build
 
 `.github/workflows/ci.yml` se activa en todos los PR y en pushes a `main` y
 `development`. Valida el origen `development` de los PR a `main`, ejecuta web y
-API en paralelo y después Compose:
+API en paralelo y después, también en paralelo, Compose y los recorridos de
+navegador. Un push nuevo a un PR cancela la ejecución anterior de ese PR; los push a
+`main` y `development` nunca se cancelan:
 
 - `web`: instalación con lockfile, TypeScript, lint y build en pasos separados.
   Actualmente no existen tests web; no se oculta esa ausencia con `--if-present`.
 - `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud, identidad, seguridad y lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reservas K022/K025, cola K027, vencimientos K028 con procesos reales del worker, reinicio de API, Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reservas K022/K025, cola K027, vencimientos K028 con procesos reales del worker, avisos, seguridad, panel y operación; verifica worker y siempre recoge logs y limpia.
+- `browser`: levanta solo el PostgreSQL de Compose, instala Chromium (en caché por
+  lockfile, con tres intentos de 3 minutos porque la descarga a veces se cuelga) y
+  ejecuta la autenticación HTTPS con reinicio de API y `test:web:compose`. No es
+  un check obligatorio mientras no se agregue a la protección de ramas.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
