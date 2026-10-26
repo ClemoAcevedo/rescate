@@ -19,3 +19,6 @@ Esta carpeta contiene los servicios que consumen la API y sus tipos.
 - `waitlist-service.ts` consulta solicitudes y posición, ingresa con clave idempotente
   y acepta/rechaza/sale con CSRF. Usa los tipos generados y valida la coherencia
   entre estado, oferta, posición, vencimiento y reserva antes de mostrar acciones.
+
+- `chat-service.ts` valida mensajes, secuencia y páginas con tipos generados; envía
+  texto y clave idempotente con CSRF para la conversación de la reserva.

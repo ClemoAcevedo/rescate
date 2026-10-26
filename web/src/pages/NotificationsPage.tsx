@@ -35,10 +35,10 @@ function describe(notification: Notification): { title: string; text: string; ac
         text: `Cancelaste tu reserva de ${packs(notification.quantity)}. Los packs quedaron disponibles para otras personas.` }
     // El aviso no trae el texto del mensaje, que solo se lee dentro de la conversación
     case 'message_from_establishment':
-      return { title: 'Mensaje del establecimiento', action: 'Ver reserva', to: reservation,
+      return { title: 'Mensaje del establecimiento', action: 'Abrir conversación', to: `${reservation}/chat`,
         text: `Te escribieron sobre tu reserva de ${packs(notification.quantity)}.` }
     case 'message_from_holder':
-      return { title: 'Mensaje de quien reservó', action: 'Ver panel', to: '/operador/panel',
+      return { title: 'Mensaje de quien reservó', action: 'Abrir conversación', to: `${reservation}/chat`,
         text: `Te escribieron sobre una reserva de ${packs(notification.quantity)}.` }
   }
 }

@@ -130,7 +130,7 @@ function Detail({ id }: { id: string }) {
     {reservation && <Card className="reservation-detail">
       <Badge tone={current && !uncertain ? 'success' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && reservation.status === 'confirmed' ? 'Ventana finalizada' : labels[reservation.status]}</Badge>
       <header className="reservation-detail__heading">
-        <h2>{lotTitle(reservation.lot.description)}</h2>
+        <h2>{lotTitle(reservation.lot.description)}</h2><Link to={`/reservas/${encodeURIComponent(id)}/chat`}>Abrir chat de la reserva</Link>
         {reservation.lot.description !== lotTitle(reservation.lot.description) && <p>{reservation.lot.description}</p>}
       </header>
       <dl className="reservation-detail__facts">
