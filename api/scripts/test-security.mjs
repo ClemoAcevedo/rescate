@@ -78,7 +78,7 @@ async function restartApi() {
 }
 
 // --- Cliente HTTP. Ritmo propio bajo los límites generales (3000/min por IP con ráfaga 100;
-// 120/min por usuario con ráfaga 20) para que un 429 sea siempre el límite que se prueba.
+// 120/min por usuario con ráfaga 20, el más estricto de escrituras y lecturas) para que un 429 sea siempre el límite que se prueba.
 function pacer(perSecond, burst) {
   let tokens = burst
   let at = performance.now()

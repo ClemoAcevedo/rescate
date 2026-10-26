@@ -12,7 +12,8 @@ acotan sus claves: con el mapa lleno, una clave nueva recibe 503.
 
 | Límite (H p. 21) | Dónde se cobra | Dónde vive |
 | --- | --- | --- |
-| 120 solicitudes/min por usuario, ráfaga 20 | Al resolver la sesión | Memoria del proceso |
+| Escrituras: 120 solicitudes/min por usuario, ráfaga 20 | Al resolver la sesión, en métodos distintos de GET y HEAD | Memoria del proceso |
+| Lecturas: 300 solicitudes/min por usuario, ráfaga 60 ([ADR 0014](adr/0014-cupo-de-lecturas-por-usuario.md)) | Al resolver la sesión, en GET y HEAD | Memoria del proceso |
 | 3000 solicitudes/min por IP, ráfaga 100 | Todas las rutas salvo `/health` | Memoria del proceso |
 | Login: 5 fallos por cuenta en 15 min bloquean 15 min | Application de identidad | PostgreSQL (`login_security_state` y `login_failures`) |
 | Login: 30 intentos por IP en 15 min | `POST /auth/login` | Memoria del proceso |

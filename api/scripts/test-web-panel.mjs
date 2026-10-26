@@ -175,6 +175,21 @@ try {
   assert.match(await period.innerText(), /Lotes cerrados entre el .+ y el .+: 0\./)
   ok('período elegido: validación local de fechas y tasa sin datos cuando no hay denominador')
 
+  // Más de 366 días: el formulario lo frena; si llega por la URL, el 422 deja el formulario para corregirlo.
+  panelRequests = 0
+  await period.getByLabel('Desde').fill('2025-01-09')
+  await period.getByRole('button', { name: 'Ver período' }).click()
+  await period.getByText('El período puede abarcar como máximo 366 días.').waitFor()
+  assert.equal(panelRequests, 0)
+  await page.goto(`${baseUrl}/operador/panel?desde=2025-01-09&hasta=2026-01-10`)
+  await page.getByRole('alert').filter({ hasText: 'Reintentar' }).waitFor()
+  assert.equal(await period.getByLabel('Desde').inputValue(), '2025-01-09')
+  await period.getByLabel('Desde').fill('2025-01-10')
+  await period.getByRole('button', { name: 'Ver período' }).click()
+  await page.waitForURL(/desde=2025-01-10&hasta=2026-01-10/)
+  await period.getByText(/Lotes cerrados entre el .+: 0\./).waitFor()
+  ok('período de más de 366 días: validación local y formulario visible tras el 422 de la URL')
+
   // Otro operador ve solo su establecimiento; una cuenta sin membership no ve el panel.
   const outsiderPage = watch(await outsider.context.newPage())
   await outsiderPage.goto(`${baseUrl}/operador/panel`)
