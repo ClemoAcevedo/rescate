@@ -19,7 +19,7 @@ acotan sus claves: con el mapa lleno, una clave nueva recibe 503.
 | Login: 30 intentos por IP en 15 min | `POST /auth/login` | Memoria del proceso |
 | Código de retiro: 5 fallos por operador en 15 min suspenden 15 min | Application de reservas, al revisar y al confirmar | PostgreSQL (`pickup_code_security_state` y `pickup_code_failures`) |
 | Código de retiro: 30 revisiones por IP por minuto | Application de reservas, después del permiso y antes de comparar el código | Memoria del proceso |
-| Mensajes de chat: 12/min por usuario, ráfaga 3 | `limits.message`; lo aplica K037 (#40) | Memoria del proceso |
+| Mensajes de chat: 12/min por usuario, ráfaga 3 | `POST /reservations/:reservationId/messages` ([chat](chat.md)) | Memoria del proceso |
 
 Los límites en memoria se reinician con la API y se multiplican si hay varias
 instancias: H p. 21 los describe como protección de una sola API, no como defensa

@@ -276,7 +276,9 @@ lo cambia.
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
   vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
   (K030), panel del establecimiento con compromisos, historial y resultados por período
-  sobre lotes cerrados (K035), según OpenAPI. Límites de login, códigos de retiro y
+  sobre lotes cerrados (K035), chat de la reserva entre titular y establecimiento con
+  secuencia, reintentos sin duplicar y cierre al cancelar, vencer o retirar (K037, [chat](docs/chat.md)),
+  según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y
   salud con PostgreSQL y el último ciclo del worker ([operación](docs/operacion.md), K036).
@@ -284,7 +286,8 @@ lo cambia.
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
   (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
   Registra su último ciclo exitoso y la demora y las tareas en error de cada cola;
-  `ops:status` las consulta (K036).
+  `ops:status` las consulta (K036). Borra una vez al día el texto de los chats cerrados hace
+  más de treinta días (K037).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
   observados y repetición con el worker de fotos activo y detenido (K025); flujo de
   cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
