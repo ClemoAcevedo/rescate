@@ -101,6 +101,33 @@ export type PickupCode = string
  * offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva.
  */
 export type NotificationKind = "offer_issued" | "offer_expired" | "reservation_confirmed" | "reservation_cancelled"
+/**
+ * Fecha calendario en la zona del establecimiento, sin hora.
+ */
+export type LocalDate = string
+/**
+ * Reserva: ReservationStatus. Solicitud de espera: WaitlistStatus. Vigente al responder.
+ */
+export type CommitmentStatus =
+  "confirmed" | "cancelled" | "expired" | "delivered" | "waiting" | "offered" | "accepted" | "declined" | "left"
+/**
+ * reservation_confirmed: reserva directa; offer_accepted: la oferta aceptada creó la reserva; pickup_confirmed: retiro acreditado; waitlist_expired: la espera terminó con el cierre del lote.
+ */
+export type ActivityKind =
+  | "lot_published"
+  | "lot_expired"
+  | "lot_withdrawn"
+  | "reservation_confirmed"
+  | "reservation_cancelled"
+  | "reservation_expired"
+  | "pickup_confirmed"
+  | "waitlist_joined"
+  | "offer_issued"
+  | "offer_accepted"
+  | "offer_declined"
+  | "offer_expired"
+  | "waitlist_left"
+  | "waitlist_expired"
 
 export interface HttpSchemas {
   LoginRequest: LoginRequest
@@ -137,6 +164,13 @@ export interface HttpSchemas {
   Notification: Notification
   NotificationPage: NotificationPage
   HealthStatus: HealthStatus
+  EstablishmentPanel: EstablishmentPanel
+  PanelInventory: PanelInventory
+  PanelOpenLot: PanelOpenLot
+  OperatorCommitment: OperatorCommitment
+  OperatorCommitmentPage: OperatorCommitmentPage
+  ActivityEvent: ActivityEvent
+  ActivityPage: ActivityPage
 }
 export interface LoginRequest {
   email: EmailInput
@@ -601,4 +635,165 @@ export interface HealthStatus {
   status: "ok" | "unavailable"
   database: "ok" | "unavailable"
   worker: "ok" | "stopped" | "unknown"
+}
+export interface EstablishmentPanel {
+  establishment: {
+    id: PublicId
+    name: string
+    timeZone: TimeZone
+  }
+  asOf: Instant
+  /**
+   * Estado vigente al consultar. Cada total es la suma de lots.
+   */
+  current: {
+    /**
+     * Todos los lotes abiertos, por cierre más próximo.
+     */
+    lots: PanelOpenLot[]
+    inventory: PanelInventory
+    confirmedReservations: number
+    activeOffers: number
+    waitingRequests: number
+  }
+  /**
+   * RF12: lotes cerrados dentro del período. Retirado es entrega acreditada, no consumo; no se convierte en kilos ni ahorro.
+   */
+  period: {
+    from: LocalDate
+    to: LocalDate
+    closedLots: number
+    /**
+     * En un lote cerrado published = delivered + unassignable.
+     */
+    packs: {
+      published: number
+      delivered: number
+      unassignable: number
+    }
+    /**
+     * confirmed cuenta todas las reservas que llegaron a confirmarse; las otras tres son su término y suman confirmed. Ofertas no aceptadas y la espera no son reservas.
+     */
+    reservations: {
+      confirmed: number
+      cancelled: number
+      expired: number
+      delivered: number
+    }
+    /**
+     * Packs retirados sobre packs publicados.
+     */
+    deliveryRate: PanelRate
+    /**
+     * Reservas vencidas sobre reservas que llegaron a confirmarse.
+     */
+    reservationExpiryRate: PanelRate
+    /**
+     * Lotes del establecimiento que no entran en los indicadores: publicados aún abiertos y borradores.
+     */
+    excluded: {
+      openLots: number
+      draftLots: number
+    }
+  }
+}
+/**
+ * Lote publicado con la ventana de retiro abierta.
+ */
+export interface PanelOpenLot {
+  id: PublicId
+  description: LotDescription
+  quantity: Quantity
+  pickupStartsAt: Instant
+  pickupEndsAt: Instant
+  inventory: PanelInventory
+  /**
+   * Reservas vigentes por retirar.
+   */
+  confirmedReservations: number
+  /**
+   * Ofertas vigentes por aceptar.
+   */
+  activeOffers: number
+  /**
+   * Personas en la cola sin oferta; no poseen packs.
+   */
+  waitingRequests: number
+}
+/**
+ * Packs por estado (anexos B p. 4): Q = F + O + R + E + X. Una oferta vencida sin registrar ya cuenta como libre.
+ */
+export interface PanelInventory {
+  free: number
+  offered: number
+  reserved: number
+  /**
+   * Retiros acreditados por el operador.
+   */
+  delivered: number
+  /**
+   * Liberados con el lote ya cerrado; no vuelven a asignarse.
+   */
+  unassignable: number
+}
+export interface PanelRate {
+  numerator: number
+  denominator: number
+  /**
+   * numerator / denominator; null sin denominador.
+   */
+  value: number | null
+}
+/**
+ * Reserva o solicitud de espera vista por el operador: sin titular ni código.
+ */
+export interface OperatorCommitment {
+  id: PublicId
+  kind: "reservation" | "waitlist"
+  status: CommitmentStatus
+  lot: PanelLotRef
+  /**
+   * Packs reservados o, en la espera, solicitados.
+   */
+  quantity: number
+  /**
+   * Packs ofrecidos a la solicitud; null en reservas y sin oferta.
+   */
+  offeredQuantity: number | null
+  offerExpiresAt: string | null
+  createdAt: Instant
+  endedAt: string | null
+}
+export interface PanelLotRef {
+  id: PublicId
+  description: LotDescription
+}
+export interface OperatorCommitmentPage {
+  /**
+   * @maxItems 20
+   */
+  items: OperatorCommitment[]
+  page: number
+  hasNextPage: boolean
+}
+export interface ActivityEvent {
+  /**
+   * Identificador opaco del hecho, estable entre consultas.
+   */
+  id: string
+  kind: ActivityKind
+  at: Instant
+  lot: PanelLotRef
+  /**
+   * Packs del hecho; null en el cierre del lote.
+   */
+  quantity: number | null
+}
+export interface ActivityPage {
+  /**
+   * @maxItems 20
+   */
+  items: ActivityEvent[]
+  page: number
+  hasNextPage: boolean
 }

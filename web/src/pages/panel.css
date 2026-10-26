@@ -1,0 +1,100 @@
+/* Presentación exclusiva del panel del establecimiento (K035). */
+.panel { display: grid; gap: var(--sp-6); width: min(100%, var(--layout-max)); margin: 0 auto; }
+.panel .page-header, .panel .my-lots__toolbar { margin-bottom: 0; }
+.panel h2 { font-size: var(--fs-title-lg); }
+.panel h3 { font-size: 1.0625rem; }
+.panel__status, .panel__empty { margin: 0; color: var(--text-muted); }
+.panel__refresh { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.panel__as-of { margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
+.panel .ui-alert .ui-button { margin-inline-start: var(--sp-3); }
+.panel__section { display: grid; gap: var(--sp-4); align-content: start; min-width: 0; }
+.panel__section-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--sp-3) var(--sp-6); }
+.panel__section .ui-field { max-width: 20rem; }
+.panel .segmented__item { white-space: nowrap; }
+.panel__columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--sp-8); align-items: start; }
+
+/* Cifras de hoy: tarjetas por ancho mínimo, como el resto de la aplicación. */
+.panel-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--sp-3); }
+.panel-stat { display: grid; gap: var(--sp-1); padding: var(--sp-4); }
+.panel-stat p { margin: 0; }
+.panel-stat__label { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.panel-stat__value { color: var(--text-strong); font-family: var(--font-display); font-size: var(--fs-display-md); font-weight: var(--fw-bold); line-height: var(--lh-tight); }
+.panel-stat__detail { color: var(--text-muted); font-size: var(--fs-meta); }
+
+.panel-lots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.panel-lot { display: grid; gap: var(--sp-3); height: 100%; padding: var(--sp-4); }
+.panel-lot p { margin: 0; }
+.panel-lot__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2) var(--sp-4); }
+.panel-lot__head h3 { min-width: 0; overflow-wrap: anywhere; }
+.panel-lot__head a { color: inherit; text-decoration: none; }
+.panel-lot__head a:hover { color: var(--text-link-hover); text-decoration: underline; }
+.panel-lot__quantity { color: var(--text-strong); font-weight: var(--fw-semibold); }
+.panel-lot__window { display: flex; align-items: flex-start; gap: var(--sp-2); color: var(--text-body); font-size: var(--fs-meta); }
+.panel-lot__window .icon { margin-top: 0.15em; color: var(--text-brand); }
+.panel-lot__queue { color: var(--text-muted); font-size: var(--fs-meta); }
+.panel-lot__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.panel-lot__actions .ui-button { text-decoration: none; }
+
+/* Inventario F/O/R/E/X: la barra acompaña a la leyenda, que lleva los valores en texto. */
+.inventory { display: grid; gap: var(--sp-2); }
+.inventory__bar { display: flex; height: 0.625rem; overflow: hidden; border-radius: var(--radius-pill); background: var(--surface-sunken); }
+.inventory__part { display: block; min-width: 0.25rem; }
+.inventory__part--free { background: var(--badge-success-bg); }
+.inventory__part--offered { background: var(--ambar-700); }
+.inventory__part--reserved { background: var(--action-primary); }
+.inventory__part--delivered { background: var(--ink-900); }
+.inventory__part--unassignable { background: var(--border-subtle); }
+.inventory__legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--fs-meta); }
+.inventory__legend li { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.inventory__legend strong { color: var(--text-strong); }
+.inventory__swatch { width: 0.625rem; height: 0.625rem; border: var(--border-width) solid var(--border-control); border-radius: var(--radius-pill); }
+
+/* Resultados del período. */
+.panel-period__form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--sp-3); }
+.panel-period__form .ui-field { width: 11rem; }
+.panel-period__scope { margin: 0; color: var(--text-body); }
+.panel-rates { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--sp-3); }
+.panel-rate { display: grid; gap: var(--sp-1); padding: var(--sp-4); }
+.panel-rate h3 { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.panel-rate p { margin: 0; }
+.panel-rate__value { color: var(--text-strong); font-family: var(--font-display); font-size: var(--fs-display-lg); font-weight: var(--fw-bold); line-height: var(--lh-tight); }
+.panel-rate__value--empty { color: var(--text-muted); font-size: var(--fs-title-lg); }
+.panel-rate__fraction { color: var(--text-body); }
+.panel-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--sp-3); }
+.panel-counts dl { display: grid; gap: var(--sp-2); margin: 0; padding: var(--sp-4); border: var(--border-width) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-card); }
+.panel-counts dl > div { display: flex; justify-content: space-between; gap: var(--sp-3); }
+.panel-counts dt { color: var(--text-muted); }
+.panel-counts dd { margin: 0; color: var(--text-strong); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.panel-period__exclusions { display: flex; align-items: flex-start; gap: var(--sp-2); max-width: 75ch; margin: 0; color: var(--text-muted); font-size: var(--fs-meta); }
+.panel-period__exclusions .icon { flex: none; margin-top: 0.15em; color: var(--text-info); }
+
+/* Compromisos e historial. */
+.panel-commitments, .panel-activity { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.panel-commitment { display: grid; gap: var(--sp-1); padding: var(--sp-3) var(--sp-4); border: var(--border-width) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-card); }
+.panel-commitment p { margin: 0; }
+.panel-commitment__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.panel-commitment__kind { color: var(--text-muted); font-size: var(--fs-meta); }
+.panel-commitment__quantity { color: var(--text-strong); font-weight: var(--fw-semibold); }
+.panel-commitment__lot { overflow-wrap: anywhere; }
+.panel-commitment__time { color: var(--text-muted); font-size: var(--fs-meta); }
+.panel-activity__item { display: grid; gap: var(--sp-1); padding: var(--sp-2) 0 var(--sp-2) var(--sp-4); border-left: var(--border-width-strong) solid var(--border-subtle); }
+.panel-activity__item p { margin: 0; }
+.panel-activity__item--pickup_confirmed, .panel-activity__item--reservation_confirmed, .panel-activity__item--offer_accepted { border-left-color: var(--action-primary); }
+.panel-activity__item--offer_issued, .panel-activity__item--waitlist_joined { border-left-color: var(--ambar-700); }
+.panel-activity__item--reservation_cancelled, .panel-activity__item--reservation_expired, .panel-activity__item--offer_expired { border-left-color: var(--rojo-600); }
+.panel-activity__meta { color: var(--text-muted); font-size: var(--fs-meta); }
+.panel-activity__lot { min-height: 0; padding: 0; border: 0; background: none; color: var(--text-link); font: inherit; text-align: start; text-decoration: underline; cursor: pointer; overflow-wrap: anywhere; }
+.panel-activity__lot:hover { color: var(--text-link-hover); }
+.panel-activity__lot:focus-visible { border-radius: var(--radius-sm); outline: none; box-shadow: var(--ring-focus); }
+.panel-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--sp-4); margin-top: var(--sp-4); }
+
+@media (max-width: 64rem) {
+  .panel__columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 48rem) {
+  .panel__section .ui-field, .panel-period__form .ui-field { width: 100%; max-width: none; }
+  .panel-period__form > .ui-button, .panel-lot__actions > .ui-button { flex: 1 1 100%; }
+  .panel .segmented { display: flex; width: 100%; }
+  .panel .segmented__item { flex: 1 1 0; justify-content: center; padding-inline: var(--sp-2); }
+}

@@ -7,6 +7,7 @@ import { errorCode } from "../application/logging.js"
 import type { Log } from "../application/logging.js"
 import { PhotoRuleError } from "../domain/photos.js"
 import { LotRuleError } from "../domain/lots.js"
+import { MAX_PERIOD_DAYS, PeriodRuleError } from "../domain/panel.js"
 import { ReservationRuleError, ReservationTransitionError } from "../domain/reservations.js"
 import { WaitlistTransitionError } from "../domain/waitlist.js"
 import type { HttpSchemas } from "./openapi.js"
@@ -93,6 +94,9 @@ export function handleError(error: unknown, response: Response, log: Log): void 
       [{ path: "", message: "Los bytes no corresponden a un formato permitido." }])
     else sendError(response, 409, "CONFLICT", error.reason === "photo_limit_reached"
       ? "El lote ya tiene tres fotos." : "El estado del lote no permite cambiar sus fotos.")
+  } else if (error instanceof PeriodRuleError) {
+    sendError(response, 422, "VALIDATION_ERROR", "Revisa el período indicado.", [{ path: "/from", message: error.violation === "period_inverted"
+      ? "La fecha inicial no puede ser posterior a la final." : `El período no puede superar ${MAX_PERIOD_DAYS} días.` }])
   } else if (error instanceof ApplicationError) {
     if (error instanceof ConcurrentUploadsError || error instanceof PickupReviewSuspendedError) {
       response.set("Retry-After", String(error.retryAfter))

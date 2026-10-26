@@ -43,10 +43,11 @@ agregan cuando exista su tabla.
 ## Planes
 
 [`explain-scale.mjs`](../api/scripts/explain-scale.mjs) recorre búsqueda, detalle,
-reserva, historial, cancelación, ingreso a la espera, avisos y los trabajos del worker
-con la API real. Intercepta `pg` y analiza cada sentencia dentro de un savepoint que
-se revierte, así que el plan corresponde al SQL vigente de los repositorios. El resumen
-marca los `Seq Scan` que leen más de 1000 filas.
+reserva, historial, cancelación, ingreso a la espera, avisos, el
+[panel del establecimiento](panel.md) y los trabajos del worker con la API real.
+Intercepta `pg` y analiza cada sentencia dentro de un savepoint que se revierte, así
+que el plan corresponde al SQL vigente de los repositorios. El resumen marca los
+`Seq Scan` que leen más de 1000 filas.
 
 ## Carga
 
@@ -64,3 +65,8 @@ El cuadre del inventario (`lotReconciledSql`) suma las entregas de un lote unien
 `commitments` en cualquier estado, y corre bajo el bloqueo del lote en cada reserva,
 cancelación y comando de la cola. `commitments_lot_idx` cubre esa unión;
 `commitments_lot_confirmed_idx` sigue sirviendo a las sumas de reservas confirmadas.
+
+Compromisos e historial del [panel](panel.md) leen toda la historia de un establecimiento,
+cerca del 10 % de `commitments` y `waitlist_entries` en la semilla. Ahí el planificador
+prefiere recorrer la tabla y unirla por hash aunque exista `commitments_lot_idx`, y cada
+consulta tarda decenas de milisegundos. Por eso el panel no agrega índices.

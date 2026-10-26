@@ -34,7 +34,7 @@ export function SiteHeader() {
   // El enlace orienta la navegación; la API vuelve a comprobar la membresía en cada operación.
   const isOperator = Boolean(session && session.operableEstablishments.length > 0)
   const navigationItems = session
-    ? [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/espera', label: 'Mis esperas', end: false }, { to: '/reservas', label: 'Mis reservas', end: false }, ...(isOperator ? [{ to: '/operador/lotes', label: 'Mis lotes', end: true }] : [])]
+    ? [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/espera', label: 'Mis esperas', end: false }, { to: '/reservas', label: 'Mis reservas', end: false }, ...(isOperator ? [{ to: '/operador/panel', label: 'Mi establecimiento', end: true }, { to: '/operador/lotes', label: 'Mis lotes', end: true }] : [])]
     : [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/registro', label: 'Registro', end: false }]
 
   return (

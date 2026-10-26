@@ -96,6 +96,9 @@ cuerpo JSON `400`, `413`, `415`, `422`; no sustituyen errores de autorización.
 | `confirmPickup` · POST `/lots/{lotId}/pickups` | Sesión y permiso sobre establecimiento del lote | C | 201, 401, 403, 404, 409, J, G | RF06, RF08 / K022 |
 | `listNotifications` · GET `/notifications` | Sesión; solo los propios | No, lectura | 200, 401, 422, G | RF09 / K030 |
 | `markNotificationRead` · POST `/notifications/{notificationId}/read` | Sesión; destinatario | C | 200, 401, 403, 404, J, G | RF09 / K030 |
+| `getEstablishmentPanel` · GET `/establishments/{establishmentId}/panel` | Sesión y permiso sobre establecimiento | No, lectura | 200, 401, 403, 404, 422, G | RF10, RF12 / K035 |
+| `listEstablishmentCommitments` · GET `/establishments/{establishmentId}/commitments` | Sesión y permiso sobre establecimiento | No, lectura | 200, 401, 403, 404, 422, G | RF10 / K035 |
+| `listEstablishmentActivity` · GET `/establishments/{establishmentId}/activity` | Sesión y permiso sobre establecimiento | No, lectura | 200, 401, 403, 404, 422, G | RF10 / K035 |
 
 RF01/RF02 provienen de anexos A p. 1; las tarjetas se relacionan en el
 [modelo inicial](../modelo-inicial.md), sección Fuera de K003, y en la planificación

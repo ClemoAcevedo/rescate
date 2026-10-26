@@ -34,6 +34,9 @@ import { createWaitlistRouter } from "./http/waitlist-router.js"
 import { createNotificationUseCases, createOutboxProcessor } from "./application/notifications/use-cases.js"
 import { createNotificationRepository, createOutboxRepository } from "./infrastructure/postgres/notification-repository.js"
 import { createNotificationsRouter } from "./http/notifications-router.js"
+import { createPanelUseCases } from "./application/panel/use-cases.js"
+import { createPanelRepository } from "./infrastructure/postgres/panel-repository.js"
+import { createPanelRouter } from "./http/panel-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
@@ -134,7 +137,9 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
   const notificationsRouter = createNotificationsRouter(
     createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
     authentication.authenticate, authentication.protectCommand, log)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
+  const panelRouter = createPanelRouter(createPanelUseCases(createPanelRepository(pool), () => new Date()),
+    authentication.authenticate, log)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, panelRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
     // /health no pasa por el límite por IP: checkHealth comparte una sola consulta a la base.
     health: operations.checkHealth,
     traffic: (req, res, next) => {

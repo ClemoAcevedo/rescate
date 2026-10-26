@@ -8,6 +8,7 @@ import { LotsPage } from '../pages/LotsPage'
 import { MyLotsPage } from '../pages/MyLotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
+import { PanelPage } from '../pages/PanelPage'
 import { PickupsPage } from '../pages/PickupsPage'
 import { ReservationsPage, ReservationDetailPage } from '../pages/ReservationsPage'
 import { JoinWaitlistPage, WaitlistPage, WaitlistDetailPage } from '../pages/WaitlistPage'
@@ -26,6 +27,7 @@ function App() {
         <Route index element={<RootRedirect />} />
         <Route path="lotes" element={<LotsPage />} />
         <Route path="lotes/:id" element={<LotDetailPage />} />
+        <Route path="operador/panel" element={<PanelPage />} />
         <Route path="operador/lotes" element={<MyLotsPage />} />
         <Route path="operador/lotes/nuevo" element={<LotEditorPage />} />
         <Route path="operador/lotes/:lotId" element={<LotEditorPage />} />
