@@ -17,14 +17,16 @@ const response = (value, finishReason = 'STOP') => ({ candidates: [{ finishReaso
 const decision = (verdict = 'confirmed') => ({ candidate: 1, verdict, reason: 'El código visible demuestra la decisión.', confidence: 0.95, evidence });
 const largeFile = filename => ({ filename, status: 'added', patch: '@@ -0,0 +1,200 @@\n' + Array.from({ length: 200 }, (_, i) => `+const v${i} = '${'x'.repeat(180)}'`).join('\n') });
 
-function harness({ files = [file], reviews = [], statuses = [200], model,
+function harness({ files = [file], reviews = [], statuses = [200], model, openRouterApiKey, openRouterResponses = [],
   initial = {}, sourceFiles = {}, patches = {}, sourceError = false, planOptions } = {}) {
   const requests = [], messages = [], waits = [], artifacts = [];
   const pr = { state: 'open', draft: false, changed_files: files.length, title: 'Cambio', body: 'Descripción del autor',
     head: { sha, repo: { full_name: repository } }, base: { sha: base }, ...initial };
   let current = pr;
   let modelCalls = 0;
+  let openRouterCalls = 0;
   const options = { repository, prNumber: 147, expectedSha: sha, githubToken: 'github-test-token', apiKey: 'gemini-test-key',
+    openRouterApiKey,
     rules: 'Reglas confiables', report: message => messages.push(message), saveResult: result => artifacts.push(result),
     sleepImpl: async delay => { waits.push(delay); }, planOptions,
     loadSource: async () => {
@@ -45,6 +47,16 @@ function harness({ files = [file], reviews = [], statuses = [200], model,
           : review([], payload.files);
         return reply(response(result), status);
       }
+      if (url.includes('openrouter.ai')) {
+        const index = openRouterCalls++;
+        const payload = JSON.parse(JSON.parse(init.body).messages[1].content);
+        const result = openRouterResponses[index] ?? (payload.candidates
+          ? { decisions: payload.candidates.map((finding, i) => ({ ...decision(), candidate: i + 1, evidence: finding.evidence })) }
+          : review([], payload.files));
+        return reply({ choices: [{ message: { content: JSON.stringify(result) }, finish_reason: 'stop' }],
+          model: 'test/free-model', usage: { prompt_tokens: 100, completion_tokens: 20,
+            completion_tokens_details: { reasoning_tokens: 0 } } });
+      }
       if (init.method === 'POST') return reply({ id: 42 });
       if (url.includes('/reviews?')) return reply(reviews);
       if (url.includes('/files?')) {
@@ -55,7 +67,9 @@ function harness({ files = [file], reviews = [], statuses = [200], model,
     } };
   return { options, requests, messages, waits, artifacts, setCurrent: change => { current = { ...pr, ...change }; },
     posts: () => requests.filter(r => r.method === 'POST' && r.url.endsWith('/reviews')),
-    models: () => requests.filter(r => r.url.includes('generativelanguage.googleapis.com')) };
+    models: () => requests.filter(r => r.url.includes('generativelanguage.googleapis.com')),
+    openRouterRequests: () => requests.filter(r => r.url.includes('openrouter.ai')),
+    openRouterCalls: () => openRouterCalls };
 }
 
 test('positions distinguish additions, removals and context across hunks', () => {
@@ -238,13 +252,29 @@ for (const status of [500, 502, 503, 504]) test(`HTTP ${status} retries with bac
   assert.equal(new Set(h.models().map(request => request.signal)).size, 3);
 });
 
-test('persistent timeouts or service failures stop after three requests', async () => {
+test('persistent timeouts or service failures stop after five requests', async () => {
   for (const status of [new DOMException('timeout', 'TimeoutError'), 503]) {
     const h = harness({ statuses: [status] });
-    await assert.rejects(runReview(h.options), /tres intentos/);
-    assert.equal(h.models().length, 3);
+    await assert.rejects(runReview(h.options), /cinco intentos/);
+    assert.equal(h.models().length, 5);
     assert.equal(h.artifacts[0].complete, false);
   }
+});
+
+test('OpenRouter retries one invalid finding with corrective validation feedback', async () => {
+  const invalid = review([{ ...finding, evidence: { ...evidence, quote: 'cita inventada' } }]);
+  const h = harness({ statuses: [401], openRouterApiKey: 'openrouter-test-key', openRouterResponses: [invalid, review()] });
+  const result = await runReview(h.options);
+  assert.equal(result.complete, true);
+  assert.equal(h.models().length, 1);
+  assert.equal(h.openRouterCalls(), 2);
+  assert.equal(result.usage.requests, 3);
+  assert.equal(result.usage.unknownRequests, 1);
+  assert.deepEqual(result.modelsUsed, ['OpenRouter Free · test/free-model']);
+  const correction = JSON.parse(h.openRouterRequests()[1].body).messages[0].content;
+  assert.match(correction, /REINTENTO CORRECTIVO/);
+  assert.match(correction, /hallazgo inválido/);
+  assert.match(h.messages.join('\n'), /solicitando una corrección/);
 });
 
 test('the total time limit stops before starting a model request', async () => {

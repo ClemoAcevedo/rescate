@@ -231,7 +231,7 @@ Cada Pull Request debe:
 - indicar la tarjeta asociada
 - explicar brevemente los cambios realizados
 - indicar cómo comprobar los cambios
-- ser revisado por al menos otro integrante antes de integrarse
+- la revisión de otro integrante es recomendada, pero no bloquea la integración
 
 No se realizan cambios directamente sobre `main` o `development`.
 
@@ -260,7 +260,8 @@ lo cambia.
   y cancelación con resultado comprobado (K023); revisión de código y confirmación
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
-  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030);
+  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030),
+  que también muestra los avisos de mensajes del chat (K037);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
   período (K035).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
@@ -276,7 +277,10 @@ lo cambia.
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
   vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
   (K030), panel del establecimiento con compromisos, historial y resultados por período
-  sobre lotes cerrados (K035), según OpenAPI. Límites de login, códigos de retiro y
+  sobre lotes cerrados (K035), chat de la reserva entre titular y establecimiento con
+  secuencia, reintentos sin duplicar, aviso a la otra parte y cierre al cancelar, vencer o retirar
+  (K037, [chat](docs/chat.md)),
+  según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y
   salud con PostgreSQL y el último ciclo del worker ([operación](docs/operacion.md), K036).
@@ -284,7 +288,8 @@ lo cambia.
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
   (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
   Registra su último ciclo exitoso y la demora y las tareas en error de cada cola;
-  `ops:status` las consulta (K036).
+  `ops:status` las consulta (K036). Borra una vez al día el texto de los chats cerrados hace
+  más de treinta días (K037).
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
   observados y repetición con el worker de fotos activo y detenido (K025); flujo de
   cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API

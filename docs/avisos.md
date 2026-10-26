@@ -13,6 +13,8 @@ avisos persisten aunque no esté conectada y se recuperan al volver. El contrato
 | `offer_expired` | Se registra el vencimiento de esa oferta | Titular de la solicitud | `/espera/:id` |
 | `reservation_confirmed` | Se acepta la oferta y nace la reserva | Titular | `/reservas/:id` |
 | `reservation_cancelled` | El titular cancela su [reserva](reservas.md) | Titular | `/reservas/:id` |
+| `message_from_holder` | El titular escribe en el [chat](chat.md) de la reserva | Cada operador del local | `/operador/panel` |
+| `message_from_establishment` | Un operador escribe en el [chat](chat.md) de la reserva | Titular | `/reservas/:id` |
 
 Reservar directamente, entrar a la cola, rechazar, salir y retirar no generan avisos. Una
 oferta vencida se avisa cuando se registra: en el siguiente comando sobre el lote o cuando
@@ -21,13 +23,13 @@ el trabajador de [vencimientos](vencimientos.md) la registra, ambos a través de
 ## Reglas
 
 - **Un aviso por evento y destinatario.** El evento se inserta en la misma transacción que la
-  transición; el worker genera el aviso. Reintentos, reinicios o dos workers no lo duplican.
+  transición; el worker genera el aviso. Un mensaje del chat tiene un evento por cada destinatario. Reintentos, reinicios o dos workers no lo duplican.
 - **Persistencia.** Generar y leer son estados distintos: el aviso existe aunque la persona
   estuviera desconectada y queda sin leer hasta que lo abre.
 - **Leer no actúa.** Marcar como leído solo registra el instante (se conserva el primero). El
   enlace lleva al estado vigente: una oferta vencida sigue vencida y no se puede aceptar.
 - **Privacidad.** Cada persona consulta solo sus avisos; uno ajeno responde 404 igual que uno
-  inexistente. Los avisos no llevan códigos de retiro ni datos de otras personas.
+  inexistente. Los avisos no llevan códigos de retiro ni datos de otras personas. Los de mensaje tampoco llevan el texto.
 
 ## Contrato HTTP
 

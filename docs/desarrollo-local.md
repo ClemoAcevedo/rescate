@@ -175,30 +175,39 @@ El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incl
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 `continue-on-error`. Los comandos del job Compose están en el workflow.
 
-## Revisión de PR con Gemini
+## Revisión automática de PR
 
 [Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
-nuevos commits con `gemini-3.5-flash-lite`. Publica una revisión de tipo comentario
+nuevos commits con `gemini-3.5-flash-lite` como proveedor principal y OpenRouter
+Free como respaldo. Publica una revisión de tipo comentario
 mediante `github-actions[bot]`, con hallazgos en español y enlaces a líneas del
-commit revisado. Complementa la revisión de otro integrante exigida por la
-protección de ramas.
+commit revisado. Es informativa, no aprueba el PR ni es un check obligatorio para
+integrar. La protección de ramas exige Pull Request y CI, sin exigir aprobación
+humana.
 
 ### Configuración
 
 1. Crear una clave de Gemini API en [Google AI Studio](https://aistudio.google.com/api-keys)
-   en un proyecto con la capa gratuita disponible.
-2. Guardarla como `GEMINI_API_KEY` en **Settings → Secrets and variables → Actions**
-   del repositorio. `GITHUB_TOKEN` lo proporciona Actions con permisos de lectura
-   de contenido y escritura de revisiones.
-3. Abrir un PR listo para revisión desde una rama del mismo repositorio o subir
-   un commit. Los borradores, forks y pushes de Dependabot quedan excluidos del
-   job que usa el secreto.
+   en un proyecto con la capa gratuita disponible y guardarla como `GEMINI_API_KEY`
+   en **Settings → Secrets and variables → Actions** del repositorio.
+2. Crear una clave en [OpenRouter](https://openrouter.ai/keys) y guardarla como
+   `OPENROUTER_API_KEY` en el mismo lugar. Gemini se intenta primero; OpenRouter
+   se usa si Gemini falla o su respuesta no supera las validaciones. El modelo
+   `openrouter/free` selecciona un modelo gratuito compatible disponible. Sus
+   límites y disponibilidad dependen de OpenRouter y del proveedor seleccionado.
+   Si solo existe la clave de OpenRouter, también puede hacer la revisión primaria.
+3. `GITHUB_TOKEN` lo proporciona Actions con permisos de lectura de contenido y
+   escritura de revisiones. Abrir un PR listo para revisión desde una rama del
+   mismo repositorio o subir un commit. Los borradores, forks y pushes de
+   Dependabot quedan excluidos del job que usa los secretos.
 
 El reviewer usa la [API de Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite),
 que ofrece entrada y salida gratuitas dentro de la cuota del proyecto. Consultar los
 [límites efectivos en AI Studio](https://ai.google.dev/gemini-api/docs/rate-limits).
 La capa gratuita permite a Google usar el contenido enviado para mejorar sus
-productos; las condiciones de pago son distintas.
+productos; las condiciones de pago son distintas. Cuando se activa OpenRouter,
+el diff y el contexto enviados también se procesan por OpenRouter y el proveedor
+gratuito que seleccione; sus políticas de retención pueden variar.
 
 ### Alcance y diagnóstico
 
@@ -231,11 +240,16 @@ refutar cada candidato: confirmarlo o descartarlo requiere evidencia visible y
 confianza mínima 0,90. Un candidato sin verificar deja la revisión incompleta.
 Estas validaciones no demuestran que el modelo haya encontrado todos los bugs.
 
-Ante HTTP 500/502/503/504 o fallos de conexión/timeout, reintenta hasta dos veces,
-esperando 10 y 20 segundos. Cada intento dura hasta 120 segundos; la revisión tiene
-20 minutos de presupuesto total y el job 25. Los errores de clave, cuota (`429`) y
-formato no se reintentan automáticamente. El bot comprueba HEAD, base y estado del
-PR antes de cada consulta, reintento y publicación; descarta resultados obsoletos.
+Ante HTTP 500/502/503/504 o fallos de conexión/timeout, Gemini reintenta hasta cuatro
+veces, esperando 10, 20, 40 y 80 segundos. Si Gemini falla, devuelve formato inválido
+o cobertura incompleta, el reviewer intenta OpenRouter. Si la respuesta de OpenRouter
+no pasa la validación, solicita una corrección una vez y vuelve a validarla; si vuelve
+a fallar, deja la revisión incompleta. Cada intento dura hasta 120 segundos; la revisión
+tiene 20 minutos de presupuesto total y el job 25. En particular,
+`401` indica una clave ausente o inválida; `429` indica límite de uso; `503` indica que
+el servicio está temporalmente sobrecargado o caído. El bot comprueba HEAD, base y
+estado del PR antes de cada consulta, reintento y publicación; descarta resultados
+obsoletos.
 
 Una revisión incompleta aparece advertida al principio del comentario y deja el
 job fallido, conservando los hallazgos confirmados y la lista de pendientes. Se
@@ -245,16 +259,16 @@ suprime consultas duplicadas. Si falta la clave o no se puede preparar el diff,
 el error aparece en Actions antes de consultar el modelo.
 
 El artefacto `gemini-review-RUN-ATTEMPT` conserva durante 14 días `review-result.json`
-con cobertura y decisiones, y `review-usage.json` con los tokens informados por Gemini,
-sin prompts ni credenciales. El consumo se guarda antes y después de cada llamada,
-también si su respuesta es inválida o el SHA cambia. `unknownRequests` indica consultas
-cuyo consumo no fue informado: el total conocido no equivale a una factura.
+con cobertura y decisiones, y `review-usage.json` con los tokens informados por los
+proveedores, sin prompts ni credenciales. El consumo se guarda antes y después de
+cada llamada, también si su respuesta es inválida o el SHA cambia. `unknownRequests`
+indica consultas cuyo consumo no fue informado: el total conocido no equivale a una factura.
 Los logs solo muestran conteos y diagnósticos. El número de consultas crece con los
 lotes, hallazgos y reintentos; los tests locales no consumen API. Este job es
 independiente del CI del producto y no aprueba ni integra PRs.
 
 Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
-título **Revisión de Gemini 3.5 Flash-Lite** y el SHA vigente. Un job verde por sí solo
+título **Revisión automática** y el SHA vigente. Un job verde por sí solo
 no acredita una revisión: también puede haber omitido un commit reemplazado.
 Las pruebas del reviewer se ejecutan sin claves con:
 
