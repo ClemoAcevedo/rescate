@@ -180,9 +180,8 @@ ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 [Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
 nuevos commits con `gemini-3.5-flash-lite`. Publica una revisión de tipo comentario
 mediante `github-actions[bot]`, con hallazgos en español y enlaces a líneas del
-commit revisado. Es informativa, no aprueba el PR ni es un check obligatorio para
-integrar. La protección de ramas exige Pull Request y CI, sin exigir aprobación
-humana.
+commit revisado. Complementa la revisión de otro integrante exigida por la
+protección de ramas.
 
 ### Configuración
 
@@ -232,14 +231,11 @@ refutar cada candidato: confirmarlo o descartarlo requiere evidencia visible y
 confianza mínima 0,90. Un candidato sin verificar deja la revisión incompleta.
 Estas validaciones no demuestran que el modelo haya encontrado todos los bugs.
 
-Ante HTTP 500/502/503/504 o fallos de conexión/timeout, reintenta hasta cuatro veces,
-esperando 10, 20, 40 y 80 segundos. Cada intento dura hasta 120 segundos; la revisión
-tiene 20 minutos de presupuesto total y el job 25. Los errores de clave, permisos,
-cuota (`429`) y formato no se reintentan automáticamente. En particular, `401`
-indica una clave ausente, inválida o vencida; `429` indica límite de uso; `503`
-indica que el servicio está temporalmente sobrecargado o caído. El bot comprueba
-HEAD, base y estado del PR antes de cada consulta, reintento y publicación; descarta
-resultados obsoletos.
+Ante HTTP 500/502/503/504 o fallos de conexión/timeout, reintenta hasta dos veces,
+esperando 10 y 20 segundos. Cada intento dura hasta 120 segundos; la revisión tiene
+20 minutos de presupuesto total y el job 25. Los errores de clave, cuota (`429`) y
+formato no se reintentan automáticamente. El bot comprueba HEAD, base y estado del
+PR antes de cada consulta, reintento y publicación; descarta resultados obsoletos.
 
 Una revisión incompleta aparece advertida al principio del comentario y deja el
 job fallido, conservando los hallazgos confirmados y la lista de pendientes. Se

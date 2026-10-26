@@ -54,10 +54,9 @@ estas ramas: conserva la ascendencia común para los siguientes PR. En GitHub,
 abrir el menú junto al botón de merge y seleccionar esa opción; el método usado
 en otro PR puede quedar como predeterminado. Una sincronización `main` →
 `development` también debe conservar el commit de merge.
-Configurar protección de ambas ramas para exigir Pull Request y CI, sin exigir
-aprobación humana ni resolución de hilos de revisión. El
-[CI](../.github/workflows/ci.yml) valida web/API antes de probar Compose,
-migraciones desde base vacía, upgrade, idempotencia y recorridos HTTPS.
+Configurar protección de ambas ramas con revisión de otro integrante y CI
+obligatorio. El [CI](../.github/workflows/ci.yml) valida web/API antes de probar
+Compose, migraciones desde base vacía, upgrade, idempotencia y recorridos HTTPS.
 
 El [workflow de producción](../.github/workflows/deploy.yml) se ejecuta al concluir
 correctamente el CI de un push a `main` del mismo repositorio. Usa el SHA de esa
