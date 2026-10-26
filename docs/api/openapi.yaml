@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, panel del establecimiento, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -33,6 +33,9 @@ tags:
   -
     name: "Operations"
     description: "RNF04: salud del proceso, de la base y del worker."
+  -
+    name: "Panel"
+    description: "RF10/RF12: panel del establecimiento para su operador, historial y resultados básicos."
 paths:
   "/health":
     get:
@@ -873,6 +876,122 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+  "/establishments/{establishmentId}/panel":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "getEstablishmentPanel"
+      summary: "Consultar el panel y los resultados del establecimiento"
+      description: "RF10/RF12. Solo operador con membership actual sobre el establecimiento; otro establecimiento recibe 403 sin datos. current muestra los lotes publicados con ventana abierta, su inventario F/O/R/E/X y su espera; los totales son la suma de esas filas. period cuenta solo los lotes cerrados dentro del período, en días locales de la zona del establecimiento con ambas fechas incluidas. Un lote cierra al registrarse su cierre o, sin registro, al terminar su ventana. Sin fechas, los últimos 7 días con hoy incluido; con una sola, to es hoy o from retrocede 6 días. Máximo 366 días. Sin códigos de retiro ni datos de titulares."
+      tags:
+        - "Panel"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: from
+          in: query
+          description: "Primer día del período (YYYY-MM-DD), incluido."
+          schema: { $ref: "#/components/schemas/LocalDate" }
+        - name: to
+          in: query
+          description: "Último día del período (YYYY-MM-DD), incluido; no anterior a from."
+          schema: { $ref: "#/components/schemas/LocalDate" }
+      responses:
+        "200":
+          description: "Panel del establecimiento con su estado vigente y los resultados del período."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstablishmentPanel" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/establishments/{establishmentId}/commitments":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "listEstablishmentCommitments"
+      summary: "Listar reservas y solicitudes de espera del establecimiento"
+      description: "RF10. Solo operador con membership actual; otro establecimiento recibe 403. Reservas y solicitudes de espera de los lotes del establecimiento, creación descendente, páginas de 20. Estado vigente al responder, igual que para su titular. Sin titular ni código de retiro. Un lotId de otro establecimiento responde 404 igual que uno inexistente. Se rechazan filtros desconocidos."
+      tags:
+        - "Panel"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: lotId
+          in: query
+          description: "Solo los compromisos de este lote."
+          schema: { $ref: "#/components/schemas/PublicId" }
+        - name: state
+          in: query
+          description: "active: espera, oferta o reserva vigentes; ended: terminados. Sin valor, todos."
+          schema: { type: string, enum: [active, ended] }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de compromisos del establecimiento."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorCommitmentPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/establishments/{establishmentId}/activity":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "listEstablishmentActivity"
+      summary: "Consultar el historial del establecimiento"
+      description: "RF10. Solo operador con membership actual; otro establecimiento recibe 403. Hechos de los lotes del establecimiento, más recientes primero, páginas de 20: publicación y cierre del lote, reservas, retiros, ingreso a la espera y ofertas. Un vencimiento cuenta desde su plazo aunque el trabajador aún no lo registre. Sin titulares ni códigos de retiro. Un lotId de otro establecimiento responde 404."
+      tags:
+        - "Panel"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: lotId
+          in: query
+          description: "Solo los hechos de este lote."
+          schema: { $ref: "#/components/schemas/PublicId" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página del historial."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivityPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   "/lots/{lotId}":
     parameters:
       -
@@ -1781,6 +1900,168 @@ components:
       additionalProperties: false
       maxProperties: 0
       description: "Objeto vacío: el aviso sale de la ruta y el actor de la sesión."
+    LocalDate:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+      format: date
+      description: "Fecha calendario en la zona del establecimiento, sin hora."
+    PanelLotRef:
+      type: object
+      additionalProperties: false
+      required: [id, description]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+    PanelInventory:
+      type: object
+      additionalProperties: false
+      required: [free, offered, reserved, delivered, unassignable]
+      description: "Packs por estado (anexos B p. 4): Q = F + O + R + E + X. Una oferta vencida sin registrar ya cuenta como libre."
+      properties:
+        free: { type: integer, minimum: 0 }
+        offered: { type: integer, minimum: 0 }
+        reserved: { type: integer, minimum: 0 }
+        delivered: { type: integer, minimum: 0, description: "Retiros acreditados por el operador." }
+        unassignable: { type: integer, minimum: 0, description: "Liberados con el lote ya cerrado; no vuelven a asignarse." }
+    PanelOpenLot:
+      type: object
+      additionalProperties: false
+      required: [id, description, quantity, pickupStartsAt, pickupEndsAt, inventory, confirmedReservations, activeOffers, waitingRequests]
+      description: "Lote publicado con la ventana de retiro abierta."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+        quantity: { $ref: "#/components/schemas/Quantity" }
+        pickupStartsAt: { $ref: "#/components/schemas/Instant" }
+        pickupEndsAt: { $ref: "#/components/schemas/Instant" }
+        inventory: { $ref: "#/components/schemas/PanelInventory" }
+        confirmedReservations: { type: integer, minimum: 0, description: "Reservas vigentes por retirar." }
+        activeOffers: { type: integer, minimum: 0, description: "Ofertas vigentes por aceptar." }
+        waitingRequests: { type: integer, minimum: 0, description: "Personas en la cola sin oferta; no poseen packs." }
+    PanelRate:
+      type: object
+      additionalProperties: false
+      required: [numerator, denominator, value]
+      properties:
+        numerator: { type: integer, minimum: 0 }
+        denominator: { type: integer, minimum: 0 }
+        value: { type: [number, "null"], minimum: 0, maximum: 1, description: "numerator / denominator; null sin denominador." }
+    EstablishmentPanel:
+      type: object
+      additionalProperties: false
+      required: [establishment, asOf, current, period]
+      properties:
+        establishment:
+          type: object
+          additionalProperties: false
+          required: [id, name, timeZone]
+          properties:
+            id: { $ref: "#/components/schemas/PublicId" }
+            name: { type: string }
+            timeZone: { $ref: "#/components/schemas/TimeZone" }
+        asOf: { $ref: "#/components/schemas/Instant" }
+        current:
+          type: object
+          additionalProperties: false
+          required: [lots, inventory, confirmedReservations, activeOffers, waitingRequests]
+          description: "Estado vigente al consultar. Cada total es la suma de lots."
+          properties:
+            lots: { type: array, items: { $ref: "#/components/schemas/PanelOpenLot" }, description: "Todos los lotes abiertos, por cierre más próximo." }
+            inventory: { $ref: "#/components/schemas/PanelInventory" }
+            confirmedReservations: { type: integer, minimum: 0 }
+            activeOffers: { type: integer, minimum: 0 }
+            waitingRequests: { type: integer, minimum: 0 }
+        period:
+          type: object
+          additionalProperties: false
+          required: [from, to, closedLots, packs, reservations, deliveryRate, reservationExpiryRate, excluded]
+          description: "RF12: lotes cerrados dentro del período. Retirado es entrega acreditada, no consumo; no se convierte en kilos ni ahorro."
+          properties:
+            from: { $ref: "#/components/schemas/LocalDate" }
+            to: { $ref: "#/components/schemas/LocalDate" }
+            closedLots: { type: integer, minimum: 0 }
+            packs:
+              type: object
+              additionalProperties: false
+              required: [published, delivered, unassignable]
+              description: "En un lote cerrado published = delivered + unassignable."
+              properties:
+                published: { type: integer, minimum: 0 }
+                delivered: { type: integer, minimum: 0 }
+                unassignable: { type: integer, minimum: 0 }
+            reservations:
+              type: object
+              additionalProperties: false
+              required: [confirmed, cancelled, expired, delivered]
+              description: "confirmed cuenta todas las reservas que llegaron a confirmarse; las otras tres son su término y suman confirmed. Ofertas no aceptadas y la espera no son reservas."
+              properties:
+                confirmed: { type: integer, minimum: 0 }
+                cancelled: { type: integer, minimum: 0 }
+                expired: { type: integer, minimum: 0 }
+                delivered: { type: integer, minimum: 0 }
+            deliveryRate:
+              allOf: [{ $ref: "#/components/schemas/PanelRate" }]
+              description: "Packs retirados sobre packs publicados."
+            reservationExpiryRate:
+              allOf: [{ $ref: "#/components/schemas/PanelRate" }]
+              description: "Reservas vencidas sobre reservas que llegaron a confirmarse."
+            excluded:
+              type: object
+              additionalProperties: false
+              required: [openLots, draftLots]
+              description: "Lotes del establecimiento que no entran en los indicadores: publicados aún abiertos y borradores."
+              properties:
+                openLots: { type: integer, minimum: 0 }
+                draftLots: { type: integer, minimum: 0 }
+    CommitmentStatus:
+      type: string
+      enum: [confirmed, cancelled, expired, delivered, waiting, offered, accepted, declined, left]
+      description: "Reserva: ReservationStatus. Solicitud de espera: WaitlistStatus. Vigente al responder."
+    OperatorCommitment:
+      type: object
+      additionalProperties: false
+      required: [id, kind, status, lot, quantity, offeredQuantity, offerExpiresAt, createdAt, endedAt]
+      description: "Reserva o solicitud de espera vista por el operador: sin titular ni código."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        kind: { type: string, enum: [reservation, waitlist] }
+        status: { $ref: "#/components/schemas/CommitmentStatus" }
+        lot: { $ref: "#/components/schemas/PanelLotRef" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs reservados o, en la espera, solicitados." }
+        offeredQuantity: { type: [integer, "null"], minimum: 1, description: "Packs ofrecidos a la solicitud; null en reservas y sin oferta." }
+        offerExpiresAt: { type: [string, "null"], format: date-time }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time }
+    OperatorCommitmentPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/OperatorCommitment" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+    ActivityKind:
+      type: string
+      enum: [lot_published, lot_expired, lot_withdrawn, reservation_confirmed, reservation_cancelled, reservation_expired, pickup_confirmed, waitlist_joined, offer_issued, offer_accepted, offer_declined, offer_expired, waitlist_left, waitlist_expired]
+      description: "reservation_confirmed: reserva directa; offer_accepted: la oferta aceptada creó la reserva; pickup_confirmed: retiro acreditado; waitlist_expired: la espera terminó con el cierre del lote."
+    ActivityEvent:
+      type: object
+      additionalProperties: false
+      required: [id, kind, at, lot, quantity]
+      properties:
+        id: { type: string, description: "Identificador opaco del hecho, estable entre consultas." }
+        kind: { $ref: "#/components/schemas/ActivityKind" }
+        at: { $ref: "#/components/schemas/Instant" }
+        lot: { $ref: "#/components/schemas/PanelLotRef" }
+        quantity: { type: [integer, "null"], minimum: 1, description: "Packs del hecho; null en el cierre del lote." }
+    ActivityPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ActivityEvent" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
     PublicId:
       type: "string"
     LotPhoto:

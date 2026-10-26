@@ -17,6 +17,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Salud, registro de solicitudes y revisión diaria | [Operación](operacion.md) |
 | Lotes | [Lotes](lotes.md) |
 | Reservas, cancelación y retiro | [Reservas](reservas.md) |
+| Panel del establecimiento y resultados | [Panel](panel.md) |
 | Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |
 | Vencimientos y worker | [Vencimientos](vencimientos.md) |
 | Avisos internos y outbox | [Avisos](avisos.md) |

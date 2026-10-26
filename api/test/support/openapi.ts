@@ -25,7 +25,7 @@ export function assertContract(method: string, path: string, response: Response,
     : path.startsWith("/reservations/") ? "/reservations/{reservationId}"
     : /^\/lots\/[^/]+\/pickup-reviews$/.test(path) ? "/lots/{lotId}/pickup-reviews"
     : /^\/lots\/[^/]+\/pickups$/.test(path) ? "/lots/{lotId}/pickups"
-    : path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? "/establishments/{establishmentId}/lots"
+    : path.startsWith("/auth/") ? path : path.startsWith("/establishments/") ? path.replace(/^\/establishments\/[^/]+/, "/establishments/{establishmentId}")
     : path.endsWith("/publish") ? "/lots/{lotId}/publish"
     : /^\/lots\/[^/]+\/photos\/[^/]+\/[^/]+$/.test(path) ? "/lots/{lotId}/photos/{photoId}/{variant}"
     : /^\/lots\/[^/]+\/photos\/[^/]+$/.test(path) ? "/lots/{lotId}/photos/{photoId}"

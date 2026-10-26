@@ -37,7 +37,8 @@ levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth`,
 `/reservas` y `/reservas/:id` muestran historial, detalle y cancelación;
 `/registro` y `/login` integran K008. `/operador/lotes/nuevo` y
 `/operador/lotes/:lotId` integran el borrador y la publicación de K010 (K011);
-`/operador/lotes/:lotId/retiros` revisa códigos y confirma retiros (K024). `/conexion` consulta únicamente
+`/operador/lotes/:lotId/retiros` revisa códigos y confirma retiros (K024); `/operador/panel` muestra el
+[panel del establecimiento](../docs/panel.md) (K035). `/conexion` consulta únicamente
 `/health`; las rutas desconocidas muestran la pantalla 404. Recargas directas
 requieren fallback SPA del servidor en producción.
 

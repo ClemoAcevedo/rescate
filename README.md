@@ -260,7 +260,9 @@ lo cambia.
   y cancelación con resultado comprobado (K023); revisión de código y confirmación
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
-  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030).
+  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030);
+  «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
+  período (K035).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
   1366 px, distribución y menú de operador de 320 a 1920 px y
   [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
@@ -273,10 +275,11 @@ lo cambia.
   revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
   retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
   vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
-  (K030), según OpenAPI. Límites de login, códigos de retiro y tráfico, con los fallos
-  de login y de código persistidos, y registros sin secretos (K034). Una línea por
-  solicitud con identificador, operación, estado y duración, y salud con PostgreSQL y
-  el último ciclo del worker ([operación](docs/operacion.md), K036).
+  (K030), panel del establecimiento con compromisos, historial y resultados por período
+  sobre lotes cerrados (K035), según OpenAPI. Límites de login, códigos de retiro y
+  tráfico, con los fallos de login y de código persistidos, y registros sin secretos
+  (K034). Una línea por solicitud con identificador, operación, estado y duración, y
+  salud con PostgreSQL y el último ciclo del worker ([operación](docs/operacion.md), K036).
 - **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
   (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
