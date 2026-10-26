@@ -34,7 +34,8 @@ try {
   await page.getByRole('button', { name: 'Comprobar conexión' }).click()
   const health = await healthResponse
   assert.equal(health.status(), 200)
-  assert.deepEqual(await health.json(), { status: 'ok' })
+  // K036: después de desplegar API y worker, la base responde y el worker tiene latido reciente.
+  assert.deepEqual(await health.json(), { status: 'ok', database: 'ok', worker: 'ok' })
   console.log('PASS: web compilada, rutas SPA y botón de conexión → API')
 
   const session = await page.evaluate(async () => {

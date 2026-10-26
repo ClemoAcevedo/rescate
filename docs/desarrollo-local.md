@@ -85,12 +85,12 @@ docker compose logs worker
 ```
 
 La web debe responder HTML y ambas rutas de salud deben responder
-`{"status":"ok"}`. Abre también http://localhost:5173/conexion y pulsa
+`{"status":"ok","database":"ok","worker":"ok"}`. Abre también http://localhost:5173/conexion y pulsa
 **Comprobar conexión**. La consulta SQL verifica conexión TCP autenticada y debe
 mostrar la base configurada y la versión de PostGIS.
 
 `db`, `api` y `web` tienen healthchecks; web espera a que API esté saludable.
-`/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable.
+`/health` verifica el proceso HTTP y PostgreSQL ([operación](operacion.md)); la API espera al servicio db saludable.
 Compose no aplica migraciones automáticamente.
 El worker debe figurar `running` y registrar `Worker iniciado: vencimientos; validación y limpieza de fotos`.
 Consulta PostgreSQL cada 2 s y limpia objetos cada minuto. Mientras falten las

@@ -106,8 +106,8 @@ WEB_URL=https://rescate-rescate1.vercel.app npm --prefix api run test:deploy
 ```
 
 Sin credenciales se comprueban solo conexión, PostGIS y sesión anónima. Con
-`DEPLOY_SHA` se exige además que el dominio sirva ese commit. `/health` verifica
-el proceso HTTP; la búsqueda pública consulta PostgreSQL/PostGIS.
+`DEPLOY_SHA` se exige además que el dominio sirva ese commit. `/health` debe
+informar la base y el worker disponibles; la búsqueda pública verifica PostGIS.
 
 Las migraciones usan historial y advisory lock de node-pg-migrate. No se ejecutan
 al arrancar Express ni desde el worker. [La prueba de migraciones](migraciones.md)

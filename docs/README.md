@@ -13,7 +13,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Contrato HTTP | [OpenAPI S02](api/openapi.yaml) y [su guía](api/README.md) |
 | Dominio y requisitos | [Modelo](modelo-inicial.md), [casos de uso](casos-de-uso.md) y [trazabilidad](k013-trazabilidad.md) |
 | Identidad y sesiones | [Identidad](k008-identidad.md) |
-| Límites, aislamiento y registros | [Seguridad](seguridad.md) |
+| Límites, aislamiento y registros sin secretos | [Seguridad](seguridad.md) |
+| Salud, registro de solicitudes y revisión diaria | [Operación](operacion.md) |
 | Lotes | [Lotes](lotes.md) |
 | Reservas, cancelación y retiro | [Reservas](reservas.md) |
 | Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |

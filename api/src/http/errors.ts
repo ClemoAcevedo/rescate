@@ -57,6 +57,9 @@ const fields: Record<string, string> = {
   latitude_out_of_range: "latitude", longitude_out_of_range: "longitude", time_zone_invalid: "timeZone",
   pickup_window_invalid: "pickupEndsAt", pickup_window_already_ended: "pickupEndsAt",
 }
+/** Identificador generado de la solicitud (K036); null fuera del registro de solicitudes. */
+export const requestIdOf = (response: Response): string | null => response.locals.requestId ?? null
+
 /** `log` recibe solo eventos primitivos: el error original nunca llega al registro. */
 export function handleError(error: unknown, response: Response, log: Log): void {
   if (error instanceof IdentityError) {
@@ -95,7 +98,7 @@ export function handleError(error: unknown, response: Response, log: Log): void 
       response.set("Retry-After", String(error.retryAfter))
     }
     // El registro es la señal de revisión; el lote sigue bloqueado hasta corregirlo.
-    if (error instanceof InventoryDiscrepancyError) log({ event: "inventory_discrepancy", lotId: error.lotId })
+    if (error instanceof InventoryDiscrepancyError) log({ event: "inventory_discrepancy", requestId: requestIdOf(response), lotId: error.lotId })
     const [status, code, message] = errors[error.code]
     sendError(response, status, code, message)
   } else if (error instanceof LotRuleError) {
@@ -107,7 +110,7 @@ export function handleError(error: unknown, response: Response, log: Log): void 
         : { path: `/${fields[violation] ?? ""}`, message: "El valor no cumple las reglas del lote." })))
   } else {
     const code = errorCode(error)
-    log({ event: "request_failed", code })
+    log({ event: "request_failed", requestId: requestIdOf(response), code })
     const message = error instanceof Error ? error.message : ""
     const connectionTimeout = ["timeout exceeded when trying to connect", "Connection terminated due to connection timeout"].includes(message)
     const unavailable = connectionTimeout || /^(08|53|57P0)/.test(code) || ["55000", "55P03", "57014", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND"].includes(code)

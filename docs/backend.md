@@ -7,8 +7,8 @@ las decisiones y procedimientos completos.
 
 [app.ts](../api/src/app.ts) conserva `GET /health` y monta las cuatro operaciones
 [de lotes K010](lotes.md). [Composition](../api/src/composition.ts)
-ensambla Pool, repositorio, casos de uso y HTTP. La salud no consulta PostgreSQL
-ni B2. [K008](k008-identidad.md) incorpora las cuatro operaciones auth, scrypt,
+ensambla Pool, repositorio, casos de uso y HTTP. La salud consulta PostgreSQL y el
+último ciclo del worker, no B2 ([operación](operacion.md)). [K008](k008-identidad.md) incorpora las cuatro operaciones auth, scrypt,
 sesiones persistentes, cookies, origen/CSRF y Actor real. No hay actor temporal
 en runtime. K015 añade búsqueda PostGIS y reserva directa bajo bloqueo;
 [ADR 0004](adr/0004-reserva-directa-idempotente.md) define sus reintentos.

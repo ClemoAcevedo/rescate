@@ -18,7 +18,8 @@ cierres lógicos ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)) y se 
 K032 agrega `commitments_lot_idx` para el cuadre de entregas del inventario
 ([rendimiento](rendimiento.md#índices)). K034 agrega `pickup_code_security_state` y
 `pickup_code_failures` para el límite de códigos de retiro por operador
-([ADR 0013](adr/0013-limite-de-codigos-de-retiro.md)).
+([ADR 0013](adr/0013-limite-de-codigos-de-retiro.md)). K036 agrega `worker_heartbeat`,
+el último ciclo exitoso del worker ([operación](operacion.md)).
 La evidencia histórica de K002 más abajo conserva su contexto original.
 
 ## Prueba actual de K003

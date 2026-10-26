@@ -24,6 +24,7 @@ const migrations = [
   '1791400000000_notifications-outbox',
   '1791500000000_commitments-lot-index',
   '1791600000000_pickup-code-attempts',
+  '1791700000000_worker-heartbeat',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -391,9 +392,18 @@ try {
   await query('DELETE FROM pickup_code_failures'); await query('DELETE FROM pickup_code_security_state')
   ok('K034: fallos de código por operador con estado propio, sin código ni lote, e índice por operador e instante')
 
-  // K014, K022, los consentimientos, la cola, los avisos y K034 solo agregan tablas: las previas conservan OID.
+  // K036: una sola fila de latido del worker.
+  const beat = 'INSERT INTO worker_heartbeat (id, last_cycle_at) VALUES ($1, now())'
+  await rejected('segunda fila de latido', beat, [false], '23514', 'worker_heartbeat_single_check')
+  await query(beat, [true])
+  await rejected('latido duplicado', beat, [true], '23505', 'worker_heartbeat_pkey')
+  await query('DELETE FROM worker_heartbeat')
+  ok('K036: latido del worker en una sola fila')
+
+  // K014, K022, los consentimientos, la cola, los avisos, K034 y K036 solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const withIndex = latest.filter(row => !['pickup_code_security_state', 'pickup_code_failures'].includes(row.relname))
+  const beforeHeartbeat = latest.filter(row => row.relname !== 'worker_heartbeat')
+  const withIndex = beforeHeartbeat.filter(row => !['pickup_code_security_state', 'pickup_code_failures'].includes(row.relname))
   const withQueue = withIndex.filter(row => !['outbox_events', 'notifications'].includes(row.relname))
   const withConsents = withQueue.filter(row => row.relname !== 'waitlist_entries')
   const withDeliveries = withConsents.filter(row => row.relname !== 'user_consents')
@@ -405,7 +415,8 @@ try {
   assert.ok(latest.some(row => row.relname === 'waitlist_entries'))
   assert.ok(latest.some(row => row.relname === 'outbox_events') && latest.some(row => row.relname === 'notifications'))
   assert.ok(latest.some(row => row.relname === 'pickup_code_security_state') && latest.some(row => row.relname === 'pickup_code_failures'))
-  ok('K014, K022, consentimientos, cola, avisos y K034 agregan tablas sin recrear las existentes; el enum no recrea lots')
+  assert.ok(latest.some(row => row.relname === 'worker_heartbeat'))
+  ok('K014, K022, consentimientos, cola, avisos, K034 y K036 agregan tablas sin recrear las existentes; el enum no recrea lots')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), latest)
@@ -418,6 +429,10 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.worker_heartbeat') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), beforeHeartbeat)
+  ok('rollback K036 retira solo el latido del worker')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.pickup_code_failures') AS name"))[0].name, null)
   assert.equal((await query("SELECT to_regclass('public.pickup_code_security_state') AS name"))[0].name, null)
@@ -533,7 +548,7 @@ try {
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
   await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries', 'outbox_events', 'notifications',
-    'pickup_code_security_state', 'pickup_code_failures'])
+    'pickup_code_security_state', 'pickup_code_failures', 'worker_heartbeat'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

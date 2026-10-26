@@ -70,10 +70,9 @@ enviar cabeceras registra solo su código y corta la respuesta: no llega al mane
 de Express, que imprimiría el stack. Las respuestas no anuncian `X-Powered-By` y
 llevan `X-Content-Type-Options: nosniff`.
 
-Todo evento nuevo usa el mismo tipo y el sumidero único que recibe `createApi`, también
-la instrumentación de K036 (#39): la operación se registra con la plantilla de la ruta,
-nunca con la URL con valores, sus cabeceras ni su cuerpo, y el identificador de
-solicitud es un valor generado.
+Todo evento nuevo usa el mismo tipo y el sumidero único que recibe `createApi`. La
+línea de cada solicitud lleva la plantilla de la ruta, nunca la URL con valores, sus
+cabeceras ni su cuerpo, y un identificador generado ([operación](operacion.md)).
 
 ## Pruebas
 

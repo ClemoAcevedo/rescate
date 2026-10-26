@@ -28,7 +28,7 @@ import { createDiscoveryRouter } from "./http/discovery-router.js"
 import { createReservationsRouter } from "./http/reservations-router.js"
 import { createWaitlistUseCases } from "./application/waitlist/use-cases.js"
 import { createWaitlistRepository } from "./infrastructure/postgres/waitlist-repository.js"
-import { createExpiryUseCases } from "./application/expiries/use-cases.js"
+import { createExpiryUseCases, EXPIRY_LIMITS } from "./application/expiries/use-cases.js"
 import { createLotExpiryRepository } from "./infrastructure/postgres/expiry-repository.js"
 import { createWaitlistRouter } from "./http/waitlist-router.js"
 import { createNotificationUseCases, createOutboxProcessor } from "./application/notifications/use-cases.js"
@@ -38,6 +38,7 @@ import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
 import { handleError } from "./http/errors.js"
+import { createOperations } from "./infrastructure/postgres/operations.js"
 import { errorCode } from "./application/logging.js"
 import type { Log } from "./application/logging.js"
 
@@ -103,8 +104,8 @@ export function readPhotoStorage(environment: NodeJS.ProcessEnv): ObjectStore | 
   })
 }
 
-/** `log` es el único sumidero de la API: recibe eventos primitivos (docs/seguridad.md). */
-export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log = event => console.error(event)): Api {
+/** `log` es el único sumidero de la API: eventos primitivos, una línea JSON cada uno (docs/seguridad.md). */
+export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log = event => console.log(JSON.stringify(event))): Api {
   const config = readAuthConfiguration(environment)
   const pool = createPool({ connectionString: readDatabaseUrl(environment), log })
   const identities = createIdentityUseCases({ identities: createIdentityRepository(pool),
@@ -112,6 +113,7 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
     sessions: createSessionRepository(pool), security: createLoginSecurityRepository(pool),
     dummyCredential: createDummyCredential(), now: () => new Date() })
   const limits = createTrafficLimits()
+  const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
   const authentication = createAuthentication(identities, createCsrfTokens(config.key), config.origins, limits)
   const lotsRouter = createLotsRouter({ useCases: createLotUseCases(createLotRepository(pool), () => new Date()),
     authenticate: authentication.authenticate, protectCommand: authentication.protectCommand, log })
@@ -133,6 +135,8 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
     createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
     authentication.authenticate, authentication.protectCommand, log)
   return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
+    // /health no pasa por el límite por IP: checkHealth comparte una sola consulta a la base.
+    health: operations.checkHealth,
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
       try { limits.ip(clientAddress(req)); next() }
@@ -162,6 +166,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
   const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log)
   const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
+  const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
   const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), Math.random, log)
   let running = true
   let wake: (() => void) | null = null
@@ -173,6 +178,8 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
     tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : []), "avisos internos"],
     async run() {
       let nextCleanup = 0
+      let nextHeartbeat = 0
+      let nextBacklog = 0
       while (running) {
         try {
           if (photos && Date.now() >= nextCleanup) {
@@ -183,6 +190,16 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
           const expired = expiries ? await expiries.expireNext() : false
           const processed = photos ? await photos.processNext() : false
           const delivered = (await outbox.processNext()) > 0
+          // K036: el latido marca el último ciclo exitoso; la salud de la API lo lee. Cada
+          // minuto se registra la demora y las tareas en error de cada cola.
+          if (Date.now() >= nextHeartbeat) {
+            await operations.recordWorkerCycle()
+            nextHeartbeat = Date.now() + 10_000
+          }
+          if (Date.now() >= nextBacklog) {
+            for (const queue of await operations.readBacklog()) log({ event: "worker_backlog", ...queue })
+            nextBacklog = Date.now() + 60_000
+          }
           if (!expired && !processed && !delivered) await pause(2000)
         } catch (error) {
           // Sin SQL, rutas ni credenciales en el registro; se reintenta más tarde.

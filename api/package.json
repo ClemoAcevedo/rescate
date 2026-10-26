@@ -48,6 +48,8 @@
     "db:test:notifications:compose": "node scripts/test-notifications-compose.mjs",
     "db:test:queue-worker": "npm run build && node --import tsx scripts/test-queue-worker.mjs",
     "db:test:queue-worker:compose": "node scripts/test-queue-worker-compose.mjs",
+    "db:test:operations": "npm run build && node scripts/test-operations.mjs",
+    "db:test:operations:compose": "node scripts/test-operations-compose.mjs",
     "db:test:security": "npm run build && node --import tsx scripts/test-security.mjs",
     "db:test:security:compose": "node scripts/test-security-compose.mjs",
     "db:test:photos": "npm run build && node --import tsx scripts/test-photos.mjs",
@@ -57,7 +59,8 @@
     "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs",
     "test:web:notifications": "node --env-file-if-exists=.env scripts/test-web-notifications.mjs",
     "test:web:queue-worker": "node --env-file-if-exists=.env scripts/test-web-queue-worker.mjs",
-    "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs"
+    "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs",
+    "ops:status": "npm run build && node --env-file-if-exists=.env scripts/ops-status.mjs"
   },
   "keywords": [],
   "author": "",

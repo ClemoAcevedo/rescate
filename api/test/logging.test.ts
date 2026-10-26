@@ -39,7 +39,7 @@ async function serve(router: Router) {
 
 test("un fallo inesperado responde genérico y registra solo el código, sin detalle de PostgreSQL", async () => {
   const router = Router()
-  router.post("/fails", () => {
+  router.post("/lots/:lotId/fails", () => {
     throw Object.assign(new Error(`duplicate key value violates unique constraint (${secrets[3]})`), {
       code: "23505", detail: `Key (token_hash)=(${secrets[1]}) already exists.`,
       where: `password=${secrets[0]}`,
@@ -47,12 +47,19 @@ test("un fallo inesperado responde genérico y registra solo el código, sin det
   })
   const s = await serve(router)
   try {
-    const response = await fetch(`${s.base}/fails`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+    const response = await fetch(`${s.base}/lots/${secrets[2]}/fails?email=${secrets[3]}`, { method: "POST",
+      headers: { "content-type": "application/json" }, body: "{}" })
     const text = await response.text()
     assert.equal(response.status, 500)
     assert.equal(response.headers.get("x-powered-by"), null)
     assert.equal(response.headers.get("x-content-type-options"), "nosniff")
-    assert.deepEqual(s.events, [{ event: "request_failed", code: "23505" }])
+    // K036: el fallo y la solicitud comparten un identificador generado; la operación es la
+    // plantilla de la ruta, sin el valor del parámetro ni la consulta.
+    const [failed, request] = s.events
+    assert.match(String(failed?.requestId), /^[0-9a-f-]{36}$/)
+    assert.deepEqual(failed, { event: "request_failed", requestId: failed?.requestId, code: "23505" })
+    assert.deepEqual({ ...request, durationMs: 0 }, { event: "request", requestId: failed?.requestId,
+      operation: "POST /lots/:lotId/fails", status: 500, durationMs: 0, completed: true })
     for (const secret of secrets) assert.equal(`${text}${JSON.stringify(s.events)}${JSON.stringify(s.printed)}`.includes(secret), false)
   } finally { await s.close() }
 })
@@ -64,6 +71,8 @@ test("JSON mal formado con contraseña responde 400 sin registrar el cuerpo", as
       body: `{"email":"${secrets[3]}","password":"${secrets[0]}"` })
     assert.equal(response.status, 400)
     const text = await response.text()
+    // Sin ruta resuelta (cuerpo inválido, 404 o límite por IP) no hay plantilla: nunca la URL.
+    assert.deepEqual(s.events.map(event => [event.event, event.operation, event.status]), [["request", "POST (sin ruta)", 400]])
     for (const secret of secrets) assert.equal(`${text}${JSON.stringify(s.events)}${JSON.stringify(s.printed)}`.includes(secret), false)
   } finally { await s.close() }
 })
@@ -77,7 +86,20 @@ test("un fallo después de enviar cabeceras corta la respuesta sin pasar el stac
   const s = await serve(router)
   try {
     await assert.rejects(async () => { await (await fetch(`${s.base}/stream`)).text() })
-    assert.deepEqual(s.events, [{ event: "request_failed", code: "22P02" }])
+    assert.deepEqual(s.events.map(event => [event.event, event.requestId === s.events[0]?.requestId, event.completed ?? null]),
+      [["request_failed", true, null], ["request", true, false]])
     assert.deepEqual(s.printed, [])
+  } finally { await s.close() }
+})
+
+test("K036: una solicitud cortada antes de responder se registra sin estado", async () => {
+  const router = Router()
+  router.get("/slow", (_req, res) => { setTimeout(() => { if (!res.destroyed) res.json({}) }, 300) })
+  const s = await serve(router)
+  try {
+    await assert.rejects(fetch(`${s.base}/slow`, { signal: AbortSignal.timeout(50) }))
+    await new Promise(resolve => setTimeout(resolve, 100))
+    assert.deepEqual(s.events.map(event => [event.event, event.operation, event.status, event.completed]),
+      [["request", "GET /slow", null, false]])
   } finally { await s.close() }
 })
