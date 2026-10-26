@@ -76,7 +76,12 @@ try {
     const sessionCookie = (await context.cookies(origin)).find(cookie => cookie.name === '__Host-rescate_session')
     assert.ok(sessionCookie?.secure && sessionCookie.httpOnly)
     assert.equal(sessionCookie.domain, new URL(origin).hostname)
-    const persisted = await page.evaluate(async () => (await fetch('/api/auth/session')).json())
+    // Rehidratar el proveedor de autenticación desde la cookie emitida por el
+    // login antes de probar acciones protegidas. La respuesta de fetch directa
+    // solo verifica el servidor y no actualiza el token CSRF en la aplicación.
+    const persistedResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/session')
+    await page.reload()
+    const persisted = await (await persistedResponse).json()
     assert.ok(persisted.session)
     const logoutResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/logout')
     await page.getByRole('button', { name: 'Cerrar sesión' }).click()
