@@ -184,6 +184,37 @@ test('a later quota failure preserves completed batches and identifies the pendi
   assert.equal(h.artifacts[0].coverage.pending[0].path, files[1].filename);
 });
 
+test('an unverified candidate in a later batch preserves all prior and current confirmed findings', async () => {
+  const files = [largeFile('api/src/a.ts'), largeFile('api/src/z.ts')];
+  const candidate = (path, line, title) => ({ ...finding, path, line, title,
+    evidence: { path, side: 'RIGHT', line, quote: `const v${line - 1}` } });
+  const previous = candidate(files[0].filename, 1, 'Hallazgo confirmado del primer lote');
+  const current = candidate(files[1].filename, 1, 'Hallazgo confirmado del segundo lote');
+  const uncertain = candidate(files[1].filename, 2, 'Candidato sin verificar');
+  const h = harness({ files, model: payload => {
+    if (!payload.candidates) return review(payload.part === 1 ? [previous] : [current, uncertain], payload.files);
+    return { decisions: payload.candidates.map((item, index) => index === 0
+      ? { ...decision(), candidate: index + 1, evidence: item.evidence }
+      : { candidate: index + 1, verdict: 'unverified', reason: 'Falta contexto para confirmar este candidato.',
+        confidence: null, evidence: null }) };
+  } });
+
+  await assert.rejects(runReview(h.options), /sin verificar/);
+  assert.equal(h.models().length, 4, 'ambos lotes llegaron a su segunda pasada');
+  assert.equal(h.posts().length, 1, 'el resultado parcial se publica antes de fallar el job');
+  const result = h.artifacts[0];
+  assert.equal(result.complete, false);
+  assert.equal(result.coverage.completedBatches, 1);
+  assert.deepEqual(result.coverage.reviewedFiles, [files[0].filename]);
+  assert.deepEqual(result.coverage.pending.map(item => item.path), [files[1].filename]);
+  assert.deepEqual(result.findings.map(item => item.title), [previous.title, current.title]);
+  const body = JSON.parse(h.posts()[0].body).body;
+  assert.match(body, /REVISIÓN INCOMPLETA/);
+  assert.ok(body.includes(previous.title));
+  assert.ok(body.includes(current.title));
+  assert.ok(!body.includes(uncertain.title));
+});
+
 test('batch cap is visible and never produces a complete marker', async () => {
   const h = harness({ files: [largeFile('api/src/a.ts'), largeFile('web/src/z.ts')], planOptions: { maxBatches: 1 } });
   await assert.rejects(runReview(h.options), /parcial/);
