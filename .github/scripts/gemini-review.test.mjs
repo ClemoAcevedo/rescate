@@ -238,11 +238,11 @@ for (const status of [500, 502, 503, 504]) test(`HTTP ${status} retries with bac
   assert.equal(new Set(h.models().map(request => request.signal)).size, 3);
 });
 
-test('persistent timeouts or service failures stop after three requests', async () => {
+test('persistent timeouts or service failures stop after five requests', async () => {
   for (const status of [new DOMException('timeout', 'TimeoutError'), 503]) {
     const h = harness({ statuses: [status] });
-    await assert.rejects(runReview(h.options), /tres intentos/);
-    assert.equal(h.models().length, 3);
+    await assert.rejects(runReview(h.options), /cinco intentos/);
+    assert.equal(h.models().length, 5);
     assert.equal(h.artifacts[0].complete, false);
   }
 });
