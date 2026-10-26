@@ -185,6 +185,11 @@ commit revisado. Es informativa, no aprueba el PR ni es un check obligatorio par
 integrar. La protección de ramas exige Pull Request y CI, sin exigir aprobación
 humana.
 
+Las PR sin cambios de archivos, como una sincronización de historial entre ramas,
+se omiten con resultado correcto antes de preparar el diff o exigir claves del
+proveedor. El resumen de Actions indica la omisión; no se llama al modelo ni se
+publica una revisión vacía.
+
 ### Configuración
 
 1. Crear una clave de Gemini API en [Google AI Studio](https://aistudio.google.com/api-keys)
