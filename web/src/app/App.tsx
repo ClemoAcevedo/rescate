@@ -7,6 +7,11 @@ import { LotEditorPage } from '../pages/LotEditorPage'
 import { LotsPage } from '../pages/LotsPage'
 import { MyLotsPage } from '../pages/MyLotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { NotificationsPage } from '../pages/NotificationsPage'
+import { PanelPage } from '../pages/PanelPage'
+import { PickupsPage } from '../pages/PickupsPage'
+import { ReservationsPage, ReservationDetailPage } from '../pages/ReservationsPage'
+import { JoinWaitlistPage, WaitlistPage, WaitlistDetailPage } from '../pages/WaitlistPage'
 import { RegisterPage } from '../pages/RegisterPage'
 
 function RootRedirect() {
@@ -22,9 +27,17 @@ function App() {
         <Route index element={<RootRedirect />} />
         <Route path="lotes" element={<LotsPage />} />
         <Route path="lotes/:id" element={<LotDetailPage />} />
+        <Route path="operador/panel" element={<PanelPage />} />
         <Route path="operador/lotes" element={<MyLotsPage />} />
         <Route path="operador/lotes/nuevo" element={<LotEditorPage />} />
         <Route path="operador/lotes/:lotId" element={<LotEditorPage />} />
+        <Route path="operador/lotes/:lotId/retiros" element={<PickupsPage />} />
+        <Route path="lotes/:id/espera" element={<JoinWaitlistPage />} />
+        <Route path="espera" element={<WaitlistPage />} />
+        <Route path="espera/:id" element={<WaitlistDetailPage />} />
+        <Route path="avisos" element={<NotificationsPage />} />
+        <Route path="reservas" element={<ReservationsPage />} />
+        <Route path="reservas/:id" element={<ReservationDetailPage />} />
         <Route path="registro" element={<RegisterPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="conexion" element={<ConnectionPage />} />

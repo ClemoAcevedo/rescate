@@ -7,6 +7,7 @@ import type { Authenticate } from './actor.js'
 import type { HttpSchemas } from './openapi.js'
 import { handleError, sendError } from './errors.js'
 import { photoPath } from './photos-router.js'
+import type { Log } from '../application/logging.js'
 
 type Cases = ReturnType<typeof createDiscoveryUseCases>
 class InvalidInput extends Error { constructor(readonly fields: string[]) { super('Entrada inválida') } }
@@ -76,7 +77,7 @@ function parseReservation(value: unknown): { quantity: number; idempotencyKey: s
 const id = (value: unknown) => typeof value === 'string' ? value : ''
 
 export function createDiscoveryRouter(cases: Cases, authenticate: Authenticate,
-  protectCommand: (request: Request) => Promise<void>, log: (error: unknown) => void = console.error): Router {
+  protectCommand: (request: Request) => Promise<void>, log: Log = event => console.error(event)): Router {
   const router = Router()
   const route = (handler: (request: Request, response: Response) => Promise<void>) =>
     async (request: Request, response: Response) => {

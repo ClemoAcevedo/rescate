@@ -13,9 +13,18 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Contrato HTTP | [OpenAPI S02](api/openapi.yaml) y [su guía](api/README.md) |
 | Dominio y requisitos | [Modelo](modelo-inicial.md), [casos de uso](casos-de-uso.md) y [trazabilidad](k013-trazabilidad.md) |
 | Identidad y sesiones | [Identidad](k008-identidad.md) |
+| Límites, aislamiento y registros sin secretos | [Seguridad](seguridad.md) |
+| Salud, registro de solicitudes y revisión diaria | [Operación](operacion.md) |
 | Lotes | [Lotes](lotes.md) |
+| Reservas, cancelación y retiro | [Reservas](reservas.md) |
+| Panel del establecimiento y resultados | [Panel](panel.md) |
+| Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |
+| Vencimientos y worker | [Vencimientos](vencimientos.md) |
+| Avisos internos y outbox | [Avisos](avisos.md) |
 | Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
+| Rendimiento y carga | [Rendimiento](rendimiento.md) |
+| Accesibilidad y comprensión | [Revisión y protocolo](accesibilidad.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 
 ## Decisiones (ADR)
@@ -27,11 +36,24 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0003](adr/0003-arquitectura-incremental-s02.md) | Arquitectura incremental HTTP, Application, Domain e Infrastructure; Composition ensambla |
 | [0004](adr/0004-reserva-directa-idempotente.md) | Reserva directa e idempotencia por actor, resultado persistido y bloqueo de lote |
 | [0005](adr/0005-ciclo-de-fotos.md) | Fotos cargadas y leídas por la API, validadas por el worker; publicar exige fotos listas |
+| [0006](adr/0006-inventario-del-lote.md) | Inventario Q = F + O + R + E + X en el lote con CHECK, bloqueo común y reloj de la base |
+| [0007](adr/0007-codigo-de-retiro-y-transiciones.md) | Código de retiro cifrado con huella; cancelar, retirar y vencer como una sola transición terminal |
+| [0008](adr/0008-estado-del-lote-y-cierre-logico.md) | Estado del lote como enum; vencido y retirado son cierres lógicos con `closed_at` |
+| [0009](adr/0009-consentimiento-del-correo.md) | Consentimiento del correo en `user_consents`, obligatorio al registrarse y revocable |
+| [0010](adr/0010-cola-fifo-y-ofertas.md) | Cola FIFO y ofertas en `waitlist_entries`; la cola se asienta bajo el bloqueo del lote en cada comando que libera o lee inventario |
+| [0011](adr/0011-vencimientos-con-concesion.md) | Vencimientos reclamados por lote con concesión y reintentos acotados; el cierre pasa todo F, O y R a X |
+| [0012](adr/0012-avisos-y-outbox.md) | Avisos internos con outbox transaccional: el evento nace con la transición y el worker genera un aviso por evento y destinatario |
+| [0013](adr/0013-limite-de-codigos-de-retiro.md) | Cinco códigos de retiro inválidos por operador en 15 minutos suspenden revisar y confirmar; fallos persistidos y serializados por operador |
+| [0014](adr/0014-cupo-de-lecturas-por-usuario.md) | Lecturas autenticadas con cupo propio (300/min, ráfaga 60); las escrituras conservan 120/min con ráfaga 20 |
+| [0015](adr/0015-deploy-de-worker-y-web-en-paralelo.md) | Tras la API migrada, worker y web se despliegan en paralelo; la verificación pública espera a ambos |
 
 ## Entregas y evidencia
 
 - [Informe E1](entregas/e1/informe-e1.pdf) y [anexos E1](entregas/e1/anexos-e1.pdf):
   requisitos originales. No se reescriben; los ADR posteriores prevalecen solo en lo
   que modifican.
+- [Presentación E2](entregas/e2/presentacion-e2.pdf) y
+  [estimaciones E2](entregas/e2/estimaciones-e2.xlsx): modelos, arquitectura,
+  respuesta al feedback de E1, riesgos, BPMN por rol y plan de trabajo hasta S11.
 - [Evidencia](evidencia/): registros de ejecución de K003, K005, K006, K009 y K010,
   conservados como estaban. La evidencia nueva va en la descripción del PR y en CI.

@@ -6,6 +6,7 @@ import { assertContract } from '../test/support/openapi.ts'
 import { createDiscoveryRepository } from '../dist/infrastructure/postgres/discovery-repository.js'
 import { createDiscoveryUseCases } from '../dist/application/discovery/use-cases.js'
 import { createPool } from '../dist/infrastructure/postgres/pool.js'
+import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 import { createApi } from '../dist/composition.js'
 
 const connectionString = process.env.DATABASE_URL
@@ -13,7 +14,7 @@ assert.ok(connectionString && /^rescate_(k015_test_|web_test_)/.test(new URL(con
   'Se requiere base de prueba aislada K015 o web')
 const database = new pg.Client({ connectionString })
 const api = createApi({ ...process.env, RESCATE_ALLOWED_ORIGINS: 'https://localhost:5173',
-  CSRF_SIGNING_KEY: randomBytes(32).toString('base64') })
+  CSRF_SIGNING_KEY: randomBytes(32).toString('base64'), PICKUP_CODE_KEY: randomBytes(32).toString('base64') })
 const server = api.app.listen(0, '127.0.0.1')
 await new Promise(resolve => server.once('listening', resolve))
 let checks = 0
@@ -69,7 +70,7 @@ try {
   const buyer = client()
   assert.equal((await buyer('GET', '/auth/session')).status, 200)
   const email = `k015-${randomUUID()}@example.invalid`
-  assert.equal((await buyer('POST', '/auth/register', { email, password: 'Clave-ficticia-K015-segura' })).status, 201)
+  assert.equal((await buyer('POST', '/auth/register', { email, password: 'Clave-ficticia-K015-segura', privacyConsent: true })).status, 201)
   assert.equal((await buyer('POST', '/auth/login', { email, password: 'Clave-ficticia-K015-segura' })).status, 200)
   const key = randomUUID()
   const confirmed = await buyer('POST', `/public/lots/${lotId}/reservations`, { quantity: 2, idempotencyKey: key })
@@ -83,7 +84,7 @@ try {
   const other = client()
   await other('GET', '/auth/session')
   const otherEmail = `k015-${randomUUID()}@example.invalid`
-  await other('POST', '/auth/register', { email: otherEmail, password: 'Clave-ficticia-K015-segura' })
+  await other('POST', '/auth/register', { email: otherEmail, password: 'Clave-ficticia-K015-segura', privacyConsent: true })
   await other('POST', '/auth/login', { email: otherEmail, password: 'Clave-ficticia-K015-segura' })
   assert.equal((await other('POST', `/public/lots/${lotId}/reservations`, { quantity: 1, idempotencyKey: randomUUID() })).status, 409)
   assert.equal((await guest('GET', `/public/lots/${lotId}`)).body.availableQuantity, 0)
@@ -111,8 +112,8 @@ try {
     const { rows } = await database.query(`INSERT INTO lots
       (establishment_id, description, category, quantity, address, latitude, longitude, time_zone,
        pickup_starts_at, pickup_ends_at, status, published_at)
-      VALUES ($1,$2,'Filtro K015',$3,'Santiago',$4,$5,'America/Santiago',$6,$7,$8,
-        CASE WHEN $8='published' THEN now() ELSE NULL END) RETURNING public_id::text AS id`,
+      VALUES ($1,$2,'Filtro K015',$3,'Santiago',$4,$5,'America/Santiago',$6,$7,$8::lot_status,
+        CASE WHEN $8::lot_status='published' THEN now() ELSE NULL END) RETURNING public_id::text AS id`,
       [establishment.rows[0].id, description, quantity, latitude, longitude, starts, ends, status])
     return rows[0].id
   }
@@ -180,18 +181,20 @@ try {
   const repository = createDiscoveryRepository(pool)
   const buyerId = (await database.query('SELECT id::text FROM users WHERE email=$1', [email])).rows[0].id
   try {
+    const codes = createPickupCodes(randomBytes(32))
     const failing = createDiscoveryUseCases({ ...repository,
       withReservationTransaction: (user, lot, key, operate) => repository.withReservationTransaction(user, lot, key,
         (state, writer) => operate(state, { insert: async (...args) => {
           await writer.insert(...args); throw new Error('fallo posterior a inserción')
         } })),
-    }, () => new Date())
+    }, codes, () => new Date())
     const rollbackKey = randomUUID()
     await assert.rejects(failing.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey), /fallo posterior/)
     assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE user_id=$1 AND idempotency_key=$2', [buyerId, rollbackKey])).rows[0].n, 0)
-    const cases = createDiscoveryUseCases(repository, () => new Date())
+    assert.equal((await database.query('SELECT reserved_quantity FROM lots WHERE public_id=$1', [nearIds[2]])).rows[0].reserved_quantity, 0)
+    const cases = createDiscoveryUseCases(repository, codes, () => new Date())
     const original = await cases.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey)
-    const replayAfterRestart = createDiscoveryUseCases(createDiscoveryRepository(pool), () => new Date())
+    const replayAfterRestart = createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date())
     assert.deepEqual(await replayAfterRestart.reserve({ userId: buyerId }, nearIds[2], 1, rollbackKey), original)
     ok('rollback de reserva y clave juntos; relectura desde otra instancia conserva el resultado')
 
@@ -221,11 +224,81 @@ try {
     await database.query('ROLLBACK')
     await cases.reserve({ userId: buyerId }, nearIds[4], 1, timeoutKey)
     ok('bloqueo mayor a 2 s aborta sin consumir clave; se puede reintentar después')
+
+    // K021: ocho personas compiten por cinco packs y cada una reintenta tres veces
+    // en paralelo con su clave. Cada intención obtiene un único resultado.
+    const contested = await makeLot('Contienda K021', 5)
+    const people = []
+    for (let i = 0; i < 8; i++) {
+      const { rows } = await database.query('INSERT INTO users(email) VALUES ($1) RETURNING id::text', [`k021-${randomUUID()}@example.invalid`])
+      people.push({ userId: rows[0].id, key: randomUUID() })
+    }
+    const settle = promise => promise.then(value => ({ value }), error => ({ error }))
+    const attempts = await Promise.all(people.flatMap(person => [0, 1, 2].map(() =>
+      settle(cases.reserve({ userId: person.userId }, contested, 1, person.key)))))
+    const outcomes = people.map((_, i) => attempts.slice(i * 3, i * 3 + 3))
+    for (const tries of outcomes) {
+      const won = tries.filter(t => t.value)
+      if (won.length) {
+        // La intención confirmada se reproduce idéntica en todos sus reintentos exitosos.
+        assert.ok(won.every(t => t.value.id === won[0].value.id))
+        assert.ok(tries.every(t => t.value || t.error?.reason === 'unavailable'))
+      } else assert.ok(tries.every(t => t.error?.reason === 'unavailable'), JSON.stringify(tries))
+    }
+    const winners = outcomes.filter(tries => tries.some(t => t.value))
+    assert.equal(winners.length, 5)
+    const [counts] = (await database.query(`SELECT l.free_quantity, l.reserved_quantity,
+        (SELECT count(*)::int FROM commitments c WHERE c.lot_id = l.id) AS commitments
+      FROM lots l WHERE public_id = $1`, [contested])).rows
+    assert.deepEqual(counts, { free_quantity: 0, reserved_quantity: 5, commitments: 5 })
+    // Una respuesta perdida se recupera repitiendo la clave: mismo resultado, sin otra reserva.
+    for (const [i, tries] of outcomes.entries()) {
+      const original = tries.find(t => t.value)?.value
+      if (original) assert.deepEqual(await cases.reserve({ userId: people[i].userId }, contested, 1, people[i].key), original)
+    }
+    assert.equal((await database.query('SELECT reserved_quantity FROM lots WHERE public_id=$1', [contested])).rows[0].reserved_quantity, 5)
+    ok('reintentos concurrentes de 8 personas por 5 packs: un resultado por clave, sin sobreasignación')
+
+    // Si la regla fallara, la base igual rechaza dejar F negativo y revierte todo.
+    const blind = createDiscoveryUseCases({ ...repository,
+      withReservationTransaction: (user, lot, key, operate) => repository.withReservationTransaction(user, lot, key,
+        (state, writer) => operate(state.lot ? { ...state, lot: { ...state.lot, availableQuantity: 99 } } : state, writer)),
+    }, codes, () => new Date())
+    const blindKey = randomUUID()
+    await assert.rejects(blind.reserve({ userId: buyerId }, contested, 1, blindKey), { constraint: 'lots_inventory_total_check' })
+    assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE idempotency_key=$1', [blindKey])).rows[0].n, 0)
+    ok('CHECK de inventario rechaza sobreasignación aunque Application no la detecte; clave sin consumir')
+
+    // Contadores distintos de sus registros: no se asigna y queda un registro para revisión.
+    const tampered = await makeLot('Discrepancia K021', 5)
+    await database.query('UPDATE lots SET reserved_quantity = 1 WHERE public_id = $1', [tampered])
+    const discrepancyKey = randomUUID()
+    await assert.rejects(cases.reserve({ userId: buyerId }, tampered, 1, discrepancyKey), { code: 'inventory_discrepancy', lotId: tampered })
+    const logged = []
+    // La API escribe una línea JSON por evento en la salida estándar (K036).
+    const originalLog = console.log
+    console.log = line => logged.push(JSON.parse(line))
+    let refused
+    try { refused = await other('POST', `/public/lots/${tampered}/reservations`, { quantity: 1, idempotencyKey: randomUUID() }) }
+    finally { console.log = originalLog }
+    assert.equal(refused.status, 409)
+    assert.ok(logged.some(entry => entry?.event === 'inventory_discrepancy' && entry.lotId === tampered), JSON.stringify(logged))
+    assert.equal((await database.query('SELECT count(*)::int n FROM commitments WHERE lot_id=(SELECT id FROM lots WHERE public_id=$1)', [tampered])).rows[0].n, 0)
+    await database.query('UPDATE lots SET reserved_quantity = 0 WHERE public_id = $1', [tampered])
+    await cases.reserve({ userId: buyerId }, tampered, 1, discrepancyKey)
+    ok('discrepancia entre R y reservas bloquea nuevas asignaciones con 409 y registra revisión')
+
+    const unreconciled = await database.query(`SELECT l.public_id FROM lots l
+      WHERE l.reserved_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c
+        WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
+        OR l.free_quantity <> l.quantity - l.offered_quantity - l.reserved_quantity - l.delivered_quantity - l.expired_quantity`)
+    assert.deepEqual(unreconciled.rows, [])
+    ok('conciliación: R coincide con las reservas confirmadas en todos los lotes')
   } finally {
     await database.query('ROLLBACK')
     await pool.end()
   }
-  console.log(`PASS K015: ${checks} grupos de integración con PostgreSQL/PostGIS real`)
+  console.log(`PASS K015/K021: ${checks} grupos de integración con PostgreSQL/PostGIS real`)
 
 } finally {
   await database.end().catch(() => {})

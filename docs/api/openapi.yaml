@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública y reserva directa, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, panel del establecimiento, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -21,7 +21,42 @@ tags:
   -
     name: "Discovery"
     description: "RF03/RF04: exploración pública y reserva directa."
+  -
+    name: "Reservations"
+    description: "RF05/RF06/RF08: reservas del titular, cancelación, código de retiro y entrega acreditada por el operador."
+  -
+    name: "Waitlist"
+    description: "RF07: cola FIFO, ofertas parciales y su aceptación o rechazo por el titular."
+  -
+    name: "Notifications"
+    description: "RF09: avisos internos persistentes del titular y su lectura."
+  -
+    name: "Operations"
+    description: "RNF04: salud del proceso, de la base y del worker."
+  -
+    name: "Panel"
+    description: "RF10/RF12: panel del establecimiento para su operador, historial y resultados básicos."
 paths:
+  "/health":
+    get:
+      operationId: "getHealth"
+      summary: "Comprobar el proceso, la base y el worker"
+      description: "Consulta PostgreSQL y el último ciclo exitoso del worker. El estado general depende solo del proceso y la base: un worker detenido responde 200. Sin respuesta de la base en 3 s, 503. No pasa por el límite por IP ni se registra."
+      tags: ["Operations"]
+      security: []
+      responses:
+        "200":
+          description: "Proceso y base disponibles. `worker` es `stopped` sin un ciclo exitoso en 60 s y `unknown` si falta la migración de K036."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+              example: { status: "ok", database: "ok", worker: "ok" }
+        "503":
+          description: "La base no responde. No incluye host, credenciales ni el error."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+              example: { status: "unavailable", database: "unavailable", worker: "unknown" }
   "/public/lots":
     get:
       operationId: "searchPublicLots"
@@ -83,7 +118,7 @@ paths:
     post:
       operationId: "reservePublicLot"
       summary: "Reservar packs disponibles"
-      description: "Reserva directa bajo bloqueo del lote. Requiere sesión, Origin y CSRF. idempotencyKey es un UUID del cuerpo, con unicidad por actor durante el piloto. Tras confirmar, la misma clave y parámetros reproducen status 201 y cuerpo, incluso si el lote cerró; otros parámetros producen 409. Los errores no consumen la clave. 409 si cerró la ventana, faltan packs o ya hay reserva activa; 404 para lote inexistente o borrador. Cantidad entera positiva hasta 2147483647 (límite de almacenamiento), sin tope comercial por persona."
+      description: "Reserva directa bajo bloqueo del lote. Requiere sesión, Origin y CSRF. idempotencyKey es un UUID del cuerpo, con unicidad por actor durante el piloto. Tras confirmar, la misma clave y parámetros reproducen status 201 y cuerpo, incluso si el lote cerró; otros parámetros producen 409. Los errores no consumen la clave. 409 si cerró la ventana, faltan packs, ya hay reserva activa o el lote está en revisión por contadores distintos de sus reservas; 404 para lote inexistente o borrador. Cantidad entera positiva hasta 2147483647 (límite de almacenamiento), sin tope comercial por persona."
       tags: ["Discovery"]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -107,6 +142,390 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations":
+    get:
+      operationId: "listReservations"
+      summary: "Listar las reservas propias"
+      description: "Reservas del actor de la sesión, vigentes y terminadas, por creación descendente en páginas de 20. No incluye códigos de retiro. status es el estado vigente al leer: una confirmada cuyo lote cerró se informa expired aunque el trabajador aún no lo haya registrado."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de reservas propias."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations/{reservationId}":
+    parameters:
+      - $ref: "#/components/parameters/ReservationId"
+    get:
+      operationId: "getReservation"
+      summary: "Consultar una reserva propia y su código"
+      description: "Solo el titular. Una reserva ajena o inexistente responde 404 sin distinguirlas. pickupCode solo aparece mientras la reserva está confirmada y su lote no cerró; cancelada, vencida o retirada devuelve null y el código ya no sirve en el backend. Una reserva confirmada antes de existir códigos recibe el suyo en esta consulta."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Reserva del titular."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations/{reservationId}/cancel":
+    parameters:
+      - $ref: "#/components/parameters/ReservationId"
+    post:
+      operationId: "cancelReservation"
+      summary: "Cancelar una reserva propia"
+      description: "Solo el titular cancela una reserva confirmada antes del cierre del lote. Bajo bloqueo del lote invalida el código y devuelve los packs a libres en la misma transacción. Repetir sobre una cancelada responde 200 con el mismo estado y no libera de nuevo. 409 si ya fue retirada o venció; 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CancelReservationRequest" }
+      responses:
+        "200":
+          description: "Reserva cancelada, sin código."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/public/lots/{lotId}/waitlist":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "joinWaitlist"
+      summary: "Entrar a la cola de espera de un lote"
+      description: "Abre una solicitud al final de la cola FIFO cuando la cantidad no se puede reservar directamente: no alcanza o ya hay personas esperando. Con packs libres suficientes y la cola vacía responde 409 y corresponde reservar directamente. Si hay packs libres, la primera solicitud recibe de inmediato una oferta por lo que haya, parcial si no alcanza (ADR 0002); la respuesta ya la refleja. Una solicitud en espera no retiene packs. Requiere sesión, Origin y CSRF. idempotencyKey es un UUID por actor: la misma clave y parámetros devuelven la solicitud existente con su estado vigente; otros parámetros producen 409. 409 también si el lote cerró, ya hay una reserva o solicitud activa de ese lote, o el lote está en revisión por contadores distintos de sus registros; 404 para lote inexistente o borrador."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JoinWaitlistRequest" }
+      responses:
+        "201":
+          description: "Solicitud abierta, o la existente para esa clave."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist":
+    get:
+      operationId: "listWaitlistEntries"
+      summary: "Listar las solicitudes de espera propias"
+      description: "Solicitudes del actor de la sesión, vigentes y terminadas, por creación descendente en páginas de 20. status es el estado vigente al leer: una oferta cuya hora pasó o una espera de un lote cerrado se informan expired aunque el trabajador aún no lo haya registrado."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de solicitudes."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    get:
+      operationId: "getWaitlistEntry"
+      summary: "Consultar una solicitud de espera propia"
+      description: "Estado vigente, posición mientras espera, cantidad ofrecida y su vigencia, y la reserva que nació al aceptar. 404 si es ajena o no existe."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Solicitud con su estado vigente."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}/accept":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    post:
+      operationId: "acceptWaitlistOffer"
+      summary: "Aceptar la oferta vigente"
+      description: "Confirma solo la cantidad ofrecida (O → R, sin descontar libres otra vez), cierra la solicitud sin saldo prioritario y crea la reserva con su código de retiro, que se consulta en GET /reservations/{reservationId}. Repetir sobre una aceptada responde 200 con la misma reserva. 409 si no hay oferta, venció (también si el lote cerró), fue rechazada o la solicitud se retiró; 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistCommandRequest" }
+      responses:
+        "200":
+          description: "Solicitud aceptada con su reservationId."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}/decline":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    post:
+      operationId: "declineWaitlistOffer"
+      summary: "Rechazar la oferta vigente"
+      description: "Cierra la solicitud, libera solo lo retenido (a libres, o a no asignables si el lote ya cerró) y ofrece a quien sigue en la misma transacción. No conserva prioridad ni reingresa: volver exige una solicitud nueva. Repetir sobre una rechazada responde 200 y no libera de nuevo. 409 si no hay oferta, ya fue aceptada o venció; 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistCommandRequest" }
+      responses:
+        "200":
+          description: "Solicitud rechazada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/waitlist/{entryId}/leave":
+    parameters:
+      - $ref: "#/components/parameters/EntryId"
+    post:
+      operationId: "leaveWaitlist"
+      summary: "Salir de la cola de espera"
+      description: "Retira una solicitud que aún espera sin oferta; pierde su posición y volver exige una solicitud nueva. Repetir sobre una retirada responde 200. Con una oferta vigente se rechaza en vez de salir (409). 404 si es ajena o no existe. Cuerpo: objeto vacío."
+      tags: ["Waitlist"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistCommandRequest" }
+      responses:
+        "200":
+          description: "Solicitud retirada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistEntry" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/pickup-reviews":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "reviewPickupCode"
+      summary: "Revisar un código de retiro"
+      description: "Operador con membership actual sobre el establecimiento del lote. El código va en el cuerpo, nunca en la ruta. Muestra la reserva del lote con ese código, también si fue cancelada, venció o ya se retiró; no consume el código ni garantiza la entrega. Mayúsculas, espacios y guiones no importan; I/L se leen como 1 y O como 0. Un código inexistente, mal formado o de otro lote responde 404 sin más información y cuenta como fallo del operador. Cinco fallos en 15 minutos, al revisar o al confirmar, suspenden al operador 15 minutos: revisar y confirmar responden 429 con Retry-After, también con el código correcto. Además, como máximo 30 revisiones o confirmaciones por IP cada minuto. Usa POST porque el código no puede ir en la URL; no cambia la reserva."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PickupReviewRequest" }
+      responses:
+        "200":
+          description: "Reserva correspondiente al código y si hoy podría confirmarse."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PickupReview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/pickups":
+    parameters:
+      - $ref: "#/components/parameters/LotId"
+    post:
+      operationId: "confirmPickup"
+      summary: "Confirmar el retiro de una reserva"
+      description: "Operador con membership actual. Bajo bloqueo del lote vuelve a comprobar permiso, reserva, código y ventana aunque la revisión previa haya sido válida: se retira desde el inicio de la ventana y antes de su cierre. Registra una única entrega completa, consume el código y mueve los packs de reservados a retirados en la misma transacción. idempotencyKey es un UUID por operador: repetir la misma clave y parámetros reproduce 201 y el cuerpo original; con otros parámetros responde 409. Otro intento sobre una reserva ya retirada responde 409. Los errores no consumen la clave. 409 también si fue cancelada, venció o la ventana aún no comienza; 404 si el código no corresponde a esa reserva del lote, que cuenta como fallo del operador igual que al revisar. Con la revisión suspendida responde 429 con Retry-After, incluso para una clave ya usada."
+      tags: ["Reservations"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmPickupRequest" }
+      responses:
+        "201":
+          description: "Entrega registrada o reproducción del resultado original con la misma clave."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PickupResponse" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/notifications":
+    get:
+      operationId: "listNotifications"
+      summary: "Listar los avisos propios"
+      description: "Avisos del actor de la sesión, más recientes primero, en páginas de 20, con el total sin leer. Persisten aunque la persona estuviera desconectada. Solo muestran datos del propio titular y nunca códigos de retiro; el detalle enlazado (solicitud o reserva) vuelve a comprobar permisos y estado vigente. El worker genera el aviso después de la transición, por lo que puede tardar unos segundos en aparecer."
+      tags: ["Notifications"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de avisos propios."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/notifications/{notificationId}/read":
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    post:
+      operationId: "markNotificationRead"
+      summary: "Marcar un aviso propio como leído"
+      description: "Registra la lectura y devuelve el aviso. Repetir conserva el instante de la primera lectura. Leer no cambia ofertas, solicitudes ni reservas: una oferta vencida sigue vencida. 404 si el aviso es ajeno o no existe. Cuerpo: objeto vacío."
+      tags: ["Notifications"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkNotificationReadRequest" }
+      responses:
+        "200":
+          description: "Aviso con su lectura registrada."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
@@ -136,6 +555,7 @@ paths:
             example:
               email: "persona@example.com"
               password: "Ejemplo-sin-acceso-2030"
+              privacyConsent: true
       responses:
         "201":
           description: "Cuenta creada. Sin sesión automática ni Set-Cookie de autenticación."
@@ -339,7 +759,7 @@ paths:
       parameters:
         - name: status
           in: query
-          schema: { type: string, enum: [draft, published] }
+          schema: { $ref: "#/components/schemas/LotStatus" }
         - name: page
           in: query
           schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
@@ -456,6 +876,122 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+  "/establishments/{establishmentId}/panel":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "getEstablishmentPanel"
+      summary: "Consultar el panel y los resultados del establecimiento"
+      description: "RF10/RF12. Solo operador con membership actual sobre el establecimiento; otro establecimiento recibe 403 sin datos. current muestra los lotes publicados con ventana abierta, su inventario F/O/R/E/X y su espera; los totales son la suma de esas filas. period cuenta solo los lotes cerrados dentro del período, en días locales de la zona del establecimiento con ambas fechas incluidas. Un lote cierra al registrarse su cierre o, sin registro, al terminar su ventana. Sin fechas, los últimos 7 días con hoy incluido; con una sola, to es hoy o from retrocede 6 días. Máximo 366 días. Sin códigos de retiro ni datos de titulares."
+      tags:
+        - "Panel"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: from
+          in: query
+          description: "Primer día del período (YYYY-MM-DD), incluido."
+          schema: { $ref: "#/components/schemas/LocalDate" }
+        - name: to
+          in: query
+          description: "Último día del período (YYYY-MM-DD), incluido; no anterior a from."
+          schema: { $ref: "#/components/schemas/LocalDate" }
+      responses:
+        "200":
+          description: "Panel del establecimiento con su estado vigente y los resultados del período."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstablishmentPanel" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/establishments/{establishmentId}/commitments":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "listEstablishmentCommitments"
+      summary: "Listar reservas y solicitudes de espera del establecimiento"
+      description: "RF10. Solo operador con membership actual; otro establecimiento recibe 403. Reservas y solicitudes de espera de los lotes del establecimiento, creación descendente, páginas de 20. Estado vigente al responder, igual que para su titular. Sin titular ni código de retiro. Un lotId de otro establecimiento responde 404 igual que uno inexistente. Se rechazan filtros desconocidos."
+      tags:
+        - "Panel"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: lotId
+          in: query
+          description: "Solo los compromisos de este lote."
+          schema: { $ref: "#/components/schemas/PublicId" }
+        - name: state
+          in: query
+          description: "active: espera, oferta o reserva vigentes; ended: terminados. Sin valor, todos."
+          schema: { type: string, enum: [active, ended] }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página de compromisos del establecimiento."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorCommitmentPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/establishments/{establishmentId}/activity":
+    parameters:
+      -
+        $ref: "#/components/parameters/EstablishmentId"
+    get:
+      operationId: "listEstablishmentActivity"
+      summary: "Consultar el historial del establecimiento"
+      description: "RF10. Solo operador con membership actual; otro establecimiento recibe 403. Hechos de los lotes del establecimiento, más recientes primero, páginas de 20: publicación y cierre del lote, reservas, retiros, ingreso a la espera y ofertas. Un vencimiento cuenta desde su plazo aunque el trabajador aún no lo registre. Sin titulares ni códigos de retiro. Un lotId de otro establecimiento responde 404."
+      tags:
+        - "Panel"
+      security:
+        -
+          SessionCookie: []
+      parameters:
+        - name: lotId
+          in: query
+          description: "Solo los hechos de este lote."
+          schema: { $ref: "#/components/schemas/PublicId" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: "Página del historial."
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivityPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   "/lots/{lotId}":
     parameters:
       -
@@ -858,6 +1394,29 @@ components:
       schema:
         $ref: "#/components/schemas/PublicId"
       example: "lot_demo_R4q"
+    NotificationId:
+      name: "notificationId"
+      in: "path"
+      required: true
+      description: "Identificador público del aviso; no concede acceso a avisos de otras personas."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+    EntryId:
+      name: "entryId"
+      in: "path"
+      required: true
+      description: "Identificador público de la solicitud de espera; no concede acceso a otras personas."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "wl_demo_M2x"
+    ReservationId:
+      name: "reservationId"
+      in: "path"
+      required: true
+      description: "Identificador público de la reserva; no es el código de retiro ni concede acceso."
+      schema:
+        $ref: "#/components/schemas/PublicId"
+      example: "res_demo_K9w"
   headers:
     NoStore:
       description: "Todas las respuestas de estas operaciones llevan Cache-Control: no-store."
@@ -926,7 +1485,7 @@ components:
               code: "FORBIDDEN"
               message: "No se permite esta operación."
     NotFound:
-      description: "NOT_FOUND: El establecimiento o lote solicitado no existe."
+      description: "NOT_FOUND: El establecimiento, lote o reserva solicitado no existe o no es del actor, o el código no corresponde a una reserva del lote."
       headers:
         Cache-Control:
           $ref: "#/components/headers/NoStore"
@@ -939,7 +1498,7 @@ components:
               code: "NOT_FOUND"
               message: "Recurso inexistente."
     Conflict:
-      description: "CONFLICT: Conflicto con el estado actual: correo ya registrado, versión obsoleta o lote que ya no es borrador, según la operación."
+      description: "CONFLICT: Conflicto con el estado actual: correo ya registrado, versión obsoleta, lote que ya no es borrador, clave usada con otros parámetros o reserva cancelada, vencida, ya retirada o fuera de la ventana, según la operación."
       headers:
         Cache-Control:
           $ref: "#/components/headers/NoStore"
@@ -1022,7 +1581,7 @@ components:
                     path: "/quantity"
                     message: "Debe ser un entero positivo."
     TooManyRequests:
-      description: "RATE_LIMITED: Límite de solicitudes o de intentos de login alcanzado según E1 H p. 21. Retry-After indica segundos de espera."
+      description: "RATE_LIMITED: Límite de solicitudes, de intentos de login o de códigos de retiro alcanzado según E1 H p. 21. Retry-After indica segundos de espera."
       headers:
         Cache-Control:
           $ref: "#/components/headers/NoStore"
@@ -1101,7 +1660,7 @@ components:
       description: "Resumen de un lote para el operador de su establecimiento."
       properties:
         id: { $ref: "#/components/schemas/PublicId" }
-        status: { type: string, enum: [draft, published] }
+        status: { $ref: "#/components/schemas/LotStatus" }
         version: { $ref: "#/components/schemas/Version" }
         description: { $ref: "#/components/schemas/LotDescription" }
         category: { $ref: "#/components/schemas/Category" }
@@ -1144,8 +1703,365 @@ components:
         id: { $ref: "#/components/schemas/PublicId" }
         lotId: { $ref: "#/components/schemas/PublicId" }
         quantity: { type: integer, minimum: 1, maximum: 2147483647 }
-        status: { type: string, const: confirmed }
+        status: { type: string, const: confirmed, description: "Resultado de la creación. Un reintento con la misma clave lo reproduce aunque la reserva haya terminado; el estado vigente y el código se consultan en GET /reservations/{reservationId}." }
         createdAt: { $ref: "#/components/schemas/Instant" }
+    ReservationStatus:
+      type: string
+      enum: [confirmed, cancelled, expired, delivered]
+      description: "Estado vigente al responder. confirmed: vigente; cancelled: cancelada por su titular; expired: el lote cerró sin retiro, aunque el trabajador aún no lo haya registrado; delivered: retiro acreditado. Los tres últimos son terminales."
+    ReservationLot:
+      type: object
+      additionalProperties: false
+      required: [id, description, conditions, address, latitude, longitude, timeZone, pickupStartsAt, pickupEndsAt]
+      description: "Lote de la reserva para su titular: contenido, lugar y plazo publicados."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+        conditions: { $ref: "#/components/schemas/Conditions" }
+        address: { $ref: "#/components/schemas/Address" }
+        latitude: { $ref: "#/components/schemas/Latitude" }
+        longitude: { $ref: "#/components/schemas/Longitude" }
+        timeZone: { $ref: "#/components/schemas/TimeZone" }
+        pickupStartsAt: { $ref: "#/components/schemas/Instant" }
+        pickupEndsAt: { $ref: "#/components/schemas/Instant" }
+    ReservationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, quantity, status, createdAt, endedAt, lot]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/ReservationStatus" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time, description: "Instante en que terminó; null mientras está confirmada. Una reserva vencida terminó al cierre del lote." }
+        lot: { $ref: "#/components/schemas/ReservationLot" }
+    ReservationDetail:
+      type: object
+      additionalProperties: false
+      required: [id, quantity, status, createdAt, endedAt, lot, pickupCode]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/ReservationStatus" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time, description: "Instante en que terminó; null mientras está confirmada." }
+        lot: { $ref: "#/components/schemas/ReservationLot" }
+        pickupCode: { type: [string, "null"], pattern: "^[0-9A-HJKMNP-TV-Z]{8}$", description: "Código de retiro: credencial de ocho caracteres para mostrar al operador. Solo mientras status es confirmed; si no, null. No guardarlo en URL, historial, logs ni almacenamiento persistente del navegador." }
+      example:
+        id: "res_demo_K9w"
+        quantity: 2
+        status: "confirmed"
+        createdAt: "2030-01-15T12:00:00Z"
+        endedAt: null
+        lot:
+          id: "lot_demo_R4q"
+          description: "Pack de cuatro panes surtidos."
+          conditions: null
+          address: "Dirección ficticia 123"
+          latitude: -33.45
+          longitude: -70.66
+          timeZone: "America/Santiago"
+          pickupStartsAt: "2030-01-15T18:00:00Z"
+          pickupEndsAt: "2030-01-15T21:00:00Z"
+        pickupCode: "7KQ2M9XA"
+    ReservationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ReservationSummary" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+    CancelReservationRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: "Objeto vacío: la reserva sale de la ruta y el actor de la sesión."
+    JoinWaitlistRequest:
+      type: object
+      additionalProperties: false
+      required: [quantity, idempotencyKey]
+      properties:
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs que se desean. La oferta puede ser menor (ADR 0002); nunca mayor." }
+        idempotencyKey: { type: string, format: uuid, description: "UUID generado por el cliente para una intención de ingreso." }
+    WaitlistCommandRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: "Objeto vacío: la solicitud sale de la ruta y el actor de la sesión."
+    WaitlistStatus:
+      type: string
+      enum: [waiting, offered, accepted, declined, expired, left]
+      description: "Estado vigente al responder. waiting: en la cola sin packs retenidos; offered: tiene una oferta vigente que retiene packs; accepted, declined, expired y left son terminales. Una oferta no aceptada a tiempo y una espera de un lote cerrado se informan expired aunque el trabajador aún no lo haya registrado."
+    WaitlistEntry:
+      type: object
+      additionalProperties: false
+      required: [id, requestedQuantity, status, offeredQuantity, offerExpiresAt, position, reservationId, createdAt, endedAt, lot]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        requestedQuantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/WaitlistStatus" }
+        offeredQuantity: { type: [integer, "null"], minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, nunca más que los solicitados; null si nunca recibió una oferta. Se conserva tras rechazar, vencer o aceptar." }
+        offerExpiresAt: { type: [string, "null"], format: date-time, description: "Fin de la vigencia de la oferta: diez minutos o el cierre del lote, lo que ocurra primero." }
+        position: { type: [integer, "null"], minimum: 1, description: "Lugar en la cola (1 es el primero) mientras status es waiting; si no, null." }
+        reservationId: { oneOf: [{ $ref: "#/components/schemas/PublicId" }, { type: "null" }], description: "Reserva creada al aceptar, por la cantidad ofrecida; null en cualquier otro estado." }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time, description: "Instante en que terminó; null mientras espera o tiene una oferta vigente. Una oferta vencida terminó al llegar su hora y una espera al cierre del lote." }
+        lot: { $ref: "#/components/schemas/ReservationLot" }
+    WaitlistPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/WaitlistEntry" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+    PickupCode:
+      type: string
+      minLength: 1
+      maxLength: 32
+      description: "Código tal como lo dicta la persona; el servidor ignora espacios, guiones y mayúsculas. Nunca en URL ni logs."
+    PickupReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: { $ref: "#/components/schemas/PickupCode" }
+    ReviewedReservation:
+      type: object
+      additionalProperties: false
+      required: [id, quantity, status, createdAt, endedAt]
+      description: "Reserva vista por el operador: sin datos del titular ni el código."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647 }
+        status: { $ref: "#/components/schemas/ReservationStatus" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time }
+    PickupReview:
+      type: object
+      additionalProperties: false
+      required: [reservation, canConfirm]
+      properties:
+        reservation: { $ref: "#/components/schemas/ReviewedReservation" }
+        canConfirm: { type: boolean, description: "true si la reserva está confirmada y la ventana ya comenzó. Es orientativo: confirmar vuelve a validar todo bajo bloqueo. false con status confirmed significa que la ventana aún no comienza." }
+    ConfirmPickupRequest:
+      type: object
+      additionalProperties: false
+      required: [reservationId, code, idempotencyKey]
+      properties:
+        reservationId: { type: string, format: uuid, description: "Reserva mostrada por la revisión." }
+        code: { $ref: "#/components/schemas/PickupCode" }
+        idempotencyKey: { type: string, format: uuid, description: "UUID generado por el cliente para esta confirmación; único por operador." }
+    PickupResponse:
+      type: object
+      additionalProperties: false
+      required: [reservationId, quantity, deliveredAt]
+      properties:
+        reservationId: { $ref: "#/components/schemas/PublicId" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs entregados: la reserva completa." }
+        deliveredAt: { $ref: "#/components/schemas/Instant" }
+    NotificationKind:
+      type: string
+      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled]
+      description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva."
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, kind, createdAt, readAt, lot, quantity, waitlistEntryId, reservationId, offerExpiresAt]
+      description: "Aviso del titular con los datos de la transición. Sin código de retiro ni datos de otras personas."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        kind: { $ref: "#/components/schemas/NotificationKind" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        readAt: { type: [string, "null"], format: date-time, description: "null hasta su primera lectura." }
+        lot:
+          type: object
+          additionalProperties: false
+          required: [id, description]
+          properties:
+            id: { $ref: "#/components/schemas/PublicId" }
+            description: { type: string }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados según el tipo." }
+        waitlistEntryId: { type: [string, "null"], description: "Solicitud de espera relacionada; null en una cancelación." }
+        reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta." }
+        offerExpiresAt: { type: [string, "null"], format: date-time, description: "Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo." }
+    NotificationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage, unreadCount]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/Notification" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+        unreadCount: { type: integer, minimum: 0, description: "Avisos propios sin leer, en todas las páginas." }
+    MarkNotificationReadRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: "Objeto vacío: el aviso sale de la ruta y el actor de la sesión."
+    LocalDate:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+      format: date
+      description: "Fecha calendario en la zona del establecimiento, sin hora."
+    PanelLotRef:
+      type: object
+      additionalProperties: false
+      required: [id, description]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+    PanelInventory:
+      type: object
+      additionalProperties: false
+      required: [free, offered, reserved, delivered, unassignable]
+      description: "Packs por estado (anexos B p. 4): Q = F + O + R + E + X. Una oferta vencida sin registrar ya cuenta como libre."
+      properties:
+        free: { type: integer, minimum: 0 }
+        offered: { type: integer, minimum: 0 }
+        reserved: { type: integer, minimum: 0 }
+        delivered: { type: integer, minimum: 0, description: "Retiros acreditados por el operador." }
+        unassignable: { type: integer, minimum: 0, description: "Liberados con el lote ya cerrado; no vuelven a asignarse." }
+    PanelOpenLot:
+      type: object
+      additionalProperties: false
+      required: [id, description, quantity, pickupStartsAt, pickupEndsAt, inventory, confirmedReservations, activeOffers, waitingRequests]
+      description: "Lote publicado con la ventana de retiro abierta."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        description: { $ref: "#/components/schemas/LotDescription" }
+        quantity: { $ref: "#/components/schemas/Quantity" }
+        pickupStartsAt: { $ref: "#/components/schemas/Instant" }
+        pickupEndsAt: { $ref: "#/components/schemas/Instant" }
+        inventory: { $ref: "#/components/schemas/PanelInventory" }
+        confirmedReservations: { type: integer, minimum: 0, description: "Reservas vigentes por retirar." }
+        activeOffers: { type: integer, minimum: 0, description: "Ofertas vigentes por aceptar." }
+        waitingRequests: { type: integer, minimum: 0, description: "Personas en la cola sin oferta; no poseen packs." }
+    PanelRate:
+      type: object
+      additionalProperties: false
+      required: [numerator, denominator, value]
+      properties:
+        numerator: { type: integer, minimum: 0 }
+        denominator: { type: integer, minimum: 0 }
+        value: { type: [number, "null"], minimum: 0, maximum: 1, description: "numerator / denominator; null sin denominador." }
+    EstablishmentPanel:
+      type: object
+      additionalProperties: false
+      required: [establishment, asOf, current, period]
+      properties:
+        establishment:
+          type: object
+          additionalProperties: false
+          required: [id, name, timeZone]
+          properties:
+            id: { $ref: "#/components/schemas/PublicId" }
+            name: { type: string }
+            timeZone: { $ref: "#/components/schemas/TimeZone" }
+        asOf: { $ref: "#/components/schemas/Instant" }
+        current:
+          type: object
+          additionalProperties: false
+          required: [lots, inventory, confirmedReservations, activeOffers, waitingRequests]
+          description: "Estado vigente al consultar. Cada total es la suma de lots."
+          properties:
+            lots: { type: array, items: { $ref: "#/components/schemas/PanelOpenLot" }, description: "Todos los lotes abiertos, por cierre más próximo." }
+            inventory: { $ref: "#/components/schemas/PanelInventory" }
+            confirmedReservations: { type: integer, minimum: 0 }
+            activeOffers: { type: integer, minimum: 0 }
+            waitingRequests: { type: integer, minimum: 0 }
+        period:
+          type: object
+          additionalProperties: false
+          required: [from, to, closedLots, packs, reservations, deliveryRate, reservationExpiryRate, excluded]
+          description: "RF12: lotes cerrados dentro del período. Retirado es entrega acreditada, no consumo; no se convierte en kilos ni ahorro."
+          properties:
+            from: { $ref: "#/components/schemas/LocalDate" }
+            to: { $ref: "#/components/schemas/LocalDate" }
+            closedLots: { type: integer, minimum: 0 }
+            packs:
+              type: object
+              additionalProperties: false
+              required: [published, delivered, unassignable]
+              description: "En un lote cerrado published = delivered + unassignable."
+              properties:
+                published: { type: integer, minimum: 0 }
+                delivered: { type: integer, minimum: 0 }
+                unassignable: { type: integer, minimum: 0 }
+            reservations:
+              type: object
+              additionalProperties: false
+              required: [confirmed, cancelled, expired, delivered]
+              description: "confirmed cuenta todas las reservas que llegaron a confirmarse; las otras tres son su término y suman confirmed. Ofertas no aceptadas y la espera no son reservas."
+              properties:
+                confirmed: { type: integer, minimum: 0 }
+                cancelled: { type: integer, minimum: 0 }
+                expired: { type: integer, minimum: 0 }
+                delivered: { type: integer, minimum: 0 }
+            deliveryRate:
+              allOf: [{ $ref: "#/components/schemas/PanelRate" }]
+              description: "Packs retirados sobre packs publicados."
+            reservationExpiryRate:
+              allOf: [{ $ref: "#/components/schemas/PanelRate" }]
+              description: "Reservas vencidas sobre reservas que llegaron a confirmarse."
+            excluded:
+              type: object
+              additionalProperties: false
+              required: [openLots, draftLots]
+              description: "Lotes del establecimiento que no entran en los indicadores: publicados aún abiertos y borradores."
+              properties:
+                openLots: { type: integer, minimum: 0 }
+                draftLots: { type: integer, minimum: 0 }
+    CommitmentStatus:
+      type: string
+      enum: [confirmed, cancelled, expired, delivered, waiting, offered, accepted, declined, left]
+      description: "Reserva: ReservationStatus. Solicitud de espera: WaitlistStatus. Vigente al responder."
+    OperatorCommitment:
+      type: object
+      additionalProperties: false
+      required: [id, kind, status, lot, quantity, offeredQuantity, offerExpiresAt, createdAt, endedAt]
+      description: "Reserva o solicitud de espera vista por el operador: sin titular ni código."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        kind: { type: string, enum: [reservation, waitlist] }
+        status: { $ref: "#/components/schemas/CommitmentStatus" }
+        lot: { $ref: "#/components/schemas/PanelLotRef" }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs reservados o, en la espera, solicitados." }
+        offeredQuantity: { type: [integer, "null"], minimum: 1, description: "Packs ofrecidos a la solicitud; null en reservas y sin oferta." }
+        offerExpiresAt: { type: [string, "null"], format: date-time }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        endedAt: { type: [string, "null"], format: date-time }
+    OperatorCommitmentPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/OperatorCommitment" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
+    ActivityKind:
+      type: string
+      enum: [lot_published, lot_expired, lot_withdrawn, reservation_confirmed, reservation_cancelled, reservation_expired, pickup_confirmed, waitlist_joined, offer_issued, offer_accepted, offer_declined, offer_expired, waitlist_left, waitlist_expired]
+      description: "reservation_confirmed: reserva directa; offer_accepted: la oferta aceptada creó la reserva; pickup_confirmed: retiro acreditado; waitlist_expired: la espera terminó con el cierre del lote."
+    ActivityEvent:
+      type: object
+      additionalProperties: false
+      required: [id, kind, at, lot, quantity]
+      properties:
+        id: { type: string, description: "Identificador opaco del hecho, estable entre consultas." }
+        kind: { $ref: "#/components/schemas/ActivityKind" }
+        at: { $ref: "#/components/schemas/Instant" }
+        lot: { $ref: "#/components/schemas/PanelLotRef" }
+        quantity: { type: [integer, "null"], minimum: 1, description: "Packs del hecho; null en el cierre del lote." }
+    ActivityPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/ActivityEvent" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
     PublicId:
       type: "string"
     LotPhoto:
@@ -1196,11 +2112,15 @@ components:
       required:
         - "email"
         - "password"
+        - "privacyConsent"
       properties:
         email:
           $ref: "#/components/schemas/EmailInput"
         password:
           $ref: "#/components/schemas/Password"
+        privacyConsent:
+          type: "boolean"
+          description: "Consentimiento para tratar el correo de la cuenta. false responde 422 y no crea la cuenta; true queda registrado con la versión vigente del texto."
       description: "Crea solo la cuenta; no acepta establishmentId, membresías, roles ni displayName."
     LoginRequest:
       type: "object"
@@ -1341,6 +2261,14 @@ components:
       type: "string"
       description: "Instante RFC 3339 con Z u offset explícito; respuestas en UTC (Z). No aceptar hora local sin offset."
       format: "date-time"
+    LotStatus:
+      type: "string"
+      enum:
+        - "draft"
+        - "published"
+        - "expired"
+        - "withdrawn"
+      description: "expired y withdrawn son cierres lógicos: el lote deja de ofrecerse, pero se conserva con su historial."
     Version:
       type: "integer"
       minimum: 1
@@ -1465,10 +2393,7 @@ components:
         pickupEndsAt:
           $ref: "#/components/schemas/Instant"
         status:
-          type: "string"
-          enum:
-            - "draft"
-            - "published"
+          $ref: "#/components/schemas/LotStatus"
         version:
           $ref: "#/components/schemas/Version"
         createdAt:
@@ -1523,6 +2448,14 @@ components:
           items:
             $ref: "#/components/schemas/ValidationIssue"
       description: "Detalle opcional para validación. Nunca incluye entradas sensibles, secretos ni diagnósticos internos."
+    HealthStatus:
+      type: "object"
+      additionalProperties: false
+      required: ["status", "database", "worker"]
+      properties:
+        status: { type: "string", enum: ["ok", "unavailable"] }
+        database: { type: "string", enum: ["ok", "unavailable"] }
+        worker: { type: "string", enum: ["ok", "stopped", "unknown"] }
     ErrorResponse:
       type: "object"
       additionalProperties: false

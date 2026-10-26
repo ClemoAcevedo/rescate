@@ -2,10 +2,14 @@
 import { IdentityError, PasswordHashingCapacityError } from "../application/identity/errors.js"
 import { TrafficLimitError, TrafficCapacityError } from "./rate-limits.js"
 import type { Response } from "express"
-import { ApplicationError, ConcurrentUploadsError } from "../application/errors.js"
+import { ApplicationError, ConcurrentUploadsError, InventoryDiscrepancyError, PickupReviewSuspendedError } from "../application/errors.js"
+import { errorCode } from "../application/logging.js"
+import type { Log } from "../application/logging.js"
 import { PhotoRuleError } from "../domain/photos.js"
 import { LotRuleError } from "../domain/lots.js"
-import { ReservationRuleError } from "../domain/reservations.js"
+import { MAX_PERIOD_DAYS, PeriodRuleError } from "../domain/panel.js"
+import { ReservationRuleError, ReservationTransitionError } from "../domain/reservations.js"
+import { WaitlistTransitionError } from "../domain/waitlist.js"
 import type { HttpSchemas } from "./openapi.js"
 
 type ErrorBody = HttpSchemas["ErrorResponse"]
@@ -21,11 +25,31 @@ const errors = {
   lot_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   establishment_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   version_conflict: [409, "CONFLICT", "El lote cambió. Vuelve a consultarlo antes de reintentar."],
-  idempotency_conflict: [409, "CONFLICT", "La clave ya se usó con otro lote o cantidad."],
+  idempotency_conflict: [409, "CONFLICT", "La clave ya se usó con otros parámetros."],
   photo_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   photo_upload_expired: [409, "CONFLICT", "La carga venció o el lote cambió; vuelve a cargar la foto."],
   photo_storage_unavailable: [503, "SERVICE_UNAVAILABLE", "El servicio no está disponible temporalmente."],
   concurrent_photo_uploads: [429, "RATE_LIMITED", "Espera a que terminen tus cargas en curso."],
+  inventory_discrepancy: [409, "CONFLICT", "El lote está en revisión y no admite reservas por ahora."],
+  reservation_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
+  pickup_code_not_found: [404, "NOT_FOUND", "El código no corresponde a una reserva de este lote."],
+  waitlist_entry_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
+  notification_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
+  pickup_review_suspended: [429, "RATE_LIMITED", "Se suspendió la revisión de códigos por intentos fallidos. Intenta nuevamente después del tiempo indicado."],
+} as const
+const transitions = {
+  cancelled: "La reserva fue cancelada.",
+  expired: "La reserva venció: la ventana de retiro cerró.",
+  delivered: "La reserva ya fue retirada.",
+  pickup_not_started: "La ventana de retiro aún no comienza.",
+} as const
+const waitlistTransitions = {
+  not_offered: "La solicitud aún no tiene una oferta.",
+  not_waiting: "La solicitud ya tiene una oferta: acéptala o recházala.",
+  accepted: "La oferta ya fue aceptada.",
+  declined: "La oferta ya fue rechazada.",
+  expired: "La solicitud venció: la oferta o el lote ya no están vigentes.",
+  left: "Saliste de la cola de espera.",
 } as const
 const conflicts = new Set(["lot_already_published", "published_lot_is_immutable"])
 const fields: Record<string, string> = {
@@ -34,7 +58,11 @@ const fields: Record<string, string> = {
   latitude_out_of_range: "latitude", longitude_out_of_range: "longitude", time_zone_invalid: "timeZone",
   pickup_window_invalid: "pickupEndsAt", pickup_window_already_ended: "pickupEndsAt",
 }
-export function handleError(error: unknown, response: Response, log: (error: unknown) => void): void {
+/** Identificador generado de la solicitud (K036); null fuera del registro de solicitudes. */
+export const requestIdOf = (response: Response): string | null => response.locals.requestId ?? null
+
+/** `log` recibe solo eventos primitivos: el error original nunca llega al registro. */
+export function handleError(error: unknown, response: Response, log: Log): void {
   if (error instanceof IdentityError) {
     if (error.code === "invalid_input") sendError(response, 422, "VALIDATION_ERROR", "Revisa los campos indicados.", error.fields.map(field => ({
       path: field ? `/${field.replaceAll("~", "~0").replaceAll("/", "~1")}` : "", message: "Campo desconocido, ausente o inválido.",
@@ -52,15 +80,29 @@ export function handleError(error: unknown, response: Response, log: (error: unk
   } else if (error instanceof ReservationRuleError) {
     if (error.reason === 'invalid_quantity') sendError(response, 422, 'VALIDATION_ERROR', 'Revisa la cantidad.',
       [{ path: '/quantity', message: 'Se requiere un entero entre 1 y 2147483647.' }])
-    else sendError(response, 409, 'CONFLICT', error.reason === 'active_commitment'
-      ? 'Ya tienes una reserva activa de este lote.' : 'El lote cerró o no tiene packs suficientes.')
+    else sendError(response, 409, 'CONFLICT', {
+      active_commitment: 'Ya tienes una reserva o una solicitud activa de este lote.',
+      directly_available: 'Hay packs suficientes: reserva directamente.',
+      unavailable: 'El lote cerró o no tiene packs suficientes.',
+    }[error.reason])
+  } else if (error instanceof ReservationTransitionError) {
+    sendError(response, 409, "CONFLICT", transitions[error.reason])
+  } else if (error instanceof WaitlistTransitionError) {
+    sendError(response, 409, "CONFLICT", waitlistTransitions[error.reason])
   } else if (error instanceof PhotoRuleError) {
     if (error.reason === "unrecognized_image") sendError(response, 422, "VALIDATION_ERROR", "El archivo no es una imagen JPEG, PNG o WebP.",
       [{ path: "", message: "Los bytes no corresponden a un formato permitido." }])
     else sendError(response, 409, "CONFLICT", error.reason === "photo_limit_reached"
       ? "El lote ya tiene tres fotos." : "El estado del lote no permite cambiar sus fotos.")
+  } else if (error instanceof PeriodRuleError) {
+    sendError(response, 422, "VALIDATION_ERROR", "Revisa el período indicado.", [{ path: "/from", message: error.violation === "period_inverted"
+      ? "La fecha inicial no puede ser posterior a la final." : `El período no puede superar ${MAX_PERIOD_DAYS} días.` }])
   } else if (error instanceof ApplicationError) {
-    if (error instanceof ConcurrentUploadsError) response.set("Retry-After", String(error.retryAfter))
+    if (error instanceof ConcurrentUploadsError || error instanceof PickupReviewSuspendedError) {
+      response.set("Retry-After", String(error.retryAfter))
+    }
+    // El registro es la señal de revisión; el lote sigue bloqueado hasta corregirlo.
+    if (error instanceof InventoryDiscrepancyError) log({ event: "inventory_discrepancy", requestId: requestIdOf(response), lotId: error.lotId })
     const [status, code, message] = errors[error.code]
     sendError(response, status, code, message)
   } else if (error instanceof LotRuleError) {
@@ -71,8 +113,8 @@ export function handleError(error: unknown, response: Response, log: (error: unk
         ? { path: "", message: "Hay fotos en carga, en validación o rechazadas; espera o quítalas antes de publicar." }
         : { path: `/${fields[violation] ?? ""}`, message: "El valor no cumple las reglas del lote." })))
   } else {
-    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
-    log({ event: "request_failed", code: /^[A-Z0-9]{2,20}$/.test(code) ? code : "INTERNAL" })
+    const code = errorCode(error)
+    log({ event: "request_failed", requestId: requestIdOf(response), code })
     const message = error instanceof Error ? error.message : ""
     const connectionTimeout = ["timeout exceeded when trying to connect", "Connection terminated due to connection timeout"].includes(message)
     const unavailable = connectionTimeout || /^(08|53|57P0)/.test(code) || ["55000", "55P03", "57014", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND"].includes(code)

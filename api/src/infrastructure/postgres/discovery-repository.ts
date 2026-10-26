@@ -1,6 +1,8 @@
 import type { DiscoveryRepository, PublicLot, PublicPhoto, Reservation } from '../../application/discovery/ports.js'
+import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
+import { lotReconciledSql, settleQueue } from './waitlist-queue.js'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 interface LotRow {
@@ -14,8 +16,7 @@ const location = 'ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geogr
 const origin = 'ST_SetSRID(ST_MakePoint($4::float8, $3::float8), 4326)::geography'
 const distance = `ST_Distance(${location}, ${origin}) / 1000.0`
 const publicColumns = `l.public_id::text AS id, l.description, l.category, l.quantity,
-  GREATEST(0, l.quantity - COALESCE((SELECT sum(c.quantity) FROM public.commitments c
-    WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0))::integer AS available_quantity,
+  l.free_quantity AS available_quantity,
   l.conditions, l.address, l.latitude, l.longitude, l.time_zone, l.pickup_starts_at,
   l.pickup_ends_at, ${distance} AS distance_km,
   (SELECT COALESCE(json_agg(json_build_object('id', p.public_id::text, 'width', p.width, 'height', p.height)
@@ -34,12 +35,14 @@ function toReservation(row: ReservationRow): Reservation {
     createdAt: row.created_at }
 }
 // Sin instante no se filtra por ventana: la reserva la comprueba Application con su reloj.
+// Un lote vencido ya registrado (K028) se lee igual que uno cerrado sin registrar, así
+// que la respuesta no depende de que el trabajador haya pasado.
 async function readLot(db: Pool | PoolClient, lotId: string, now: Date | null): Promise<PublicLot | null> {
   if (!uuid.test(lotId)) return null
   const { rows } = await db.query<LotRow>(
     `SELECT ${publicColumns} FROM public.lots l
-     WHERE l.public_id = $1 AND l.status = 'published'
-       AND ($2::timestamptz IS NULL OR l.pickup_ends_at > $2)`,
+     WHERE l.public_id = $1 AND ($2::timestamptz IS NULL AND l.status IN ('published', 'expired')
+       OR l.status = 'published' AND l.pickup_ends_at > $2)`,
     [lotId, now, null, null],
   )
   return rows[0] ? toLot(rows[0]) : null
@@ -66,44 +69,51 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
     },
     async withReservationTransaction(userId, lotId, key, operate) {
       return withTransaction(pool, async (client) => {
-        await client.query("SET LOCAL lock_timeout = '2s'")
         // Una clave reintentada sobre otro lote también se serializa por usuario.
-        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${userId}:${key}`])
+        await lockIntent(client, 'reservation', userId, key)
         const prior = await client.query<ReservationRow>(
           `SELECT c.public_id::text AS id, l.public_id::text AS lot_id,
                   c.quantity, c.created_at
            FROM public.commitments c JOIN public.lots l ON l.id = c.lot_id
            WHERE c.user_id = $1 AND c.idempotency_key = $2`, [userId, key],
         )
-        if (prior.rows[0]) return operate({ lot: null, existing: toReservation(prior.rows[0]), active: false }, {
+        if (prior.rows[0]) return operate({ existing: toReservation(prior.rows[0]) }, {
           insert: async () => { throw new Error('Reintento no debe insertar') },
         })
-        let lot: PublicLot | null = null
-        let active = false
-        if (uuid.test(lotId)) {
-          const locked = await client.query<{ id: string }>(
-            'SELECT id::text FROM public.lots WHERE public_id = $1 FOR UPDATE', [lotId],
-          )
-          if (locked.rows[0]) {
-            lot = await readLot(client, lotId, null)
-            const found = await client.query<{ active: boolean }>(
-              `SELECT EXISTS (SELECT 1 FROM public.commitments
-               WHERE user_id = $1 AND lot_id = $2 AND status = 'confirmed') AS active`,
-              [userId, locked.rows[0].id],
+        const locked = await lockLot(client, lotId)
+        // Una oferta vencida aún retiene packs: se registra antes de medir lo libre.
+        if (locked) await settleQueue(client, locked.lotId, locked.at)
+        const lot = locked && await readLot(client, lotId, null)
+        if (!locked || !lot) return operate({ existing: null, lot: null }, {
+          insert: async () => { throw new Error('No se reserva sin lote publicado') },
+        })
+        // R, E y O se contrastan con los registros que los respaldan (anexos B p. 4).
+        const found = await client.query<{ active: boolean; queued: boolean; reconciled: boolean }>(
+          `SELECT (EXISTS (SELECT 1 FROM public.commitments
+             WHERE user_id = $1 AND lot_id = l.id AND status = 'confirmed')
+             OR EXISTS (SELECT 1 FROM public.waitlist_entries w WHERE w.user_id = $1 AND w.lot_id = l.id
+               AND w.status IN ('waiting', 'offered'))) AS active,
+           EXISTS (SELECT 1 FROM public.waitlist_entries w WHERE w.lot_id = l.id AND w.status = 'waiting') AS queued,
+           ${lotReconciledSql} AS reconciled
+           FROM public.lots l WHERE l.id = $2`,
+          [userId, locked.lotId],
+        )
+        const { active, queued, reconciled } = found.rows[0]!
+        return operate({ existing: null, lot, active, queued, reconciled, now: locked.at }, {
+          insert: async (quantity, at, code) => {
+            // F → R en la misma transacción: los CHECK del lote rechazan sobreasignación.
+            await client.query(
+              'UPDATE public.lots SET reserved_quantity = reserved_quantity + $2 WHERE id = $1',
+              [locked.lotId, quantity],
             )
-            active = found.rows[0]?.active ?? false
-          }
-        }
-        return operate({ lot, existing: null, active }, {
-          insert: async (quantity, at) => {
             const inserted = await client.query<ReservationRow>(
-              `INSERT INTO public.commitments (user_id, lot_id, quantity, status, created_at, idempotency_key)
-               SELECT $1, id, $3, 'confirmed', $4, $5 FROM public.lots WHERE public_id = $2
-               RETURNING public_id::text AS id, $2::text AS lot_id, quantity, created_at`,
-              [userId, lotId, quantity, at, key],
+              `INSERT INTO public.commitments (user_id, lot_id, quantity, status, created_at, idempotency_key,
+                 pickup_code_ciphertext, pickup_code_fingerprint)
+               VALUES ($1, $2, $3, 'confirmed', $4, $5, $7, $8)
+               RETURNING public_id::text AS id, $6::text AS lot_id, quantity, created_at`,
+              [userId, locked.lotId, quantity, at, key, lotId, Buffer.from(code.ciphertext), Buffer.from(code.fingerprint)],
             )
-            if (!inserted.rows[0]) throw new Error('La reserva no afectó ninguna fila')
-            return toReservation(inserted.rows[0])
+            return toReservation(inserted.rows[0]!)
           },
         })
       })

@@ -62,6 +62,8 @@ async function insertAccountsAndEstablishments(db, passwords) {
     await db.query(`INSERT INTO user_credentials(user_id,password_hash,password_salt,scrypt_n,scrypt_r,scrypt_p)
       VALUES ($1,$2,$3,$4,$5,$6)`, [user.id, Buffer.from(credential.hash), Buffer.from(credential.salt),
       credential.parameters.N, credential.parameters.r, credential.parameters.p])
+    await db.query(`INSERT INTO user_consents(user_id,purpose,policy_version,granted_at)
+      VALUES ($1,'account_email','2026-10',now())`, [user.id])
     if (account.establishmentId !== null) await db.query('INSERT INTO memberships(user_id,establishment_id) VALUES ($1,$2)', [user.id, establishmentIds.get(account.establishmentId)])
   }
 }

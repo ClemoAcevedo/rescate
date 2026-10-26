@@ -2,8 +2,8 @@
 // Coordinan autorización, reglas de Domain y atomicidad. No conocen Express,
 // pg, cookies ni códigos HTTP.
 
-import { declareDraftEdit, declareLot, publishLot as applyPublication } from "../../domain/lots.js"
-import type { Lot, LotDeclaration } from "../../domain/lots.js"
+import { describeDraftEdit, describeLot, publishLot as applyPublication } from "../../domain/lots.js"
+import type { Lot, LotDescription } from "../../domain/lots.js"
 import { establishmentNotFound, lotNotFound, notAuthorized, versionConflict } from "../errors.js"
 import type { Actor, Clock, LotListFilter, LotRepository, LotSummary, LotWriter } from "./ports.js"
 
@@ -18,12 +18,12 @@ export interface LotUseCases {
 export interface CreateDraftInput {
   /** ID público recibido por HTTP; se resuelve antes de autorizar. */
   establishmentId: string
-  declaration: LotDeclaration
+  description: LotDescription
 }
 
 export interface UpdateDraftInput {
   publicId: string
-  declaration: Partial<LotDeclaration>
+  description: Partial<LotDescription>
   expectedVersion: number
 }
 
@@ -60,19 +60,19 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
       if (establishment === null) throw establishmentNotFound()
       await requireMembership(repository, actor, establishment.id)
       // Domain valida antes de escribir: un borrador inválido no se persiste.
-      const declaration = declareLot(input.declaration)
-      return repository.insertLot({ establishmentId: establishment.id, declaration })
+      const description = describeLot(input.description)
+      return repository.insertLot({ establishmentId: establishment.id, description })
     },
 
     async updateDraft(actor, input) {
       return repository.withLotTransaction(input.publicId, async (lot, writer) => {
         const target = await authorizeLot(lot, actor, writer)
         requireVersion(target, input.expectedVersion)
-        // Rechaza editar un lote publicado y valida la nueva declaración.
-        const declaration = declareDraftEdit(target, { ...target.declaration, ...input.declaration })
-        return writer.updateDeclaration({
+        // Rechaza editar un lote publicado y valida la nueva descripción.
+        const description = describeDraftEdit(target, { ...target.description, ...input.description })
+        return writer.updateDescription({
           publicId: target.publicId,
-          declaration,
+          description,
           expectedVersion: input.expectedVersion,
           updatedAt: now(),
         })

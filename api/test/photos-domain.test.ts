@@ -55,12 +55,14 @@ test("el worker rechaza SVG, animaciones, más de 20 MP y archivos truncados", a
     "metadatos y firma deben coincidir")
 })
 
-test("imagen y miniatura WebP sin EXIF, orientadas y dentro de sus límites", async () => {
+test("imagen y miniatura WebP sin EXIF ni GPS, orientadas y dentro de sus límites", async () => {
   const source = await jpegWithExif()
   const info = await processor.inspect(source)
   assert.ok(info)
   assert.equal(checkSourceImage(info, source), null)
-  assert.equal((await sharp(source).metadata()).exif !== undefined, true, "el fixture trae EXIF")
+  // 0x8825 es el puntero al bloque GPS del EXIF, en cualquiera de los dos órdenes de bytes.
+  const sourceExif = (await sharp(source).metadata()).exif
+  assert.ok(sourceExif?.includes(Buffer.from([0x88, 0x25])) || sourceExif?.includes(Buffer.from([0x25, 0x88])), "el fixture trae EXIF con GPS")
 
   const display = await processor.render(source, PHOTO_LIMITS.display)
   assert.ok(display)
@@ -109,7 +111,7 @@ test("D-05: publicar exige que todas las fotos activas estén listas", () => {
   const lot: Lot = {
     publicId: "l", establishmentId: "1", establishmentPublicId: "e", status: "draft", version: 1,
     createdAt: now, updatedAt: now, publishedAt: null,
-    declaration: { description: "Pack", category: "Pan", quantity: 1, conditions: null, address: "Calle 1",
+    description: { description: "Pack", category: "Pan", quantity: 1, conditions: null, address: "Calle 1",
       latitude: 0, longitude: 0, timeZone: "America/Santiago",
       pickupStartsAt: new Date("2026-10-01T10:00:00Z"), pickupEndsAt: new Date("2026-10-01T12:00:00Z") },
   }

@@ -34,13 +34,22 @@ restricciones existentes y calcula disponibilidad después de bloquear el lote.
 Ver [lotes](lotes.md#búsqueda-y-reserva-directa) y [ADR 0004](adr/0004-reserva-directa-idempotente.md).
 K014 agrega `lot_photos`: lote, autor, posición 1–3, estado, plazo de carga, formato,
 tamaño, dimensiones y motivo de rechazo. Ver [fotos](fotos.md).
+K021 agrega los contadores O, R, E y X del lote. K022 amplía `commitments.status`
+a cancelada, vencida y retirada con `ended_at`, guarda el código de retiro cifrado y
+su huella, y crea `deliveries` con una entrega por reserva. Ver [reservas](reservas.md)
+y [ADR 0007](adr/0007-codigo-de-retiro-y-transiciones.md).
+Tras el feedback de E2, `lots.status` es el enum `lot_status` (`draft`, `published`,
+`expired`, `withdrawn`) con `closed_at` para los cierres lógicos
+([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)), y `user_consents` guarda
+el consentimiento para tratar el correo
+([ADR 0009](adr/0009-consentimiento-del-correo.md)).
 
 **Modelo conceptual E2 (K013, 2026-09-21):** las secciones
 [Modelo conceptual E2](#modelo-conceptual-e2-k013) y posteriores describen el
 dominio que deben cubrir los siguientes casos de uso. No son una ampliación del
 SQL K003/K010 ni prueban una funcionalidad integrada: solicitudes, ofertas,
-códigos, entregas, conversaciones e incidencias siguen fuera de la persistencia y
-de las rutas actuales. Conservan las reglas E1 que no fueron modificadas y aplican
+conversaciones e incidencias siguen fuera de la persistencia y de las rutas
+actuales; reserva, código y entrega se implementan en K015, K021 y K022. Conservan las reglas E1 que no fueron modificadas y aplican
 la excepción de oferta parcial de [ADR 0002](adr/0002-ofertas-parciales.md).
 
 ## Fuentes y clasificación
@@ -102,7 +111,7 @@ historia en cascada). Los campos siguientes son NOT NULL salvo `conditions` y
   sin inventar un texto o una regla sanitaria. Su obligatoriedad se revisa en K010.
 - Ubicación y zona se guardan también en lote (**B**, instantánea), porque RF02
   exige conservar lugar/plazo publicados aunque cambie el establecimiento.
-- K003 exige una declaración completa incluso en borrador (**B**, contrato de
+- K003 exige una descripción completa incluso en borrador (**B**, contrato de
   persistencia inicial); E1 no precisa guardado parcial (**C**). K010 debe decidir
   explícitamente si permite campos pendientes y, de ser necesario, agregar una
   migración. No se afirma que E1 prohíba borradores incompletos.
@@ -131,23 +140,22 @@ Estados almacenados, traducción técnica **B** de términos explícitos de B p.
 | `lots` | `draft`, `published` | `draft` | Representar borrador/publicado de RF02 sin ejecutar publicación |
 | `commitments` | `confirmed` | Ninguno | Representar reserva confirmada de RF04, exigiendo intención explícita al insertar |
 
-Se usan `text` + CHECK con nombre (**B**), no ENUM: una migración posterior puede
-sustituir el catálogo y ajustar índices con SQL ordinario. No son las máquinas de
-estados completas. `closed`/`expired` de lotes y espera/ofertado/cancelado/vencido/
-retirado de compromisos están definidos en E1, pero deliberadamente pospuestos.
+K003 usó `text` + CHECK con nombre (**B**). `commitments.status` lo mantiene;
+`lots.status` pasó a enum con vencido y retirado ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)).
+La espera y las ofertas no son estados de `commitments`: viven en `waitlist_entries`
+([ADR 0010](adr/0010-cola-fifo-y-ofertas.md), [cola de espera](cola-de-espera.md)).
 Agotado es condición del inventario, no estado (B p. 4).
 
 `lots_publication_check` exige `published_at IS NULL` en borrador y NOT NULL en
 publicado (**B**, coherencia local de campos). No publica, valida permisos,
 congela contenido ni verifica fotos. El índice UNIQUE parcial
 `commitments_active_user_lot_key` protege `(user_id, lot_id)` cuando
-`status = 'confirmed'` (**A**, RF04, implementación **B**). Al incorporar espera y
-ofertas, la misma migración deberá ampliar el predicado a esos estados activos;
-no sustituirlo por UNIQUE permanente que impida nuevos compromisos históricos.
-ADR 0002 no elimina esta restricción: cerrar la solicitud en cola al aceptar
-parcialmente no termina la reserva confirmada. Como E1 admite un solo compromiso
-activo por usuario y lote (A p. 1), una nueva solicitud del mismo usuario espera a
-que su reserva termine; el índice parcial de K003 se amplía a los estados activos.
+`status = 'confirmed'` (**A**, RF04, implementación **B**); el índice parcial
+`waitlist_entries_open_user_lot_key` hace lo mismo con las solicitudes abiertas, y la
+exclusión entre ambas se comprueba bajo el bloqueo del lote. ADR 0002 no elimina esta
+restricción: cerrar la solicitud en cola al aceptar parcialmente no termina la reserva
+confirmada. Como E1 admite un solo compromiso activo por usuario y lote (A p. 1), una
+nueva solicitud del mismo usuario espera a que su reserva termine.
 
 ## Modelo conceptual E2 (K013)
 
@@ -169,7 +177,7 @@ Los términos se usan así:
   un rol global: es el usuario cuando actúa para un establecimiento del que es
   miembro. E1 no define la granularidad administrativa ni la revocación de esa
   membresía.
-- **Lote** es la oferta publicada por un establecimiento, con su declaración,
+- **Lote** es la oferta publicada por un establecimiento, con su descripción,
   lugar y ventana de retiro. Contiene `Q` **unidades reservables**: packs
   equivalentes e indivisibles; la unidad no es un producto individual ni requiere
   identidad propia. Una cantidad en un compromiso, una oferta o una entrega se
@@ -194,11 +202,11 @@ Los términos se usan así:
 | Usuario | Identificar a quien rescata y/o actúa como operador; es autor de solicitudes, mensajes e incidencias. | Un usuario tiene 0..N membresías y 0..N compromisos; cada uno pertenece a un usuario. | K008 implementa credenciales y sesión; una membresía existente habilita la operación. La administración de membresías sigue pendiente. |
 | Establecimiento | Representar al negocio que publica y acredita retiros. | Tiene 0..N membresías y publica 0..N lotes; una membresía y un lote pertenecen a un establecimiento. | `establishments` existe. |
 | Membresía | Vincular un usuario con el establecimiento que puede operar. Es la base del permiso de operador, no un catálogo de roles. | Resuelve la relación N:M entre usuario y establecimiento; una sola por par. | Existe y K010 la comprueba al gestionar el lote. |
-| Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Existe como borrador/publicado; no guarda fotos ni contadores. |
+| Lote | Declarar una oferta y su ventana; agrupar sus packs equivalentes y el inventario conceptual `F/O/R/E/X`. | Pertenece a un establecimiento; tiene 0..3 fotos; recibe 0..N compromisos. | Enum `lot_status`: borrador, publicado, vencido o retirado; los dos últimos son cierres lógicos con `closed_at`, sin borrar la fila. Contadores desde K021. |
 | Foto de lote | Ser una imagen opcional que ayuda a describir un lote publicado. Sólo una foto lista y autorizada puede hacerse visible; el conjunto queda fijo al publicar. | Cada foto pertenece a exactamente un lote; un lote tiene de 0 a 3 según anexo I p. 25. | `lot_photos` (K014) guarda referencias y estado; los bytes están en objetos privados. Ver [fotos](fotos.md). |
 | Compromiso | Conservar la intención del usuario sobre una cantidad y, si corresponde, su reserva confirmada. Debe distinguir cantidad solicitada, ofrecida y confirmada. | Pertenece a un usuario y un lote; puede originar 0..N ofertas sucesivas sólo si las reglas futuras lo permiten; una reserva confirmada puede tener el código y la entrega que correspondan. | Sólo existe la reserva confirmada, sin solicitud/oferta ni cantidades separadas. |
-| Código de retiro | Presentar la credencial de una reserva confirmada para que su titular la consulte y un operador autorizado la revise antes de confirmar el retiro completo. No es un identificador público ni una autorización por sí solo. | Una reserva confirmada tiene un código de ocho caracteres; una solicitud en espera no lo tiene. Se consume al acreditar la única entrega completa. | No existe. Anexos A p. 2 y G pp. 13 y 16 lo definen; no se inventan rotaciones ni códigos alternativos. |
-| Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | No existe. |
+| Código de retiro | Presentar la credencial de una reserva confirmada para que su titular la consulte y un operador autorizado la revise antes de confirmar el retiro completo. No es un identificador público ni una autorización por sí solo. | Una reserva confirmada tiene un código de ocho caracteres; una solicitud en espera no lo tiene. Se consume al acreditar la única entrega completa. | K022: cifrado y huella en `commitments`; un estado terminal borra el cifrado. Sin rotaciones ni códigos alternativos. |
+| Entrega | Registrar la acreditación efectiva de una reserva y la cantidad que pasa a `E`. Es un registro asociado, no un atributo booleano: necesita conservar cuándo y en qué compromiso ocurrió. | Pertenece a una reserva confirmada; se propone 0..1 si el retiro es único e íntegro. E1 disponible no define entregas parciales, por lo que no se modelan. | K022: `deliveries`, única por reserva, con operador, cantidad, instante y clave de intención. |
 | Incidencia (RF11) | Registrar un problema descubierto sobre un lote, antes o después de entregar, con motivo e instrucciones, y comunicarlo a todos los vinculados sin reescribir entregas. | Pertenece a un lote; un lote tiene 0..N incidencias. Tiene un usuario autor, versiones publicadas por un operador miembro o administración, y 0..N destinatarios únicos por incidencia, versión y usuario. | No existe. Anexo I p. 26 define reporte, publicación, destinatarios, estados y cierre por incidencia; S08 (K043–K046) lo implementa. |
 | Conversación y mensaje | Mantener el intercambio asociado al compromiso cuando aplique; no sustituye estados ni autorización. | Una conversación corresponde a un compromiso; contiene 1..N mensajes, cada uno de un usuario participante. | E1 menciona chat, pero no hay implementación ni detalle suficiente para definir participantes adicionales o retención. |
 
@@ -263,8 +271,8 @@ de un identificador público, una URL firmada o un código en autorización.
   permite la oferta parcial sólo a la cabeza y cierra la solicitud al aceptarla,
   rechazarla o vencer.
 - **Decisión de diseño:** se muestran estados conceptuales con nombres legibles y
-  se registra la entrega como hecho inmutable. Los nombres no son valores SQL ni
-  amplían los estados `draft`/`published` que K010 implementa.
+  se registra la entrega como hecho inmutable. Los estados del lote coinciden con
+  el enum `lot_status`; los del compromiso todavía no son todos valores SQL.
 - **Pendiente:** plazos no ya definidos en E1, entregas parciales y
   representación persistente. No se fijan aquí. E1 no define reembolsos ni
   sanciones por incidencia, por lo que no se modelan.
@@ -273,7 +281,7 @@ de un identificador público, una URL firmada o un código en autorización.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Borrador: operador crea declaración completa
+  [*] --> Borrador: operador crea descripción completa
   Borrador --> Publicado: publicar con membresía, versión y ventana válida
   Publicado --> Retirado: retiro del lote para corregirlo
   Publicado --> Vencido: termina la ventana de retiro
@@ -283,10 +291,10 @@ stateDiagram-v2
 
 | Inicial | Acción o evento | Actor autorizado | Condiciones | Resultado | Efectos relevantes |
 | --- | --- | --- | --- | --- | --- |
-| — | Crear borrador | Usuario con membresía del establecimiento | Declaración completa válida. | Borrador. | K010 asigna versión inicial; todavía no hay disponibilidad. |
-| Borrador | Publicar | Operador miembro | Versión vigente, declaración válida y fin de ventana posterior al instante bloqueado. | Publicado. | Fecha de publicación; declaración y conjunto de fotos quedan fijos. Cero fotos es válido. |
-| Publicado | Retirar para corregir | Operador del establecimiento, con motivo (G p. 15) | RF02 exige crear otro lote en vez de editar. | Retirado (conceptual). | Deja de ser asignable. Todo `F`, `O` y `R` pendiente pasa a `X` y los retiros `E` se conservan (B p. 4); cancela ofertas y reservas pendientes e invalida sus códigos. |
-| Publicado | Final de ventana | Reloj/regla compartida por API y worker | Llega el cierre de retiro. | Vencido (conceptual). | Deja de admitir ofertas/aceptaciones; qué ocurre con reservas u ofertas activas se rige por sus transiciones, no por un borrado. |
+| — | Crear borrador | Usuario con membresía del establecimiento | Descripción completa válida. | Borrador. | K010 asigna versión inicial; todavía no hay disponibilidad. |
+| Borrador | Publicar | Operador miembro | Versión vigente, descripción válida y fin de ventana posterior al instante bloqueado. | Publicado. | Fecha de publicación; descripción y conjunto de fotos quedan fijos. Cero fotos es válido. |
+| Publicado | Retirar para corregir | Operador del establecimiento, con motivo (G p. 15) | RF02 exige crear otro lote en vez de editar. | Retirado (`withdrawn` con `closed_at`). | Deja de ser asignable. Todo `F`, `O` y `R` pendiente pasa a `X` y los retiros `E` se conservan (B p. 4); cancela ofertas y reservas pendientes e invalida sus códigos. |
+| Publicado | Final de ventana | Reloj/regla compartida por API y worker | Llega el cierre de retiro. | Vencido (`expired` con `closed_at`). | Deja de admitir ofertas/aceptaciones; qué ocurre con reservas u ofertas activas se rige por sus transiciones, no por un borrado. |
 
 Un lote publicado está **asignable** sólo si su ventana sigue vigente y tiene
 `F > 0` después de releer estado, contadores y prioridad bajo bloqueo. La falta de
@@ -391,14 +399,11 @@ define.
 - No hay cantidades en las otras tres entidades. No hay límite de dos packs
   (RF04 y corrección G p. 12), ni límite SQL de 100: H p. 18 lo presenta como
   supuesto de dimensionamiento, al igual que la ventana de 24 h.
-- **Requisito conocido pospuesto:** B p. 4 exige Q = F + O + R + E + X y contadores
-  no negativos (cero sí es válido para esos contadores). K003 conserva Q, pero
-  no crea inventario parcial ni cinco contadores que aún no tienen operaciones.
-  Incorporarlos, conciliarlos con compromisos y validar cantidad contra Q y
-  disponibilidad bajo bloqueo corresponde a la reserva transaccional posterior.
-  Los CHECK actuales no garantizan ausencia de sobreasignación entre filas.
-  ADR 0002 precisa que F → O y O → R mueven solo la cantidad ofrecida y aceptada;
-  Q no cambia y la demanda restante no constituye inventario ni prioridad residual.
+- **Inventario (B p. 4):** Q = F + O + R + E + X con contadores no negativos. K021
+  guarda O, R, E y X en el lote y deriva F; sus CHECK impiden la sobreasignación
+  ([ADR 0006](adr/0006-inventario-del-lote.md)). ADR 0002 precisa que F → O y O → R
+  mueven solo la cantidad ofrecida y aceptada; Q no cambia y la demanda restante no
+  constituye inventario ni prioridad residual.
 - UNIQUE: correo exacto, par de membresía y compromiso activo usuario/lote.
 - CHECK: cantidades, estados, ventana ordenada, coherencia de publicación,
   latitud [-90,90], longitud [-180,180], textos requeridos no vacíos y descripción

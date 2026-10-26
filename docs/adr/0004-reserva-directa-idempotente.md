@@ -30,13 +30,14 @@ aceptaciones, retiro u otros comandos se deberá definir su espacio de claves y
 conservar los resultados de creación, sin reutilizar las claves históricas ni
 reconstruir respuestas de creación a partir de estados mutables.
 
-El inventario de K015 deriva libres como cantidad publicada menos reservas
-confirmadas. No introduce cinco contadores sin operaciones que los mantengan.
-S04 deberá incorporar ofertas, entregas y cierres y garantizar su conciliación.
+[ADR 0006](0006-inventario-del-lote.md) define el inventario del lote, el bloqueo
+común y el instante de decisión que usa esta transacción.
 
 ## Verificación
 
 `db:test:discovery:compose` comprueba claves simultáneas, diferencias de mayúsculas,
 parámetros distintos, aislamiento entre actores, reproducción tras cierre y rollback.
+También reintenta en paralelo tres veces la clave de ocho personas que compiten por
+cinco packs: cada clave obtiene un solo resultado y no hay sobreasignación.
 `test:web:compose` pierde una respuesta después del commit y comprueba que el
 reintento del navegador conserva clave y cantidad y deja una sola reserva.

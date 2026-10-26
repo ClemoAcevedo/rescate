@@ -1,7 +1,7 @@
 // K010 · Application: límites tipados hacia Infrastructure.
 // No exponen pg, clientes ni SQL. Se definen junto a su consumidor.
 
-import type { Lot, LotDeclaration, LotStatus } from "../../domain/lots.js"
+import type { Lot, LotDescription, LotStatus } from "../../domain/lots.js"
 import type { PhotoStatus } from "../../domain/photos.js"
 
 /** Actor autenticado. K008 lo resolverá desde la sesión persistida. */
@@ -12,12 +12,12 @@ export interface Actor {
 
 export interface NewLot {
   establishmentId: string
-  declaration: LotDeclaration
+  description: LotDescription
 }
 
 export interface LotUpdate {
   publicId: string
-  declaration: LotDeclaration
+  description: LotDescription
   /** Versión leída por el operador: protege la edición concurrente. */
   expectedVersion: number
   updatedAt: Date
@@ -77,7 +77,7 @@ export interface LotRepository {
 /** Escrituras disponibles dentro de una transacción ya iniciada. */
 export interface LotWriter {
   isMemberOfEstablishment(userId: string, establishmentId: string): Promise<boolean>
-  updateDeclaration(update: LotUpdate): Promise<Lot>
+  updateDescription(update: LotUpdate): Promise<Lot>
   markPublished(publication: LotPublication): Promise<Lot>
   /** Estados de las fotos activas del lote bloqueado: en carga vigente, validación, listas o rechazadas. */
   listPhotoStatuses(lotPublicId: string, now: Date): Promise<PhotoStatus[]>

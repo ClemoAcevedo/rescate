@@ -38,16 +38,21 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
 Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. La búsqueda pública usa rutas separadas.
 
 - El listado exige membership actual sobre el establecimiento (403 para otro
-  operador, 404 si el establecimiento no existe). Incluye borradores y publicados,
+  operador, 404 si el establecimiento no existe). Incluye todos los estados,
   también con la ventana vencida, ordenados por publicación o creación descendente,
-  en páginas de 20. Filtra con `status=draft|published`; un filtro desconocido
+  en páginas de 20. Filtra con `status=draft|published|expired|withdrawn`; un filtro desconocido
   responde 422. Cada resumen trae los packs reservados y la miniatura de la primera
   foto lista.
 
 - PATCH recibe `version` y al menos un campo. Omitir un campo lo conserva;
-  `conditions: null` lo borra. Application combina el patch con la declaración
+  `conditions: null` lo borra. Application combina el patch con la descripción
   leída bajo bloqueo y Domain valida el resultado completo.
 - Publicar recibe solo `{ "version": N }`.
+- Vencido (`expired`) y retirado (`withdrawn`) son cierres lógicos: el lote no se
+  borra, deja de aparecer en la búsqueda pública y queda con `closed_at`
+  ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)). El worker vence un lote
+  publicado al llegar su cierre ([vencimientos](vencimientos.md)); retirar aún no
+  tiene comando.
 - Se rechazan propiedades desconocidas, cambio de establecimiento y campos del
   servidor. Las fechas son RFC 3339 con zona explícita; las respuestas usan UTC.
 - Las respuestas exponen solo `LotResponse`, con `Cache-Control: no-store`. Los
@@ -78,7 +83,7 @@ identifica un establecimiento y responde 404.
 
 | Ruta | Qué hace |
 | --- | --- |
-| `/operador/lotes` | «Mis lotes»: borradores y publicados del establecimiento, con filtros Todos/Borradores/Publicados, reservas y acceso a la vista pública. Con varios establecimientos se elige uno. |
+| `/operador/lotes` | «Mis lotes»: lotes del establecimiento con su estado (borrador, publicado, vencido o retirado), filtros Todos/Borradores/Publicados, reservas y acceso a la vista pública. Con varios establecimientos se elige uno. |
 | `/operador/lotes/nuevo` | Formulario completo; «Guardar borrador» crea el lote y navega a su ruta. |
 | `/operador/lotes/:lotId` | Carga, edita y publica el borrador; un lote publicado se muestra en solo lectura. |
 
@@ -129,19 +134,24 @@ La persona inicia sesión para reservar. El actor procede de K008, nunca del cue
 Application coordina la transacción mediante `withReservationTransaction`:
 
 1. Serializa la clave por actor y lee un resultado previo.
-2. Si no existe, bloquea el lote con `FOR UPDATE` y relee disponibilidad y compromiso activo.
+2. Si no existe, bloquea el lote con `FOR UPDATE`, lee el reloj de PostgreSQL y
+   relee disponibilidad y compromiso activo. Si los reservados o retirados del
+   lote no coinciden con sus reservas confirmadas o entregas, rechaza con 409 y
+   registra `inventory_discrepancy` para revisión.
 3. Domain exige packs enteros positivos, stock suficiente, ausencia de otro
    compromiso activo del mismo usuario/lote y un instante anterior al cierre.
-4. Inserta reserva y clave juntas. HTTP responde solo después del commit.
+4. Inserta reserva, clave y código de retiro cifrado y mueve la cantidad de libres a
+   reservados (F → R), todo junto. HTTP responde solo después del commit.
 
 La espera por cada bloqueo tiene un límite de 2 s. Si se supera, la transacción
 revierte y responde 503; el mismo intento se puede repetir sin consumir su clave.
 
 Se puede reservar antes del inicio del retiro. La cantidad publicada no cambia;
-la disponibilidad es `Q - SUM(commitments.quantity)` para reservas confirmadas.
-K015 no crea cola, ofertas, cancelaciones, códigos ni retiros. Al añadir esos
-estados, S04 debe ampliar este cálculo y atender prioridad FIFO bajo el mismo
-bloqueo; se conserva ADR 0002.
+la disponibilidad es F, la columna de libres del lote. Los CHECK de la base impiden
+que quede negativa ([ADR 0006](adr/0006-inventario-del-lote.md)). Cada reserva nace
+con su código de retiro; cancelarla, retirarla o vencerla se describe en
+[reservas](reservas.md). La cola FIFO y las ofertas, según ADR 0002, se atienden
+bajo el mismo bloqueo ([cola de espera](cola-de-espera.md)).
 
 La clave UUID viaja en `idempotencyKey`. Un resultado confirmado reproduce el
 mismo 201 y cuerpo con la misma clave y parámetros, incluso tras cerrar el lote.
@@ -152,7 +162,9 @@ El navegador espera hasta 10 s por intento y reintenta fallos inciertos hasta tr
 veces a 1, 2 y 4 s, conservando clave y cantidad. Mientras envía o queda un resultado
 incierto, bloquea el cambio de cantidad. No convierte un timeout en una reserva
 fallida ni inicia otra intención en silencio. Esto incluye un 5xx del proxy aunque
-su cuerpo no sea JSON. Tras confirmar, vuelve a consultar la disponibilidad para
+su cuerpo no sea JSON. La intención se conserva en la misma pestaña al recargar, y el resultado de
+creación enlaza al [detalle vigente de la reserva](reservas.md#vista-del-titular).
+Tras recibirlo, vuelve a consultar la disponibilidad para
 incluir reservas de otras personas.
 
 Recorrido: [router](../api/src/http/discovery-router.ts) →

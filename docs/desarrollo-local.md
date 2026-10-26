@@ -1,7 +1,7 @@
 # Entorno local y CI
 
 Guía vigente para el árbol de trabajo K008/K010 (2026-09-21).
-Compose levanta web, API, PostgreSQL/PostGIS y el worker de fotos. La API añade
+Compose levanta web, API, PostgreSQL/PostGIS y el worker. La API añade
 [operaciones de lotes](lotes.md) y [fotos](fotos.md); requiere migraciones aplicadas.
 Ver [backend](backend.md), [frontend](../web/README.md) y la evidencia histórica
 [K006](evidencia/k006.md).
@@ -37,7 +37,7 @@ puertos publicados escuchan solo en `127.0.0.1`. No usar este Compose en producc
 | `web` | Vite, React y proxy `/api` | http://localhost:5173 |
 | `api` | Express compilado; `GET /health` | http://localhost:3000/health |
 | `db` | PostgreSQL 16 + PostGIS 3.5 | localhost:5432 |
-| `worker` | Proceso Node independiente: valida fotos y limpia temporales | Sin puerto |
+| `worker` | Proceso Node independiente: registra vencimientos, valida fotos y limpia temporales | Sin puerto |
 
 Variables del `.env` raíz (leídas por Compose):
 
@@ -51,6 +51,7 @@ Variables del `.env` raíz (leídas por Compose):
 | `POSTGRES_PASSWORD` | `rescate_dev_only` | Contraseña pública, solo local |
 | `RESCATE_ALLOWED_ORIGINS` | `https://localhost:3443` | Orígenes HTTPS exactos para comandos |
 | `CSRF_SIGNING_KEY` | Clave ficticia del ejemplo | Sustituir por 32 bytes aleatorios en base64 para uso real |
+| `PICKUP_CODE_KEY` | Clave ficticia del ejemplo | Cifra los códigos de retiro; otra clave de 32 bytes para uso real |
 
 Compose tiene los mismos valores por defecto que el ejemplo. Si un puerto está
 ocupado, cámbialo en `.env` y ajusta las URLs de comprobación. Los puertos internos
@@ -84,17 +85,19 @@ docker compose logs worker
 ```
 
 La web debe responder HTML y ambas rutas de salud deben responder
-`{"status":"ok"}`. Abre también http://localhost:5173/conexion y pulsa
+`{"status":"ok","database":"ok","worker":"ok"}`. Abre también http://localhost:5173/conexion y pulsa
 **Comprobar conexión**. La consulta SQL verifica conexión TCP autenticada y debe
 mostrar la base configurada y la versión de PostGIS.
 
 `db`, `api` y `web` tienen healthchecks; web espera a que API esté saludable.
-`/health` verifica únicamente el proceso HTTP, no la base. K010 consulta PostgreSQL y la API espera al servicio db saludable.
+`/health` verifica el proceso HTTP y PostgreSQL ([operación](operacion.md)); la API espera al servicio db saludable.
 Compose no aplica migraciones automáticamente.
-El worker debe figurar `running` y registrar `Worker iniciado: validación y limpieza de fotos`.
+El worker debe figurar `running` y registrar `Worker iniciado: vencimientos; validación y limpieza de fotos`.
 Consulta PostgreSQL cada 2 s y limpia objetos cada minuto. Mientras falten las
-migraciones registra `photo_worker_error` y reintenta cada 5 s. Termina la foto en
-curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` o `PHOTO_STORAGE` queda inactivo.
+migraciones registra `worker_error` y reintenta cada 5 s. Termina el lote, la foto o la tanda
+de avisos en curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` queda inactivo; con ella registra
+[vencimientos](vencimientos.md) y genera los [avisos](avisos.md) del outbox, y con `PHOTO_STORAGE`
+además procesa fotos.
 
 ## Persistencia y migraciones K002/K003
 
@@ -152,18 +155,116 @@ npm --prefix api run build
 
 `.github/workflows/ci.yml` se activa en todos los PR y en pushes a `main` y
 `development`. Valida el origen `development` de los PR a `main`, ejecuta web y
-API en paralelo y después Compose:
+API en paralelo y después, también en paralelo, Compose y los recorridos de
+navegador. Un push nuevo a un PR cancela la ejecución anterior de ese PR; los push a
+`main` y `development` nunca se cancelan:
 
 - `web`: instalación con lockfile, TypeScript, lint y build en pasos separados.
   Actualmente no existen tests web; no se oculta esa ausencia con `--if-present`.
 - `api`: instalación con lockfile, validación OpenAPI, tipos HTTP generados, TypeScript, tests de salud, identidad, seguridad y lotes y build de
   API/worker en pasos separados. Usa `node:test` y el `tsx` ya existente.
 - `compose`: valida configuración, construye, levanta con espera, consulta API,
-  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reinicio de API y Chromium HTTPS, verifica worker y siempre recoge logs y limpia.
+  web/proxy y PostGIS, prueba migraciones, concurrencia K010, Infrastructure K008, fotos K014 con el worker real, reservas K022/K025, cola K027, vencimientos K028 con procesos reales del worker, avisos, seguridad, panel y operación; verifica worker y siempre recoge logs y limpia.
+- `browser`: levanta solo el PostgreSQL de Compose, instala Chromium (en caché por
+  lockfile) con [`install-chromium.sh`](../.github/scripts/install-chromium.sh), que da
+  timeouts de red a apt y reintenta tras terminar un apt-get colgado, y
+  ejecuta la autenticación HTTPS con reinicio de API y `test:web:compose`. No es
+  un check obligatorio mientras no se agregue a la protección de ramas.
 
 El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incluso
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 `continue-on-error`. Los comandos del job Compose están en el workflow.
+
+## Revisión de PR con Gemini
+
+[Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
+nuevos commits con `gemini-3.5-flash-lite`. Publica una revisión de tipo comentario
+mediante `github-actions[bot]`, con hallazgos en español y enlaces a líneas del
+commit revisado. Complementa la revisión de otro integrante exigida por la
+protección de ramas.
+
+### Configuración
+
+1. Crear una clave de Gemini API en [Google AI Studio](https://aistudio.google.com/api-keys)
+   en un proyecto con la capa gratuita disponible.
+2. Guardarla como `GEMINI_API_KEY` en **Settings → Secrets and variables → Actions**
+   del repositorio. `GITHUB_TOKEN` lo proporciona Actions con permisos de lectura
+   de contenido y escritura de revisiones.
+3. Abrir un PR listo para revisión desde una rama del mismo repositorio o subir
+   un commit. Los borradores, forks y pushes de Dependabot quedan excluidos del
+   job que usa el secreto.
+
+El reviewer usa la [API de Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite),
+que ofrece entrada y salida gratuitas dentro de la cuota del proyecto. Consultar los
+[límites efectivos en AI Studio](https://ai.google.dev/gemini-api/docs/rate-limits).
+La capa gratuita permite a Google usar el contenido enviado para mejorar sus
+productos; las condiciones de pago son distintas.
+
+### Alcance y diagnóstico
+
+El job ejecuta el reviewer y lee `AGENTS.md` y las
+[instrucciones compartidas](../.github/review-instructions.md) desde el **base SHA**.
+Lee los objetos Git del PR como datos: no instala sus paquetes ni ejecuta su código.
+Una modificación del reviewer se activa cuando llega a la rama destino; su propio PR
+se revisa con la versión que ya existe en esa base.
+
+El [planificador](../.github/scripts/review-context.mjs) recupera el diff completo
+desde el merge-base hasta el HEAD, sin depender del patch recortado de GitHub.
+Prioriza código de producción y reparte todos los diffs de texto en hasta 16 lotes
+de 60 000 caracteres JSON cada uno. Divide también bloques grandes conservando los
+números de línea de ambos lados. Binarios, cambios sin diff de texto, líneas que no
+caben y límites excedidos quedan enumerados como pendientes; no producen cobertura
+completa.
+
+Cada lote añade hasta 30 000 caracteres de extractos numerados del HEAD: versiones
+de `package.json`, configuración TypeScript, imports relativos directos y documentación
+del área modificada. Es contexto selectivo, no resolución completa de dependencias:
+los archivos recortados se identifican. El contrato HTTP modificado puede aportar
+extractos adicionales cuando cabe. El título y la descripción del autor son contexto,
+no evidencia de corrección ni instrucciones para el modelo.
+
+Gemini usa [razonamiento alto](https://ai.google.dev/gemini-api/docs/thinking) y
+salida estructurada. Debe enumerar todas las rutas recibidas y cada hallazgo necesita
+ubicación cambiada (`RIGHT` o `LEFT`), caso concreto, impacto, corrección y una cita
+exacta de código visible, con confianza mínima 0,85. Una segunda consulta intenta
+refutar cada candidato: confirmarlo o descartarlo requiere evidencia visible y
+confianza mínima 0,90. Un candidato sin verificar deja la revisión incompleta.
+Estas validaciones no demuestran que el modelo haya encontrado todos los bugs.
+
+Ante HTTP 500/502/503/504 o fallos de conexión/timeout, reintenta hasta dos veces,
+esperando 10 y 20 segundos. Cada intento dura hasta 120 segundos; la revisión tiene
+20 minutos de presupuesto total y el job 25. Los errores de clave, cuota (`429`) y
+formato no se reintentan automáticamente. El bot comprueba HEAD, base y estado del
+PR antes de cada consulta, reintento y publicación; descarta resultados obsoletos.
+
+Una revisión incompleta aparece advertida al principio del comentario y deja el
+job fallido, conservando los hallazgos confirmados y la lista de pendientes. Se
+puede repetir con **Re-run failed jobs** sobre el mismo HEAD y base después de
+resolver la causa. Solo una revisión completa de esta versión y de ambos SHA
+suprime consultas duplicadas. Si falta la clave o no se puede preparar el diff,
+el error aparece en Actions antes de consultar el modelo.
+
+El artefacto `gemini-review-RUN-ATTEMPT` conserva durante 14 días `review-result.json`
+con cobertura y decisiones, y `review-usage.json` con los tokens informados por Gemini,
+sin prompts ni credenciales. El consumo se guarda antes y después de cada llamada,
+también si su respuesta es inválida o el SHA cambia. `unknownRequests` indica consultas
+cuyo consumo no fue informado: el total conocido no equivale a una factura.
+Los logs solo muestran conteos y diagnósticos. El número de consultas crece con los
+lotes, hallazgos y reintentos; los tests locales no consumen API. Este job es
+independiente del CI del producto y no aprueba ni integra PRs.
+
+Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
+título **Revisión de Gemini 3.5 Flash-Lite** y el SHA vigente. Un job verde por sí solo
+no acredita una revisión: también puede haber omitido un commit reemplazado.
+Las pruebas del reviewer se ejecutan sin claves con:
+
+```bash
+node --test --test-isolation=none .github/scripts/*.test.mjs
+```
+
+Las instrucciones de Copilot remiten al mismo archivo compartido. Su regla de
+revisión sigue dependiendo del acceso y la cuota de Copilot; Gemini funciona
+mediante su propio workflow.
 
 ## Evidencia y aceptación en el PR
 

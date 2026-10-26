@@ -103,13 +103,13 @@ npm ci
 npm run dev
 ```
 
-La API necesita `DATABASE_URL`, `RESCATE_ALLOWED_ORIGINS`, `CSRF_SIGNING_KEY` y
-un esquema ya migrado. Copia `api/.env.example` a `api/.env`, configura una clave
-propia y aplica las migraciones antes de iniciarla. K008 exige `users` vacío al
+La API necesita `DATABASE_URL`, `RESCATE_ALLOWED_ORIGINS`, `CSRF_SIGNING_KEY`,
+`PICKUP_CODE_KEY` y un esquema ya migrado. Copia `api/.env.example` a `api/.env`,
+configura claves propias y aplica las migraciones antes de iniciarla. K008 exige `users` vacío al
 aplicar su migración: si hay filas, aborta sin modificarlas. Configuración HTTPS,
 pruebas y explicación de seguridad en [K008](docs/k008-identidad.md).
 
-La API incluye un endpoint básico de salud:
+La API incluye un endpoint de salud: proceso, base y último ciclo del worker ([operación](docs/operacion.md#salud)):
 
 ```text
 GET /health
@@ -119,7 +119,9 @@ Una ejecución correcta responde:
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "database": "ok",
+  "worker": "ok"
 }
 ```
 
@@ -166,17 +168,19 @@ segunda ejecución sin cambios, rollback y reaplicación.
 
 Las entregas y documentos asociados al proyecto se encuentran en `docs`.
 
-Actualmente se incluye la documentación correspondiente a E1:
-
 ```text
 docs/
 └── entregas/
-    └── e1/
-        ├── informe-e1.pdf
-        └── anexos-e1.pdf
+    ├── e1/
+    │   ├── informe-e1.pdf
+    │   └── anexos-e1.pdf
+    └── e2/
+        ├── presentacion-e2.pdf
+        └── estimaciones-e2.xlsx
 ```
 
-Estos documentos contienen el contexto, requerimientos y decisiones definidas durante la primera etapa del proyecto.
+E1 contiene el contexto, requerimientos y decisiones de la primera etapa. E2 contiene
+la presentación y la planilla de estimaciones y plan de trabajo.
 
 El [índice de documentación](docs/README.md) incluye las decisiones posteriores.
 La [arquitectura actual y objetivo incremental S02](docs/arquitectura/arquitectura.md)
@@ -184,7 +188,8 @@ separa lo implementado de las cuatro responsabilidades que guiarán el backend.
 El [ADR 0003](docs/adr/0003-arquitectura-incremental-s02.md) registra esa decisión
 y [AGENTS.md](AGENTS.md) contiene las reglas para desarrollar incrementalmente.
 La regla vigente de [ofertas parciales y resolución de la solicitud](docs/adr/0002-ofertas-parciales.md)
-complementa E1 sin modificar los PDF históricos ni implementar todavía ese flujo.
+complementa E1 sin modificar los PDF históricos; su implementación está en la
+[cola de espera](docs/cola-de-espera.md).
 
 ## Flujo de trabajo
 
@@ -247,16 +252,48 @@ K003
 Este es el único resumen de estado del repositorio; se actualiza en el mismo PR que
 lo cambia.
 
-- **Web:** registro, login y sesión (K009); formulario de lotes del operador (K011)
+- **Web:** registro con consentimiento del correo, login y sesión (K009); formulario de lotes del operador (K011)
   con carga, validación y retiro de fotos (K017) y «Mis lotes» con borradores y
-  publicados (#96).
+  publicados (#96); los lotes vencidos o retirados se muestran con su estado.
   Búsqueda pública paginada, filtros, zona manual, detalle con galería de fotos y
-  reserva directa con API real (K016).
-- **API:** `/health`, identidad y sesiones (K008), borrador/publicación y listado de
-  lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015), carga, lectura y
-  retiro de fotos (K014), según OpenAPI.
-- **Worker:** valida fotos, genera imagen y miniatura sin EXIF y limpia temporales
-  (K014).
+  reserva directa con API real (K016); historial, detalle vigente, código de retiro
+  y cancelación con resultado comprobado (K023); revisión de código y confirmación
+  de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
+  parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
+  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030);
+  «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
+  período (K035).
+- **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
+  1366 px, distribución y menú de operador de 320 a 1920 px y
+  [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
+  de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para
+  medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
+  ajenas a la implementación.
+- **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
+  lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
+  protegido por la base (K021), reservas del titular con código de retiro, cancelación,
+  revisión y retiro por el operador y vencimiento al cierre (K022), carga, lectura y
+  retiro de fotos (K014), cola FIFO con ofertas parciales, aceptación, rechazo y
+  vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
+  (K030), panel del establecimiento con compromisos, historial y resultados por período
+  sobre lotes cerrados (K035), según OpenAPI. Límites de login, códigos de retiro y
+  tráfico, con los fallos de login y de código persistidos, y registros sin secretos
+  (K034). Una línea por solicitud con identificador, operación, estado y duración, y
+  salud con PostgreSQL y el último ciclo del worker ([operación](docs/operacion.md), K036).
+- **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
+  reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
+  (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
+  Registra su último ciclo exitoso y la demora y las tareas en error de cada cola;
+  `ops:status` las consulta (K036).
+- **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
+  observados y repetición con el worker de fotos activo y detenido (K025); flujo de
+  cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
+  y en tres navegadores (K031).
+- **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
+  códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
+  secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
+- **Rendimiento:** semilla de escala del anexo H, planes reales con EXPLAIN y p50/p95 de
+  búsqueda, reserva y cancelación con k6 ([rendimiento](docs/rendimiento.md), K032).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

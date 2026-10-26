@@ -5,6 +5,9 @@ import { createDiscoveryUseCases } from "./application/discovery/use-cases.js"
 import { createIdentityUseCases } from "./application/identity/use-cases.js"
 import { createLotRepository } from "./infrastructure/postgres/lot-repository.js"
 import { createDiscoveryRepository } from "./infrastructure/postgres/discovery-repository.js"
+import { createReservationUseCases } from "./application/reservations/use-cases.js"
+import { createReservationRepository } from "./infrastructure/postgres/reservation-repository.js"
+import { createPickupCodes } from "./infrastructure/crypto/pickup-codes.js"
 import { createEmailCanonicalizer, createIdentityRepository } from "./infrastructure/postgres/identity-repository.js"
 import { createSessionRepository } from "./infrastructure/postgres/session-repository.js"
 import { createLoginSecurityRepository } from "./infrastructure/postgres/login-security-repository.js"
@@ -22,10 +25,25 @@ import { createApp } from "./app.js"
 import { createPhotosRouter } from "./http/photos-router.js"
 import { createLotsRouter } from "./http/lots-router.js"
 import { createDiscoveryRouter } from "./http/discovery-router.js"
+import { createReservationsRouter } from "./http/reservations-router.js"
+import { createWaitlistUseCases } from "./application/waitlist/use-cases.js"
+import { createWaitlistRepository } from "./infrastructure/postgres/waitlist-repository.js"
+import { createExpiryUseCases, EXPIRY_LIMITS } from "./application/expiries/use-cases.js"
+import { createLotExpiryRepository } from "./infrastructure/postgres/expiry-repository.js"
+import { createWaitlistRouter } from "./http/waitlist-router.js"
+import { createNotificationUseCases, createOutboxProcessor } from "./application/notifications/use-cases.js"
+import { createNotificationRepository, createOutboxRepository } from "./infrastructure/postgres/notification-repository.js"
+import { createNotificationsRouter } from "./http/notifications-router.js"
+import { createPanelUseCases } from "./application/panel/use-cases.js"
+import { createPanelRepository } from "./infrastructure/postgres/panel-repository.js"
+import { createPanelRouter } from "./http/panel-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
-import { createTrafficLimits } from "./http/rate-limits.js"
+import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
 import { handleError } from "./http/errors.js"
+import { createOperations } from "./infrastructure/postgres/operations.js"
+import { errorCode } from "./application/logging.js"
+import type { Log } from "./application/logging.js"
 
 export interface Api { app: Express; close(): Promise<void> }
 export function readDatabaseUrl(environment: NodeJS.ProcessEnv): string {
@@ -45,6 +63,19 @@ export function readAuthConfiguration(environment: NodeJS.ProcessEnv) {
   const key = Buffer.from(encoded, "base64")
   if (key.length < 32 || key.toString("base64") !== encoded) throw new Error("CSRF_SIGNING_KEY requiere al menos 32 bytes aleatorios en base64 canónico")
   return { origins: new Set(values), key }
+}
+/**
+ * PICKUP_CODE_KEY cifra los códigos de retiro y deriva su huella (anexos H p. 21).
+ * Vive fuera de la base; perderla deja ilegibles los códigos vigentes.
+ */
+export function readPickupCodeKey(environment: NodeJS.ProcessEnv): Uint8Array {
+  const encoded = environment.PICKUP_CODE_KEY ?? ""
+  if (environment.NODE_ENV === "production" && encoded === "cmVzY2F0ZS1kZXYtb25seS1waWNrdXAtY29kZS1rZXk=") {
+    throw new Error("La clave ficticia de Compose no es válida en producción")
+  }
+  const key = Buffer.from(encoded, "base64")
+  if (key.length < 32 || key.toString("base64") !== encoded) throw new Error("PICKUP_CODE_KEY requiere al menos 32 bytes aleatorios en base64 canónico")
+  return key
 }
 /**
  * PHOTO_STORAGE elige el almacenamiento de fotos: `s3` (bucket privado B2) o
@@ -76,48 +107,72 @@ export function readPhotoStorage(environment: NodeJS.ProcessEnv): ObjectStore | 
   })
 }
 
-export function createApi(environment: NodeJS.ProcessEnv = process.env): Api {
+/** `log` es el único sumidero de la API: eventos primitivos, una línea JSON cada uno (docs/seguridad.md). */
+export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log = event => console.log(JSON.stringify(event))): Api {
   const config = readAuthConfiguration(environment)
-  const pool = createPool({ connectionString: readDatabaseUrl(environment) })
+  const pool = createPool({ connectionString: readDatabaseUrl(environment), log })
   const identities = createIdentityUseCases({ identities: createIdentityRepository(pool),
     canonicalizer: createEmailCanonicalizer(pool), passwords: createPasswordHasher(), tokens: createSessionCredentials(),
     sessions: createSessionRepository(pool), security: createLoginSecurityRepository(pool),
     dummyCredential: createDummyCredential(), now: () => new Date() })
   const limits = createTrafficLimits()
+  const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
   const authentication = createAuthentication(identities, createCsrfTokens(config.key), config.origins, limits)
   const lotsRouter = createLotsRouter({ useCases: createLotUseCases(createLotRepository(pool), () => new Date()),
-    authenticate: authentication.authenticate, protectCommand: authentication.protectCommand })
+    authenticate: authentication.authenticate, protectCommand: authentication.protectCommand, log })
   // La API autoriza, recibe y sirve; decodificar y transformar corresponde al worker.
   const photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects: readPhotoStorage(environment),
-    images: null, now: () => new Date(), log: event => console.error(event) })
+    images: null, now: () => new Date(), log })
   const photosRouter = createPhotosRouter({ useCases: photos, authenticate: authentication.authenticate,
-    protectCommand: authentication.protectCommand })
-  const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), () => new Date()),
-    authentication.authenticate, authentication.protectCommand)
-  return { app: createApp({ lotsRouter, discoveryRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits),
+    protectCommand: authentication.protectCommand, log })
+  const codes = createPickupCodes(readPickupCodeKey(environment))
+  const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date()),
+    authentication.authenticate, authentication.protectCommand, log)
+  const reservationsRouter = createReservationsRouter(
+    createReservationUseCases(createReservationRepository(pool), codes, () => new Date()),
+    authentication.authenticate, authentication.protectCommand, limits, log)
+  const waitlistRouter = createWaitlistRouter(
+    createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date()),
+    authentication.authenticate, authentication.protectCommand, log)
+  const notificationsRouter = createNotificationsRouter(
+    createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
+    authentication.authenticate, authentication.protectCommand, log)
+  const panelRouter = createPanelRouter(createPanelUseCases(createPanelRepository(pool), () => new Date()),
+    authentication.authenticate, log)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, panelRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
+    // /health no pasa por el límite por IP: checkHealth comparte una sola consulta a la base.
+    health: operations.checkHealth,
     traffic: (req, res, next) => {
       if (req.path === "/health") { next(); return }
-      try { limits.ip(req.ip ?? req.socket.remoteAddress ?? "unknown"); next() }
-      catch (error) { handleError(error, res, console.error) }
+      try { limits.ip(clientAddress(req)); next() }
+      catch (error) { handleError(error, res, log) }
     },
   }), close: () => pool.end() }
 }
 
-export interface PhotoWorker { run(): Promise<void>; stop(): void }
+export interface Worker { tasks: string[]; run(): Promise<void>; stop(): void }
 
 /**
- * Worker de fotos: valida una foto por vez y limpia objetos cada minuto. Reutiliza
- * los casos de uso de Application; sin base o almacenamiento queda inactivo.
+ * Worker: registra vencimientos de lotes, reservas y ofertas (K028), genera los avisos
+ * del outbox por tandas (K030) y valida una foto por vez y limpia objetos cada minuto
+ * (K014). Reutiliza los casos de uso de Application. Sin DATABASE_URL no hay trabajo;
+ * sin almacenamiento no procesa fotos. `WORKER_EXPIRIES=off` apaga los vencimientos,
+ * para pruebas que mueven plazos sobre una base compartida y esperan vencimientos sin registrar.
  */
-export function createPhotoWorker(environment: NodeJS.ProcessEnv = process.env,
-  log: (event: Record<string, unknown>) => void = event => console.log(JSON.stringify(event))): PhotoWorker | null {
+export function createWorker(environment: NodeJS.ProcessEnv = process.env,
+  log: Log = event => console.log(JSON.stringify(event))): Worker | null {
+  const expiriesSetting = environment.WORKER_EXPIRIES?.trim() ?? ""
+  if (!["", "on", "off"].includes(expiriesSetting)) throw new Error("WORKER_EXPIRIES admite on u off")
   const objects = readPhotoStorage(environment)
   const databaseUrl = environment.DATABASE_URL?.trim()
-  if (objects === null || !databaseUrl) return null
+  if (!databaseUrl) return null
   // Anexos H p. 20: dos conexiones para el trabajador.
-  const pool = createPool({ connectionString: databaseUrl, max: 2 })
-  const photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
+  const pool = createPool({ connectionString: databaseUrl, max: 2, log })
+  const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log)
+  const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
+  const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
+  const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), Math.random, log)
   let running = true
   let wake: (() => void) | null = null
   const pause = (ms: number) => new Promise<void>(resolve => {
@@ -125,19 +180,35 @@ export function createPhotoWorker(environment: NodeJS.ProcessEnv = process.env,
     wake = () => { clearTimeout(timer); resolve() }
   })
   return {
+    tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : []), "avisos internos"],
     async run() {
       let nextCleanup = 0
+      let nextHeartbeat = 0
+      let nextBacklog = 0
       while (running) {
         try {
-          if (Date.now() >= nextCleanup) {
+          if (photos && Date.now() >= nextCleanup) {
             await photos.cleanup()
             nextCleanup = Date.now() + 60_000
           }
-          if (!(await photos.processNext())) await pause(2000)
+          // Un lote, una foto y una tanda de avisos por vuelta: ninguna cola atrasa a las otras.
+          const expired = expiries ? await expiries.expireNext() : false
+          const processed = photos ? await photos.processNext() : false
+          const delivered = (await outbox.processNext()) > 0
+          // K036: el latido marca el último ciclo exitoso; la salud de la API lo lee. Cada
+          // minuto se registra la demora y las tareas en error de cada cola.
+          if (Date.now() >= nextHeartbeat) {
+            await operations.recordWorkerCycle()
+            nextHeartbeat = Date.now() + 10_000
+          }
+          if (Date.now() >= nextBacklog) {
+            for (const queue of await operations.readBacklog()) log({ event: "worker_backlog", ...queue })
+            nextBacklog = Date.now() + 60_000
+          }
+          if (!expired && !processed && !delivered) await pause(2000)
         } catch (error) {
           // Sin SQL, rutas ni credenciales en el registro; se reintenta más tarde.
-          const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""
-          log({ event: "photo_worker_error", code: /^[A-Z0-9_]{2,30}$/.test(code) ? code : "INTERNAL" })
+          log({ event: "worker_error", code: errorCode(error) })
           await pause(5000)
         }
       }

@@ -18,7 +18,7 @@ ni usar mocks de identidad en el despliegue.
 | --- | --- |
 | PostgreSQL | Imagen `postgis/postgis:16-3.5`; volumen en `/var/lib/postgresql/data`; `PGDATA=/var/lib/postgresql/data/pgdata`; usuario, base y contraseña propia en variables Railway. Sin dominio público ni TCP proxy. |
 | API | Contexto de build `api/`, [Dockerfile](../api/Dockerfile), `node dist/index.js`, `PORT=3000`, healthcheck `/health`, restart `ON_FAILURE`. Pre-deploy: `npm run db:migrate`. |
-| Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. Valida fotos y limpia objetos; necesita `DATABASE_URL` y el almacenamiento de fotos. Sin ellos queda inactivo. |
+| Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. Registra [vencimientos](vencimientos.md) y genera los [avisos](avisos.md) del outbox con `DATABASE_URL`; valida fotos y limpia objetos si además tiene el almacenamiento de fotos. No usa `PICKUP_CODE_KEY` ni `WORKER_EXPIRIES`. Sin base queda inactivo. |
 | Web | Proyecto Vercel vinculado a `web/`, Node 24.x, Vite, `npm ci` y build configurado en `vercel.mjs`; salida `dist/`. |
 
 Railway conserva la configuración de los servicios. Al crear un entorno, fijar
@@ -26,8 +26,9 @@ estos valores antes del primer upload. Los uploads de Actions usan
 `railway up api --path-as-root`, por lo que el Dockerfile queda en la raíz del
 archivo enviado; el servicio no debe agregar otro prefijo `/api` al contexto.
 
-La API recibe `NODE_ENV=production`, una `CSRF_SIGNING_KEY` generada con
-`openssl rand -base64 32` y la referencia privada:
+La API recibe `NODE_ENV=production`, una `CSRF_SIGNING_KEY` y una
+`PICKUP_CODE_KEY` distintas, cada una generada con `openssl rand -base64 32`, y la
+referencia privada:
 
 ```text
 DATABASE_URL=postgresql://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{postgres.POSTGRES_DB}}
@@ -36,9 +37,11 @@ DATABASE_URL=postgresql://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSW
 API y worker reciben además `NODE_ENV=production`, ese mismo `DATABASE_URL`,
 `PHOTO_STORAGE=s3` y las cinco variables `PHOTO_S3_*` del bucket B2 privado
 ([fotos](fotos.md#configuración)). Sin `PHOTO_STORAGE`, cargar fotos responde 503,
-el worker queda inactivo y el resto del sitio funciona.
+el worker solo registra vencimientos y genera avisos, y el resto del sitio funciona.
 
-Conservar la clave CSRF al reiniciar. Los secretos quedan en Railway, nunca en
+Conservar ambas claves al reiniciar. Sin `PICKUP_CODE_KEY` la API no inicia y el
+healthcheck detiene el despliegue; cambiarla deja los códigos de retiro vigentes sin
+poder mostrarse ni verificarse ([reservas](reservas.md)). Los secretos quedan en Railway, nunca en
 variables `VITE_`. API y worker no están conectados al autodeploy de GitHub en
 Railway; el proyecto Vercel tampoco tiene un autodeploy Git independiente.
 
@@ -63,11 +66,12 @@ sin cancelar un despliegue a medio ejecutar:
 1. Sube API. Railway ejecuta las migraciones una sola vez como pre-deploy, antes
    del arranque. Un error impide activar la nueva API y detiene la secuencia.
 2. Espera `SUCCESS` del ID devuelto por ese upload, incluyendo healthcheck.
-3. Sube el worker y espera su propio ID.
-4. Construye y publica web en Vercel con el mismo SHA y un `release.json` público.
+3. En paralelo, sube el worker y espera su propio ID, y
+4. construye y publica web en Vercel con el mismo SHA y un `release.json` público.
+   La web depende solo de la API migrada, no del worker ([ADR 0015](adr/0015-deploy-de-worker-y-web-en-paralelo.md)).
    La CLI devuelve JSON plano en CI y envuelto en modo no interactivo; se admiten
    ambas respuestas y se exige `READY` y una URL HTTPS antes de continuar.
-5. Chromium comprueba SHA en el dominio estable, rutas SPA, botón de conexión,
+5. Con worker y web listos, Chromium (en caché, con reintentos) comprueba SHA en el dominio estable, rutas SPA, botón de conexión,
    PostGIS, cookies, login, sesión persistida y logout.
 6. Crea `deploy-<SHA>` y un release con commit, IDs de Railway, URL de Vercel y
    enlaces de CI/CD. Reejecutar el mismo commit actualiza ese release.
@@ -103,8 +107,8 @@ WEB_URL=https://rescate-rescate1.vercel.app npm --prefix api run test:deploy
 ```
 
 Sin credenciales se comprueban solo conexión, PostGIS y sesión anónima. Con
-`DEPLOY_SHA` se exige además que el dominio sirva ese commit. `/health` verifica
-el proceso HTTP; la búsqueda pública consulta PostgreSQL/PostGIS.
+`DEPLOY_SHA` se exige además que el dominio sirva ese commit. `/health` debe
+informar la base y el worker disponibles; la búsqueda pública verifica PostGIS.
 
 Las migraciones usan historial y advisory lock de node-pg-migrate. No se ejecutan
 al arrancar Express ni desde el worker. [La prueba de migraciones](migraciones.md)

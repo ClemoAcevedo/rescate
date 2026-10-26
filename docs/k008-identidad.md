@@ -9,7 +9,7 @@ Las mediciones originales de scrypt se conservan en la [guía HTTP](api/README.m
 
 | Operación | Resultado |
 | --- | --- |
-| POST `/auth/register` | Usuario + credencial atómicos; 201. No inicia sesión ni agrega membership. Duplicado canónico: 409. |
+| POST `/auth/register` | Usuario, credencial y consentimiento atómicos; 201. Exige `privacyConsent: true` (422 si falta o es false). No inicia sesión ni agrega membership. Duplicado canónico: 409. |
 | POST `/auth/login` | Scrypt, protección de intentos y sesión persistente de 12 horas. Cookie opaca; JSON sin secreto. |
 | GET `/auth/session` | Sesión pública o null, establecimientos actuales y CSRF. No renueva la sesión. |
 | POST `/auth/logout` | Revoca solo la sesión presentada; elimina ambas cookies; 204 sin cuerpo. Reintento: 401. |
@@ -58,8 +58,10 @@ Las pruebas de rollback histórico K010 fijan la versión que están verificando
 
 `user_credentials` separa identidad de capacidad de autenticar. Guarda sal de 16
 bytes, hash scrypt de 64 y N/r/p explícitos. No se fabrican credenciales para cuentas
-sin ellas. El registro confirma usuario y credencial en la misma transacción; si
-falla la segunda inserción, no queda usuario huérfano. UNIQUE resuelve también dos
+sin ellas. El registro confirma usuario, credencial y consentimiento en la misma
+transacción; si falla cualquiera, no queda usuario huérfano. El consentimiento se
+guarda en `user_consents` con la versión del texto aceptado; ver
+[ADR 0009](adr/0009-consentimiento-del-correo.md). UNIQUE resuelve también dos
 registros concurrentes con el mismo correo.
 
 La canonicalización reside únicamente en PostgreSQL (`canonicalize_email`, ICU raíz,
@@ -126,17 +128,12 @@ Es el patrón de [double-submit firmado](https://cheatsheetseries.owasp.org/chea
 
 Origin debe coincidir exactamente con un origen HTTPS configurado; ausente, null,
 ajeno o con barra extra falla. No se usa Referer ni CORS abierto. Todas las respuestas
-API son no-store; errores y logs no incluyen contraseña, cookie, tokens ni mensajes
-SQL. El único dato técnico registrado al fallar es categoría/código controlado.
+API son no-store. Qué registra la API al fallar está en
+[seguridad](seguridad.md#registros-sin-secretos).
 
-Los límites generales son token bucket: 120/minuto/usuario con ráfaga 20 y
-3000/minuto/IP con ráfaga 100. Login añade ventana móvil de 30 intentos/IP/15 minutos.
-Estos límites de tráfico son **por proceso**, con limpieza y mapas acotados; se
-reinician al reiniciar la API. El bloqueo de cuenta, en cambio, siempre persiste en
-PostgreSQL. Varios procesos multiplican límites de tráfico; deben complementarse
-con límites compartidos en el ingreso si se escala. No se confía en X-Forwarded-For:
-un proxy agrega clientes bajo su IP, de manera conservadora. La topología/proxies
-de confianza del despliegue debe fijarse antes de cambiar esa política.
+Los límites de tráfico por usuario e IP, el de login por IP y el bloqueo de cuenta,
+con dónde se cobra cada uno y qué sobrevive a un reinicio, están en
+[seguridad](seguridad.md#límites).
 
 ## Configuración y HTTPS local
 
@@ -205,7 +202,7 @@ El certificado ignorado por Chromium es solo el de esa prueba aislada.
 | --- | --- |
 | [Crypto](../api/test/identity-crypto.test.ts) | Sal aleatoria, verificación por parámetros persistidos, límites de costo/capacidad, secreto/huella canónicos. |
 | [Application](../api/test/identity-application.test.ts) | Ventana móvil, quinto fallo, éxito conserva eventos, bloqueo posterior a scrypt, expiración y errores de persistencia. |
-| [Seguridad](../api/test/auth-security.test.ts) | Firma CSRF, expiración/vínculo/clave, límites de tráfico y configuración cerrada. |
+| [Seguridad](../api/test/auth-security.test.ts) | Firma CSRF, expiración/vínculo/clave, límites de tráfico, regla de cinco fallos y configuración cerrada. |
 | [Infrastructure PostgreSQL](../api/scripts/test-identity.mjs) | Atomicidad, rollback, duplicado concurrente, lock/relectura y persistencia de hechos. |
 | [Funcional PostgreSQL/HTTPS](../api/scripts/test-auth.mjs) | Contrato auth, sesión tras reinicio real, permisos K010 actuales, rotación/logout, bloqueo persistente, expiración, concurrencia de cinco fallos, navegador HTTPS e indisponibilidad/recuperación de PostgreSQL. |
 | [Datos de demostración](lotes.md#datos-de-demostración) | El mismo recorrido funcional comprueba carga repetible, publicación por dos operadores, aislamiento y renovación explícita de fixtures vencidos. |

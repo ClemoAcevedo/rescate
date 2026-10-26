@@ -27,10 +27,16 @@ export interface IdentityRepository {
   findByEmail(canonicalEmail: string): Promise<{ user: IdentityUser; credential: PasswordCredential | null } | null>
   listEstablishments(userId: string): Promise<Array<{ id: string; name: string }>>
   findUserById(userId: string): Promise<IdentityUser | null>
-  /** Confirma ambas filas o ninguna. No normaliza, hashea, autentica ni da permisos. */
-  createUserWithCredential(canonicalEmail: string, credential: PasswordCredential): Promise<
+  /** Confirma usuario, credencial y consentimiento o nada. No normaliza, hashea, autentica ni da permisos. */
+  createUserWithCredential(canonicalEmail: string, credential: PasswordCredential, consent: EmailConsent): Promise<
     { kind: "created"; user: IdentityUser } | { kind: "email_exists" }
   >
+}
+
+/** Consentimiento para tratar el correo de la cuenta, sobre una versión del texto. */
+export interface EmailConsent {
+  policyVersion: string
+  grantedAt: Date
 }
 
 export interface PasswordHasher {

@@ -14,6 +14,7 @@ export function RegisterPage() {
   const form = useRef<HTMLFormElement>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [privacyConsent, setPrivacyConsent] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [result, setResult] = useState<FormResult>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -22,7 +23,7 @@ export function RegisterPage() {
     if (!form.current?.reportValidity()) return
     setErrors({}); setResult(null); setSubmitting(true)
     try {
-      await register({ email, password }); setPassword('')
+      await register({ email, password, privacyConsent }); setPassword('')
       setResult({ tone: 'success', message: 'Tu cuenta fue creada. El registro no inicia sesión: ahora puedes acceder con tus credenciales.' })
     } catch (error) {
       setErrors(fieldErrors(error))
@@ -36,6 +37,16 @@ export function RegisterPage() {
     <form ref={form} className="auth-form" onSubmit={submit}>
       <FormField label="Correo electrónico" error={errors.email} required>{(control) => <Input {...control} name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />}</FormField>
       <FormField label="Contraseña" hint="Debe tener al menos 12 caracteres." error={errors.password} required>{(control) => <Input {...control} name="password" type="password" autoComplete="new-password" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} />}</FormField>
+      <div className="consent-field">
+        <label className="consent-check">
+          <input type="checkbox" name="privacyConsent" required checked={privacyConsent}
+            aria-describedby={errors.privacyConsent ? 'privacy-consent-error' : undefined}
+            aria-invalid={errors.privacyConsent ? true : undefined}
+            onChange={(event) => setPrivacyConsent(event.target.checked)} />
+          <span>Acepto que Rescate guarde mi correo para identificar mi cuenta e iniciar sesión.</span>
+        </label>
+        {errors.privacyConsent && <span id="privacy-consent-error" className="ui-field__description ui-field__description--error">Debes aceptar para crear la cuenta.</span>}
+      </div>
       <Button type="submit" block loading={submitting}>{submitting ? 'Creando cuenta…' : 'Crear cuenta'}</Button>
     </form>
     <p className="auth-switch">¿Ya tienes una cuenta? <Link to="/login">Inicia sesión</Link>.</p>

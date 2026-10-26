@@ -34,8 +34,10 @@ try {
     RETURNING id`, [estate.rows[0].id, soldOutTitle])
   const soldOutUser = await db.query('INSERT INTO users(email) VALUES ($1) RETURNING id',
     [`sold-out-${randomUUID()}@example.invalid`])
-  await db.query(`INSERT INTO commitments (user_id, lot_id, quantity, status)
-    VALUES ($1, $2, 1, 'confirmed')`, [soldOutUser.rows[0].id, soldOut.rows[0].id])
+  // Fixture directo: la reserva y su movimiento F → R van juntos, como en la API.
+  await db.query(`WITH moved AS (UPDATE lots SET reserved_quantity = reserved_quantity + 1 WHERE id = $2 RETURNING id)
+    INSERT INTO commitments (user_id, lot_id, quantity, status)
+    SELECT $1, id, 1, 'confirmed' FROM moved`, [soldOutUser.rows[0].id, soldOut.rows[0].id])
   await page.goto(`${base}/lotes`)
   await page.getByText(title).waitFor()
   assert.equal(await page.getByText('Fotografía no disponible').count() > 0, true)
@@ -109,7 +111,7 @@ try {
   const registration = await page.evaluate(async ({ email, password }) => {
     const { csrfToken } = await (await fetch('/api/auth/session')).json()
     return (await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      body: JSON.stringify({ email, password }) })).status
+      body: JSON.stringify({ email, password, privacyConsent: true }) })).status
   }, { email, password })
   assert.equal(registration, 201)
   await page.locator('input[name="email"]').fill(email)
@@ -124,8 +126,9 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Quitar un pack' }).isDisabled(), true)
   // Otra persona consume un pack después de la lectura mostrada en pantalla.
   const another = await db.query('INSERT INTO users(email) VALUES ($1) RETURNING id', [`race-${randomUUID()}@example.invalid`])
-  await db.query(`INSERT INTO commitments (user_id, lot_id, quantity, status)
-    SELECT $1, id, 1, 'confirmed' FROM lots WHERE public_id=$2`, [another.rows[0].id, lotId])
+  await db.query(`WITH moved AS (UPDATE lots SET reserved_quantity = reserved_quantity + 1 WHERE public_id = $2 RETURNING id)
+    INSERT INTO commitments (user_id, lot_id, quantity, status)
+    SELECT $1, id, 1, 'confirmed' FROM moved`, [another.rows[0].id, lotId])
   const attempts = []
   await page.route(`**/public/lots/${lotId}/reservations`, async route => {
     attempts.push(route.request().postDataJSON())
@@ -136,7 +139,7 @@ try {
     } else await route.continue()
   })
   await page.getByRole('button', { name: 'Confirmar reserva' }).click()
-  await page.getByText('Reserva confirmada por 1 pack').waitFor()
+  await page.getByText('Solicitud registrada por 1 pack').waitFor()
   await page.getByText('1 pack libre', { exact: true }).waitFor()
   assert.equal(await page.locator('.reservation-confirmation').evaluate(element => element === document.activeElement), true)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
@@ -144,8 +147,23 @@ try {
   assert.deepEqual(attempts[0], attempts[1])
   assert.equal((await db.query('SELECT count(*)::int n FROM commitments WHERE lot_id=(SELECT id FROM lots WHERE public_id=$1)', [lotId])).rows[0].n, 2)
   console.log('OK: 502 HTML tras commit se recupera sin duplicar; disponibilidad se relee ante reservas ajenas')
+  await page.getByRole('link', { name: 'Ver mi reserva' }).click()
+  await page.getByRole('heading', { name: 'Código de retiro' }).waitFor()
+  const reservationId = new URL(page.url()).pathname.split('/').at(-1)
+  assert.match(await page.locator('.pickup-code p').textContent(), /^[0-9A-HJKMNP-TV-Z]{8}$/)
+  await page.getByRole('button', { name: 'Cancelar reserva', exact: true }).click()
+  await page.getByRole('button', { name: 'Confirmar cancelación' }).click()
+  await page.getByText('Cancelada', { exact: true }).waitFor()
+  assert.equal(await page.locator('.pickup-code').count(), 0)
   await page.reload()
-  await page.getByText('1 pack libre').waitFor()
+  await page.getByText('Cancelada', { exact: true }).waitFor()
+  await page.getByRole('link', { name: 'Volver a mis reservas' }).click()
+  await page.getByText('Cancelada', { exact: true }).waitFor()
+  const stored = await db.query('SELECT status, pickup_code_ciphertext FROM commitments WHERE public_id=$1', [reservationId])
+  assert.equal(stored.rows[0].status, 'cancelled')
+  assert.equal(stored.rows[0].pickup_code_ciphertext, null)
+  assert.equal((await db.query('SELECT reserved_quantity FROM lots WHERE public_id=$1', [lotId])).rows[0].reserved_quantity, 1)
+  console.log('OK K023: código vigente, cancelación confirmada e historial con API/PostgreSQL reales')
   assert.deepEqual(errors, [])
   console.log('OK: login vuelve al detalle y confirma reserva con API real')
 } finally {

@@ -10,7 +10,7 @@ export interface InMemoryLots extends LotRepository {
   establishments: Map<string, string>
   memberships: Set<string>
   lots: Map<string, Lot>
-  seedLot(lot: Partial<Lot> & Pick<Lot, "establishmentId" | "declaration">): Lot
+  seedLot(lot: Partial<Lot> & Pick<Lot, "establishmentId" | "description">): Lot
 }
 
 export function createInMemoryLots(now: () => Date = () => new Date()): InMemoryLots {
@@ -23,14 +23,14 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
 
   const writer: LotWriter = {
     isMemberOfEstablishment: isMember,
-    async updateDeclaration(update) {
+    async updateDescription(update) {
       const current = lots.get(update.publicId)
       if (current === undefined || current.version !== update.expectedVersion || current.status !== "draft") {
         throw new Error("La actualización del borrador no afectó ninguna fila")
       }
       const updated: Lot = {
         ...current,
-        declaration: update.declaration,
+        description: update.description,
         version: current.version + 1,
         updatedAt: update.updatedAt,
       }
@@ -71,10 +71,10 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
         hasNextPage: page.length > 20,
         items: page.slice(0, 20).map((lot) => ({
           publicId: lot.publicId, status: lot.status, version: lot.version,
-          description: lot.declaration.description, category: lot.declaration.category,
-          quantity: lot.declaration.quantity, reservedQuantity: 0,
-          pickupStartsAt: lot.declaration.pickupStartsAt, pickupEndsAt: lot.declaration.pickupEndsAt,
-          timeZone: lot.declaration.timeZone, createdAt: lot.createdAt, publishedAt: lot.publishedAt, photoId: null,
+          description: lot.description.description, category: lot.description.category,
+          quantity: lot.description.quantity, reservedQuantity: 0,
+          pickupStartsAt: lot.description.pickupStartsAt, pickupEndsAt: lot.description.pickupEndsAt,
+          timeZone: lot.description.timeZone, createdAt: lot.createdAt, publishedAt: lot.publishedAt, photoId: null,
         })),
       }
     },
@@ -87,7 +87,7 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
         publicId: seed.publicId ?? randomUUID(),
         establishmentId: seed.establishmentId,
         establishmentPublicId: seed.establishmentPublicId ?? "est_test",
-        declaration: seed.declaration,
+        description: seed.description,
         status: seed.status ?? "draft",
         version: seed.version ?? 1,
         createdAt: seed.createdAt ?? instant,
@@ -106,7 +106,7 @@ export function createInMemoryLots(now: () => Date = () => new Date()): InMemory
         publicId: randomUUID(),
         establishmentId: lot.establishmentId,
         establishmentPublicId: [...establishments].find(([, id]) => id === lot.establishmentId)![0],
-        declaration: lot.declaration,
+        description: lot.description,
         status: "draft",
         version: 1,
         createdAt: instant,

@@ -29,9 +29,11 @@ page.on('request', (request) => {
     commands.push({ method: request.method(), path: pathname, body })
   }
 })
-const ok = (message) => console.log(`✓ ${message}`)
+let lastStep = 'inicio'
+const ok = (message) => { lastStep = message; console.log(`✓ ${message}`) }
 const rateLimited = []
-page.on('response', (response) => { if (response.status() === 429) rateLimited.push(new URL(response.url()).pathname) })
+// Cada 429 registra la ruta y el último paso completado, para ubicar dónde se agota la cuota.
+page.on('response', (response) => { if (response.status() === 429) rateLimited.push(`${new URL(response.url()).pathname} tras «${lastStep}»`) })
 
 async function waitForApiResponse(path, method, action) {
   const responsePromise = page.waitForResponse((response) => {
@@ -73,7 +75,7 @@ async function signIn(accountEmail, from) {
   const registered = await page.evaluate(async ({ email, password }) => {
     const { csrfToken } = await (await fetch('/api/auth/session')).json()
     const response = await fetch('/api/auth/register', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ email, password }),
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ email, password, privacyConsent: true }),
     })
     return response.status
   }, { email: accountEmail, password })
@@ -205,6 +207,10 @@ try {
   assert.equal(await page.locator('[name="quantity"]').inputValue(), '10')
   assert.equal(await page.locator('[name="category"]').inputValue(), 'Panadería')
   ok('conflicto: 409 conserva lo escrito hasta que la persona recarga la versión actual')
+
+  // Desde K030 cada carga de página también consulta la bandeja de avisos: recuperar la ráfaga
+  // por usuario antes de publicar y recargar, igual que en los últimos pasos de esta cuenta.
+  await refillUserQuota()
 
   await publishButton.click()
   const confirm = page.getByRole('button', { name: 'Confirmar publicación' })
@@ -393,8 +399,22 @@ try {
   await page.unroute(/\/api\/lots\/[^/]+\/photos\/[^/]+\/(display|thumbnail)$/)
   ok('fotos: el detalle público muestra la foto; si la imagen falla, hay reemplazo y las condiciones siguen visibles')
 
+  // Forzar la carrera: el detalle público llega antes que la sesión real.
+  // Al resolver la sesión, LotDetail vuelve a cargar para el actor autenticado.
+  let releaseSession
+  const sessionReady = new Promise(resolve => { releaseSession = resolve })
+  const delayedSession = async route => {
+    const response = await route.fetch()
+    await sessionReady
+    await route.fulfill({ response })
+  }
+  await page.route('**/api/auth/session', delayedSession)
   await page.reload()
   const thumbs = page.getByRole('button', { name: /^Ver foto \d$/ })
+  await thumbs.nth(1).waitFor()
+  releaseSession()
+  await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).waitFor()
+  await page.unroute('**/api/auth/session', delayedSession)
   await thumbs.nth(1).waitFor()
   assert.equal(await thumbs.count(), 2)
   assert.equal(await thumbs.nth(0).getAttribute('aria-pressed'), 'true')

@@ -19,6 +19,7 @@ import { createSharpImageProcessor } from '../dist/infrastructure/images/sharp-i
 import { createLotUseCases } from '../dist/application/lots/use-cases.js'
 import { createPhotoUseCases, PROCESSING_LEASE_MS } from '../dist/application/photos/use-cases.js'
 import { createDiscoveryUseCases } from '../dist/application/discovery/use-cases.js'
+import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 import { photoObjectKeys } from '../dist/domain/photos.js'
 import { createApi } from '../dist/composition.js'
 import { assertContract } from '../test/support/openapi.ts'
@@ -57,7 +58,7 @@ const rejects = async (label, operation, expected) => {
 let clock = new Date('2026-09-28T12:00:00.000Z')
 const now = () => new Date(clock)
 const advance = ms => { clock = new Date(clock.getTime() + ms) }
-const declaration = {
+const description = {
   description: 'Pack ficticio con fotos', category: 'Panadería', quantity: 4, conditions: null,
   address: 'Dirección ficticia 123', latitude: -33.45, longitude: -70.66, timeZone: 'America/Santiago',
   pickupStartsAt: new Date('2026-09-29T15:00:00.000Z'), pickupEndsAt: new Date('2026-09-29T18:00:00.000Z'),
@@ -96,8 +97,8 @@ try {
   let lots = createLotUseCases(createLotRepository(pool), now)
   const objects = createLocalObjectStore(storage)
   let photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects, images: createSharpImageProcessor(), now })
-  const lot = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, declaration })
-  const second = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, declaration })
+  const lot = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, description })
+  const second = await lots.createDraft(operator, { establishmentId: establishments[0].public_id, description })
   const jpeg = await jpegWithExif()
   ok('datos ficticios: operador, operador ajeno, visitante y dos borradores')
 
@@ -212,7 +213,7 @@ try {
   const publicPhoto = await photos.read(null, second.publicId, a.publicId, 'display')
   assert.equal(publicPhoto.published, true)
   assert.equal((await sharp(publicPhoto.bytes).metadata()).format, 'webp')
-  const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), now)
+  const discovery = createDiscoveryUseCases(createDiscoveryRepository(pool), createPickupCodes(randomBytes(32)), now)
   const detail = await discovery.get(second.publicId)
   const [cover] = await query(`SELECT public_id::text FROM lot_photos WHERE status = 'ready'
     AND lot_id = (SELECT id FROM lots WHERE public_id = $1) ORDER BY position LIMIT 1`, [second.publicId])
@@ -268,7 +269,8 @@ try {
   // HTTP real: sesión K008, Origin/CSRF, cuerpo binario y respuestas contra OpenAPI.
   const origin = 'https://localhost:3443'
   const api = createApi({ DATABASE_URL: process.env.DATABASE_URL, RESCATE_ALLOWED_ORIGINS: origin,
-    CSRF_SIGNING_KEY: randomBytes(32).toString('base64'), PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: storage })
+    CSRF_SIGNING_KEY: randomBytes(32).toString('base64'), PICKUP_CODE_KEY: randomBytes(32).toString('base64'),
+    PHOTO_STORAGE: 'local', PHOTO_LOCAL_DIR: storage })
   const httpServer = api.app.listen(0, '127.0.0.1')
   await once(httpServer, 'listening')
   const base = `http://127.0.0.1:${httpServer.address().port}`
@@ -292,12 +294,12 @@ try {
   try {
     await call('GET', '/auth/session')
     const credentials = { email: 'operador-http-k014@example.invalid', password: 'Contraseña ficticia K014 segura' }
-    assert.equal((await call('POST', '/auth/register', { body: credentials, type: 'application/json' })).status, 201)
+    assert.equal((await call('POST', '/auth/register', { body: { ...credentials, privacyConsent: true }, type: 'application/json' })).status, 201)
     const [registered] = await query('SELECT id::text FROM users WHERE email = $1', [credentials.email])
     await query('INSERT INTO memberships(user_id, establishment_id) VALUES ($1, $2)', [registered.id, establishments[0].id])
     assert.equal((await call('POST', '/auth/login', { body: credentials, type: 'application/json' })).status, 200)
     const created = await call('POST', `/establishments/${establishments[0].public_id}/lots`, { type: 'application/json', body: {
-      ...declaration, pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z' } })
+      ...description, pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z' } })
     assert.equal(created.status, 201)
     const lotId = created.body.id
     const photosPath = `/lots/${lotId}/photos`
@@ -362,8 +364,8 @@ try {
   const [code] = await once(worker, 'exit')
   assert.equal(status, 'ready')
   assert.equal(code, 0, 'SIGTERM termina el worker de forma ordenada')
-  assert.match(output, /Worker iniciado: validación y limpieza de fotos/)
-  assert.doesNotMatch(output, /postgresql:|PHOTO_|photo_worker_error/)
+  assert.match(output, /Worker iniciado: vencimientos; validación y limpieza de fotos/)
+  assert.doesNotMatch(output, /postgresql:|PHOTO_|worker_error/)
   assert.ok(peak > 0 && peak < 768, `memoria máxima del worker: ${peak.toFixed(1)} MiB`)
   const [heavyRow] = await query('SELECT width, height, source_bytes FROM lot_photos WHERE public_id = $1', [heavy.publicId])
   assert.equal(Math.max(heavyRow.width, heavyRow.height), 1600)

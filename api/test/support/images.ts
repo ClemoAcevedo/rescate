@@ -5,10 +5,13 @@ import sharp from "sharp"
 const solid = (width: number, height: number, background: string) =>
   sharp({ create: { width, height, channels: 3, background } })
 
-/** JPEG con EXIF (autor, copyright y orientación 6) para comprobar que se elimina. */
+/** JPEG con EXIF (autor, copyright, GPS y orientación 6) para comprobar que se elimina. */
 export const jpegWithExif = (width = 2400, height = 1800) =>
   solid(width, height, "#3a7").jpeg({ quality: 90 }).withMetadata({ orientation: 6 })
-    .withExif({ IFD0: { Artist: "Persona ficticia", Copyright: "Dato privado de prueba" } })
+    .withExif({
+      IFD0: { Artist: "Persona ficticia", Copyright: "Dato privado de prueba" },
+      IFD3: { GPSLatitudeRef: "S", GPSLatitude: "33/1 26/1 0/1", GPSLongitudeRef: "W", GPSLongitude: "70/1 39/1 0/1" },
+    })
     .toBuffer()
 
 /** Ruido: no se comprime bien, sirve para límites de tamaño. */

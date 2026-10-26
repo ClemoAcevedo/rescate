@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Button } from './ui/Button'
 import { Icon } from './Icon'
+import { NotificationsLink } from './NotificationsLink'
 import { RescateLogo } from './RescateLogo'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -33,7 +34,7 @@ export function SiteHeader() {
   // El enlace orienta la navegación; la API vuelve a comprobar la membresía en cada operación.
   const isOperator = Boolean(session && session.operableEstablishments.length > 0)
   const navigationItems = session
-    ? [{ to: '/lotes', label: 'Explorar lotes', end: false }, ...(isOperator ? [{ to: '/operador/lotes', label: 'Mis lotes', end: true }] : [])]
+    ? [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/espera', label: 'Mis esperas', end: false }, { to: '/reservas', label: 'Mis reservas', end: false }, ...(isOperator ? [{ to: '/operador/panel', label: 'Mi establecimiento', end: true }, { to: '/operador/lotes', label: 'Mis lotes', end: true }] : [])]
     : [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/registro', label: 'Registro', end: false }]
 
   return (
@@ -79,6 +80,7 @@ export function SiteHeader() {
             {label}
           </NavLink>
         ))}
+        {session && <NotificationsLink key={session.user.id} onNavigate={closeMenu} />}
         {isOperator && (
           <NavLink className="ui-button ui-button--primary main-navigation__cta" to="/operador/lotes/nuevo" onClick={closeMenu}>
             <Icon name="plus" />Publicar lote

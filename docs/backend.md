@@ -7,13 +7,16 @@ las decisiones y procedimientos completos.
 
 [app.ts](../api/src/app.ts) conserva `GET /health` y monta las cuatro operaciones
 [de lotes K010](lotes.md). [Composition](../api/src/composition.ts)
-ensambla Pool, repositorio, casos de uso y HTTP. La salud no consulta PostgreSQL
-ni B2. [K008](k008-identidad.md) incorpora las cuatro operaciones auth, scrypt,
+ensambla Pool, repositorio, casos de uso y HTTP. La salud consulta PostgreSQL y el
+último ciclo del worker, no B2 ([operación](operacion.md)). [K008](k008-identidad.md) incorpora las cuatro operaciones auth, scrypt,
 sesiones persistentes, cookies, origen/CSRF y Actor real. No hay actor temporal
 en runtime. K015 añade búsqueda PostGIS y reserva directa bajo bloqueo;
 [ADR 0004](adr/0004-reserva-directa-idempotente.md) define sus reintentos.
 K014 agrega carga, lectura y retiro de [fotos](fotos.md); el [worker](../api/src/worker.ts)
-las valida y limpia objetos con los mismos casos de uso de Application.
+las valida y limpia objetos con los mismos casos de uso de Application. K022 agrega
+[reservas](reservas.md): consulta del titular, cancelación, código de retiro, entrega
+y vencimiento ([ADR 0007](adr/0007-codigo-de-retiro-y-transiciones.md)). K028 hace que
+el worker registre los [vencimientos](vencimientos.md) de lotes, reservas y ofertas.
 
 ## Documentación vigente por tarea
 
@@ -22,7 +25,9 @@ las valida y limpia objetos con los mismos casos de uso de Application.
 | Entender estado actual y arquitectura objetivo | [Arquitectura](arquitectura/arquitectura.md) y [ADR 0003](adr/0003-arquitectura-incremental-s02.md) |
 | Implementar o consumir contratos HTTP S02 | [Guía HTTP](api/README.md) y [OpenAPI](api/openapi.yaml) |
 | Trabajar en lotes | [Lotes](lotes.md) |
-| Entender identidad, atomicidad y seguridad | [K008](k008-identidad.md) |
+| Trabajar en cancelación, código de retiro o entregas | [Reservas](reservas.md) |
+| Entender identidad, sesiones y atomicidad | [K008](k008-identidad.md) |
+| Límites de intentos, aislamiento por objeto y registros sin secretos | [Seguridad](seguridad.md) y [ADR 0013](adr/0013-limite-de-codigos-de-retiro.md) |
 | Levantar el entorno y ejecutar checks | [Entorno local y CI](desarrollo-local.md) |
 | Desplegar web/API y operar releases | [Railway, Vercel y CD](despliegue.md) |
 | Consultar persistencia y operar migraciones | [Modelo K003](modelo-inicial.md), [guía de migraciones](migraciones.md) y [ADR 0001](adr/0001-gestor-de-migraciones.md) |

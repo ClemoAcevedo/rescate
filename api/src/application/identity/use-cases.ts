@@ -1,4 +1,5 @@
-import { LOGIN_WINDOW_MS, SESSION_DURATION_MS, validEmail, validPassword } from "../../domain/identity.js"
+import { PRIVACY_POLICY_VERSION, SESSION_DURATION_MS, validEmail, validPassword } from "../../domain/identity.js"
+import { blockAfterFailure, expiredFailuresCutoff, retryAfterSeconds } from "../../domain/attempts.js"
 import { IdentityError } from "./errors.js"
 import type { EmailCanonicalizer, IdentityRepository, IdentityUser, LoginSecurityRepository, PasswordCredential, PasswordHasher, SessionCredentials, SessionRepository, StoredSession } from "./ports.js"
 
@@ -22,14 +23,18 @@ export function createIdentityUseCases(d: IdentityDependencies) {
     return canonical
   }
   function blocked(until: Date | null | undefined, now: Date) {
-    if (until && until > now) throw new IdentityError("login_blocked", [], Math.ceil((until.getTime() - now.getTime()) / 1000))
+    const retryAfter = retryAfterSeconds(until ?? null, now)
+    if (retryAfter > 0) throw new IdentityError("login_blocked", [], retryAfter)
   }
   return {
-    async register(email: string, password: string) {
+    async register(email: string, password: string, privacyConsent: boolean) {
       if (email.includes("\u0000")) throw new IdentityError("invalid_input", ["email"])
+      // Sin consentimiento no se guarda el correo, así que no hay cuenta.
+      if (!privacyConsent) throw new IdentityError("invalid_input", ["privacyConsent"])
     const canonical = await input(email, password)
       const credential = await d.passwords.hash(password)
-      const result = await d.identities.createUserWithCredential(canonical, credential)
+      const result = await d.identities.createUserWithCredential(canonical, credential,
+        { policyVersion: PRIVACY_POLICY_VERSION, grantedAt: d.now() })
       if (result.kind === "email_exists") throw new IdentityError("email_exists")
       return result.user
     },
@@ -46,13 +51,12 @@ export function createIdentityUseCases(d: IdentityDependencies) {
       const result = await d.security.withAccountLock(account.user.id, async (state, writer) => {
         const now = d.now() // Releer después de esperar el lock, no antes de scrypt.
         blocked(state.blockedUntil, now)
-        const cutoff = new Date(now.getTime() - LOGIN_WINDOW_MS)
-        await writer.deleteFailuresThrough(cutoff)
+        await writer.deleteFailuresThrough(expiredFailuresCutoff(now))
         await writer.setBlockedUntil(null)
         if (!verified || !account.credential) {
-          const recent = state.failureTimes.filter(at => at > cutoff && at <= now).length
+          const until = blockAfterFailure(state.failureTimes, now)
           await writer.recordFailure(now)
-          if (recent + 1 >= 5) await writer.setBlockedUntil(new Date(now.getTime() + LOGIN_WINDOW_MS))
+          if (until) await writer.setBlockedUntil(until)
           return null // Confirmar el fallo antes de responder 401.
         }
         // Éxito no borra fallos recientes. Rotación y nueva sesión son atómicas.
