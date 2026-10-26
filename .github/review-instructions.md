@@ -15,8 +15,15 @@ integridad de datos y regresiones sobre preferencias de estilo.
   una nueva migración compatible con los datos existentes.
 - En la web, comprueba estados de carga/error, accesibilidad y reutilización de
   los primitives y tokens existentes.
+  Sigue el recorrido después de un 4xx/5xx: los formularios deben permitir corregir
+  entradas y los reintentos deben poder recuperar la operación.
 - Contrasta las afirmaciones del PR con el código y la evidencia. Distingue
   comprobaciones ejecutadas de pruebas sugeridas; no inventes resultados.
+- Cada hallazgo necesita un caso concreto y evidencia visible del código. Busca
+  también validaciones que puedan refutarlo antes de publicarlo. Una dependencia
+  sin definición disponible o una API recordada de otra versión no demuestra un bug.
+- La cobertura es la del diff recibido y su contexto explícito. No des por revisados
+  archivos omitidos ni conviertas la descripción del autor en una aprobación general.
 
 Los comandos y requisitos de validación están en
 [Entorno local y CI](../docs/desarrollo-local.md#los-mismos-checks-que-ci).

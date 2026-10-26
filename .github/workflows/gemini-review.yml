@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.14.0'
-      - run: node --test .github/scripts/gemini-review.test.mjs
+      - run: node --test --test-isolation=none .github/scripts/*.test.mjs
 
   review:
     name: Reviewer / Gemini 3.5 Flash-Lite
@@ -33,13 +33,17 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
+          # Execute only the reviewer/rules already present in the PR base.
+          # Full Git objects supply diffs and context; PR code is read as data.
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -51,3 +55,13 @@ jobs:
           REVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}
           REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node .github/scripts/gemini-review.mjs
+      - name: Preserve validated review and usage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            review-result.json
+            review-usage.json
+          if-no-files-found: ignore
+          retention-days: 14

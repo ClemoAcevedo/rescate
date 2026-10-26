@@ -202,27 +202,56 @@ productos; las condiciones de pago son distintas.
 
 ### Alcance y diagnóstico
 
-El script envía las reglas de `AGENTS.md`, las
-[instrucciones compartidas](../.github/review-instructions.md), el título,
-la descripción y los diffs del PR. Consulta Gemini sin herramientas ni ejecución
-del código recibido. Ante un `503` o un tiempo de espera agotado, reintenta hasta
-dos veces, esperando 10 y 20 segundos y comprobando que el SHA sigue vigente.
-Cada intento tiene un límite de 120 segundos; el job completo, ocho minutos.
-Los errores de clave, cuota y formato no se reintentan automáticamente.
-El presupuesto de diffs es de
-60 000 caracteres: omite archivos completos que no caben o no tienen patch y
-los identifica en la revisión como cobertura parcial. GitHub puede limitar el
-patch de archivos grandes; el reviewer solo conoce los fragmentos recibidos.
+El job ejecuta el reviewer y lee `AGENTS.md` y las
+[instrucciones compartidas](../.github/review-instructions.md) desde el **base SHA**.
+Lee los objetos Git del PR como datos: no instala sus paquetes ni ejecuta su código.
+Una modificación del reviewer se activa cuando llega a la rama destino; su propio PR
+se revisa con la versión que ya existe en esa base.
 
-El workflow cancela la ejecución anterior al llegar otro commit y comprueba el
-SHA antes de publicar. Reejecutar un SHA que ya tiene revisión no consume otra
-consulta. Un resultado sin hallazgos solo se refiere a los diffs enviados.
+El [planificador](../.github/scripts/review-context.mjs) recupera el diff completo
+desde el merge-base hasta el HEAD, sin depender del patch recortado de GitHub.
+Prioriza código de producción y reparte todos los diffs de texto en hasta 16 lotes
+de 60 000 caracteres JSON cada uno. Divide también bloques grandes conservando los
+números de línea de ambos lados. Binarios, cambios sin diff de texto, líneas que no
+caben y límites excedidos quedan enumerados como pendientes; no producen cobertura
+completa.
 
-Si se agotan los reintentos, falta la clave, Gemini rechaza el acceso, se agota la cuota (`429`) o devuelve
-una respuesta incompleta o ubicaciones inválidas, el job falla con un mensaje en
-Actions y no publica una revisión. Corregir la configuración o esperar la
-renovación de cuota y usar **Re-run failed jobs** en la ejecución de **Gemini PR
-Review**. Este job es independiente del CI del producto.
+Cada lote añade hasta 30 000 caracteres de extractos numerados del HEAD: versiones
+de `package.json`, configuración TypeScript, imports relativos directos y documentación
+del área modificada. Es contexto selectivo, no resolución completa de dependencias:
+los archivos recortados se identifican. El contrato HTTP modificado puede aportar
+extractos adicionales cuando cabe. El título y la descripción del autor son contexto,
+no evidencia de corrección ni instrucciones para el modelo.
+
+Gemini usa [razonamiento alto](https://ai.google.dev/gemini-api/docs/thinking) y
+salida estructurada. Debe enumerar todas las rutas recibidas y cada hallazgo necesita
+ubicación cambiada (`RIGHT` o `LEFT`), caso concreto, impacto, corrección y una cita
+exacta de código visible, con confianza mínima 0,85. Una segunda consulta intenta
+refutar cada candidato: confirmarlo o descartarlo requiere evidencia visible y
+confianza mínima 0,90. Un candidato sin verificar deja la revisión incompleta.
+Estas validaciones no demuestran que el modelo haya encontrado todos los bugs.
+
+Ante HTTP 500/502/503/504 o fallos de conexión/timeout, reintenta hasta dos veces,
+esperando 10 y 20 segundos. Cada intento dura hasta 120 segundos; la revisión tiene
+20 minutos de presupuesto total y el job 25. Los errores de clave, cuota (`429`) y
+formato no se reintentan automáticamente. El bot comprueba HEAD, base y estado del
+PR antes de cada consulta, reintento y publicación; descarta resultados obsoletos.
+
+Una revisión incompleta aparece advertida al principio del comentario y deja el
+job fallido, conservando los hallazgos confirmados y la lista de pendientes. Se
+puede repetir con **Re-run failed jobs** sobre el mismo HEAD y base después de
+resolver la causa. Solo una revisión completa de esta versión y de ambos SHA
+suprime consultas duplicadas. Si falta la clave o no se puede preparar el diff,
+el error aparece en Actions antes de consultar el modelo.
+
+El artefacto `gemini-review-RUN-ATTEMPT` conserva durante 14 días `review-result.json`
+con cobertura y decisiones, y `review-usage.json` con los tokens informados por Gemini,
+sin prompts ni credenciales. El consumo se guarda antes y después de cada llamada,
+también si su respuesta es inválida o el SHA cambia. `unknownRequests` indica consultas
+cuyo consumo no fue informado: el total conocido no equivale a una factura.
+Los logs solo muestran conteos y diagnósticos. El número de consultas crece con los
+lotes, hallazgos y reintentos; los tests locales no consumen API. Este job es
+independiente del CI del producto y no aprueba ni integra PRs.
 
 Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
 título **Revisión de Gemini 3.5 Flash-Lite** y el SHA vigente. Un job verde por sí solo
@@ -230,7 +259,7 @@ no acredita una revisión: también puede haber omitido un commit reemplazado.
 Las pruebas del reviewer se ejecutan sin claves con:
 
 ```bash
-node --test .github/scripts/gemini-review.test.mjs
+node --test --test-isolation=none .github/scripts/*.test.mjs
 ```
 
 Las instrucciones de Copilot remiten al mismo archivo compartido. Su regla de
