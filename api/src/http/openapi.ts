@@ -171,6 +171,10 @@ export interface HttpSchemas {
   OperatorCommitmentPage: OperatorCommitmentPage
   ActivityEvent: ActivityEvent
   ActivityPage: ActivityPage
+  SendMessageRequest: SendMessageRequest
+  SentMessage: SentMessage
+  ChatMessage: ChatMessage
+  ChatMessagePage: ChatMessagePage
 }
 export interface LoginRequest {
   email: EmailInput
@@ -796,4 +800,53 @@ export interface ActivityPage {
   items: ActivityEvent[]
   page: number
   hasNextPage: boolean
+}
+export interface SendMessageRequest {
+  /**
+   * Texto plano de 1 a 1000 caracteres, contados después de recortar los espacios de los bordes.
+   */
+  text: string
+  /**
+   * UUID generado por el cliente para una intención de envío.
+   */
+  idempotencyKey: string
+}
+/**
+ * Resultado del envío. No repite el texto porque el cliente ya lo tiene.
+ */
+export interface SentMessage {
+  id: PublicId
+  /**
+   * Posición del mensaje en la conversación.
+   */
+  sequence: number
+  createdAt: Instant
+}
+/**
+ * Mensaje del chat. Dice si lo escribió el titular o el establecimiento sin revelar qué operador fue.
+ */
+export interface ChatMessage {
+  id: PublicId
+  sequence: number
+  author: "holder" | "operator"
+  /**
+   * true si lo escribió quien consulta.
+   */
+  mine: boolean
+  text: string
+  createdAt: Instant
+}
+export interface ChatMessagePage {
+  /**
+   * @maxItems 50
+   */
+  items: ChatMessage[]
+  /**
+   * true si hay más mensajes después del último de items.
+   */
+  hasMore: boolean
+  /**
+   * true mientras se puede escribir. Cancelar, vencer o retirar la reserva o cerrar el lote lo dejan en false para siempre.
+   */
+  open: boolean
 }

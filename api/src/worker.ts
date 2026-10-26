@@ -1,5 +1,6 @@
 // Worker: proceso separado de la API que registra vencimientos de lotes, reservas y
-// ofertas (K028), genera los avisos del outbox (K030) y valida fotos y limpia objetos (K014).
+// ofertas (K028), genera los avisos del outbox (K030), valida fotos y limpia objetos (K014)
+// y borra a diario el texto de los chats vencidos (K037).
 import { createWorker } from "./composition.js"
 
 const worker = createWorker()

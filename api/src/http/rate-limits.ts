@@ -44,7 +44,7 @@ export function createTrafficLimits(now: () => number = Date.now) {
     login: (ip: string) => slidingWindow(`login:${ip}`, 30, 900000),
     /** Revisar o confirmar un código de retiro (K034): 30 por IP cada minuto, cobrado tras el permiso. */
     pickupCode: (ip: string) => slidingWindow(`pickup-code:${ip}`, 30, 60000),
-    /** Enviar un mensaje de chat: 12 por minuto y usuario, ráfaga 3. Lo aplica K037 (#40). */
+    /** Enviar un mensaje de chat: 12 por minuto y usuario, ráfaga 3. */
     message: (id: string) => bucket(`message:${id}`, 12, 3),
   }
 }

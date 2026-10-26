@@ -37,6 +37,9 @@ import { createNotificationsRouter } from "./http/notifications-router.js"
 import { createPanelUseCases } from "./application/panel/use-cases.js"
 import { createPanelRepository } from "./infrastructure/postgres/panel-repository.js"
 import { createPanelRouter } from "./http/panel-router.js"
+import { createChatRetention, createChatUseCases } from "./application/chat/use-cases.js"
+import { createChatRepository } from "./infrastructure/postgres/chat-repository.js"
+import { createChatRouter } from "./http/chat-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
@@ -137,9 +140,11 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
   const notificationsRouter = createNotificationsRouter(
     createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
     authentication.authenticate, authentication.protectCommand, log)
+  const chatRouter = createChatRouter(createChatUseCases(createChatRepository(pool), () => new Date()),
+    authentication.authenticate, authentication.protectCommand, limits, log)
   const panelRouter = createPanelRouter(createPanelUseCases(createPanelRepository(pool), () => new Date()),
     authentication.authenticate, log)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, panelRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, chatRouter, panelRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
     // /health no pasa por el límite por IP: checkHealth comparte una sola consulta a la base.
     health: operations.checkHealth,
     traffic: (req, res, next) => {
@@ -154,8 +159,8 @@ export interface Worker { tasks: string[]; run(): Promise<void>; stop(): void }
 
 /**
  * Worker: registra vencimientos de lotes, reservas y ofertas (K028), genera los avisos
- * del outbox por tandas (K030) y valida una foto por vez y limpia objetos cada minuto
- * (K014). Reutiliza los casos de uso de Application. Sin DATABASE_URL no hay trabajo;
+ * del outbox por tandas (K030), valida una foto por vez y limpia objetos cada minuto
+ * (K014) y borra una vez al día el texto de los chats que ya cumplieron su retención (K037). Reutiliza los casos de uso de Application. Sin DATABASE_URL no hay trabajo;
  * sin almacenamiento no procesa fotos. `WORKER_EXPIRIES=off` apaga los vencimientos,
  * para pruebas que mueven plazos sobre una base compartida y esperan vencimientos sin registrar.
  */
@@ -173,6 +178,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
     images: createSharpImageProcessor(), now: () => new Date(), log })
   const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
   const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), Math.random, log)
+  const chat = createChatRetention(createChatRepository(pool), log)
   let running = true
   let wake: (() => void) | null = null
   const pause = (ms: number) => new Promise<void>(resolve => {
@@ -180,11 +186,12 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
     wake = () => { clearTimeout(timer); resolve() }
   })
   return {
-    tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : []), "avisos internos"],
+    tasks: [...(expiries ? ["vencimientos"] : []), ...(photos ? ["validación y limpieza de fotos"] : []), "avisos internos", "retención del chat"],
     async run() {
       let nextCleanup = 0
       let nextHeartbeat = 0
       let nextBacklog = 0
+      let nextChatRetention = 0
       while (running) {
         try {
           if (photos && Date.now() >= nextCleanup) {
@@ -204,6 +211,11 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
           if (Date.now() >= nextBacklog) {
             for (const queue of await operations.readBacklog()) log({ event: "worker_backlog", ...queue })
             nextBacklog = Date.now() + 60_000
+          }
+          // Cada reinicio también borra, y eso no molesta porque borrar lo ya borrado no cambia nada
+          if (Date.now() >= nextChatRetention) {
+            await chat.eraseExpired()
+            nextChatRetention = Date.now() + 24 * 60 * 60 * 1000
           }
           if (!expired && !processed && !delivered) await pause(2000)
         } catch (error) {
