@@ -22,8 +22,11 @@ const packs = (quantity: number) => `${quantity} ${quantity === 1 ? 'pack' : 'pa
 const packsThat = (quantity: number, adjective: string) => `${packs(quantity)} ${adjective}${quantity === 1 ? '' : 's'}`
 const percent = new Intl.NumberFormat('es-CL', { style: 'percent', maximumFractionDigits: 1 })
 /** Fechas locales del período (YYYY-MM-DD), sin reinterpretarlas en la zona del navegador. */
-const formatDate = (date: string) => new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'UTC' })
-  .format(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))))
+const dateUtc = (date: string) => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)))
+const formatDate = (date: string) => new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'UTC' }).format(dateUtc(date))
+/** Igual que MAX_PERIOD_DAYS de la API: ambas fechas incluidas. */
+const MAX_PERIOD_DAYS = 366
+const periodDays = (from: string, to: string) => Math.round((dateUtc(to) - dateUtc(from)) / 86_400_000) + 1
 
 /** Q = F + O + R + E + X; el orden sigue el recorrido de un pack (anexos B p. 4). */
 const inventoryParts = [
@@ -231,6 +234,7 @@ function PeriodForm({ from, to, onApply }: { from: string; to: string; onApply: 
     event.preventDefault()
     if (!draft.from || !draft.to) { setError('Indica ambas fechas.'); return }
     if (draft.from > draft.to) { setError('La fecha inicial no puede ser posterior a la final.'); return }
+    if (periodDays(draft.from, draft.to) > MAX_PERIOD_DAYS) { setError(`El período puede abarcar como máximo ${MAX_PERIOD_DAYS} días.`); return }
     setError(null)
     onApply(draft.from, draft.to)
   }
@@ -266,6 +270,7 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
     for (const [key, value] of Object.entries(changes)) if (value) next.set(key, value); else next.delete(key)
     setParams(next)
   }
+  const applyPeriod = (nextFrom: string, nextTo: string) => update({ desde: nextFrom, hasta: nextTo })
   const data = panel.value
   const timeZone = data?.establishment.timeZone ?? 'America/Santiago'
   const openLots = data?.current.lots ?? []
@@ -299,6 +304,15 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
 
       {panel.error && <Alert tone="danger" role="alert">{panel.error} <Button variant="secondary" onClick={() => setRefresh(value => value + 1)}>Reintentar</Button></Alert>}
       {panel.loading && !data && !panel.error && <p className="panel__status" role="status">Cargando el panel…</p>}
+      {/* Sin datos no hay sección de período: si el error viene de las fechas de la URL, se corrigen aquí. */}
+      {panel.error && !data && (from || to) && (
+        <section className="panel__section" aria-labelledby="panel-period">
+          <div className="panel__section-head">
+            <h2 id="panel-period">Resultados del período</h2>
+            <PeriodForm from={from ?? ''} to={to ?? ''} onApply={applyPeriod} />
+          </div>
+        </section>
+      )}
 
       {data && (
         <>
@@ -344,7 +358,7 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
           <section className="panel__section" aria-labelledby="panel-period">
             <div className="panel__section-head">
               <h2 id="panel-period">Resultados del período</h2>
-              <PeriodForm from={data.period.from} to={data.period.to} onApply={(nextFrom, nextTo) => update({ desde: nextFrom, hasta: nextTo })} />
+              <PeriodForm from={data.period.from} to={data.period.to} onApply={applyPeriod} />
             </div>
             <p className="panel-period__scope">
               Lotes cerrados entre el {formatDate(data.period.from)} y el {formatDate(data.period.to)}: <strong>{data.period.closedLots}</strong>.

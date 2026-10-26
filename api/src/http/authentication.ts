@@ -26,7 +26,10 @@ export function createAuthentication(useCases: IdentityUseCases, csrf: CsrfToken
     let pending = resolved.get(req)
     if (!pending) {
       pending = useCases.resolveSession(readCookie(req, SESSION_COOKIE)).then(context => {
-        if (context) limits.user(context.user.id)
+        if (context) {
+          if (req.method === "GET" || req.method === "HEAD") limits.userRead(context.user.id)
+          else limits.user(context.user.id)
+        }
         return context
       })
       resolved.set(req, pending)

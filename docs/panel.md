@@ -58,6 +58,9 @@ cuatro cifras de hoy, una tarjeta por lote abierto con su barra de inventario (l
 lleva los mismos valores como texto), los resultados del período con un formulario de
 fechas, los compromisos filtrables por lote y estado, y el historial. El establecimiento,
 el período, el lote y el estado viven en la URL. «Actualizar» vuelve a consultar todo.
+El formulario rechaza un período invertido o de más de 366 días antes de consultar; si
+las fechas inválidas llegan por la URL, el error del panel conserva el formulario para
+corregirlas.
 
 ## Pruebas
 
@@ -65,4 +68,4 @@ el período, el lote y el estado viven en la URL. «Actualizar» vuelve a consul
 | --- | --- |
 | `npm --prefix api test` | Período por defecto, una sola fecha, invertido y de 366 días; día local de Santiago; tasas sin denominador; autorización y totales como suma de filas; estado vigente de los compromisos; transporte HTTP contra OpenAPI y 422 por parámetro. |
 | `npm --prefix api run db:test:panel:compose` | PostgreSQL real con dos establecimientos: cierre registrado y sin registrar, oferta aceptada, cola, borrador, período en días de Santiago, cuadre con `commitments` y `deliveries`, compromisos vigentes y terminados sin solaparse, historial ordenado y paginado, accesos cruzados y respuestas sin códigos ni titulares. |
-| `npm --prefix api run test:web:panel` | Chromium con API real: cifras, inventario, indicadores y exclusiones, filtros por estado y por lote, validación del período, acceso por establecimiento, 360 px sin desplazamiento horizontal y sin 429. Corre dentro de `test:web:compose`. |
+| `npm --prefix api run test:web:panel` | Chromium con API real: cifras, inventario, indicadores y exclusiones, filtros por estado y por lote, validación del período (también de más de 366 días y corrección tras el 422 de la URL), acceso por establecimiento, 360 px sin desplazamiento horizontal y sin 429. Corre dentro de `test:web:compose`. |
