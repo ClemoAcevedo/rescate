@@ -242,8 +242,10 @@ Estas validaciones no demuestran que el modelo haya encontrado todos los bugs.
 
 Ante HTTP 500/502/503/504 o fallos de conexión/timeout, Gemini reintenta hasta cuatro
 veces, esperando 10, 20, 40 y 80 segundos. Si Gemini falla, devuelve formato inválido
-o cobertura incompleta, el reviewer intenta OpenRouter. Cada intento dura hasta 120
-segundos; la revisión tiene 20 minutos de presupuesto total y el job 25. En particular,
+o cobertura incompleta, el reviewer intenta OpenRouter. Si la respuesta de OpenRouter
+no pasa la validación, solicita una corrección una vez y vuelve a validarla; si vuelve
+a fallar, deja la revisión incompleta. Cada intento dura hasta 120 segundos; la revisión
+tiene 20 minutos de presupuesto total y el job 25. En particular,
 `401` indica una clave ausente o inválida; `429` indica límite de uso; `503` indica que
 el servicio está temporalmente sobrecargado o caído. El bot comprueba HEAD, base y
 estado del PR antes de cada consulta, reintento y publicación; descarta resultados
@@ -266,7 +268,7 @@ lotes, hallazgos y reintentos; los tests locales no consumen API. Este job es
 independiente del CI del producto y no aprueba ni integra PRs.
 
 Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
-título **Revisión de Gemini 3.5 Flash-Lite** y el SHA vigente. Un job verde por sí solo
+título **Revisión automática** y el SHA vigente. Un job verde por sí solo
 no acredita una revisión: también puede haber omitido un commit reemplazado.
 Las pruebas del reviewer se ejecutan sin claves con:
 
