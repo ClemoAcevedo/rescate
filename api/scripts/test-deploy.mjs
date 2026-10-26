@@ -94,6 +94,9 @@ try {
     const sessionStatus = page.locator('.session-status')
     const logoutButton = page.getByRole('button', { name: 'Cerrar sesión', exact: true })
     try {
+      await sessionStatus.waitFor({ state: 'attached', timeout: 10000 })
+      const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+      if (await menu.isVisible()) await menu.click()
       await sessionStatus.waitFor({ state: 'visible', timeout: 10000 })
       await logoutButton.waitFor({ state: 'visible', timeout: 10000 })
       assert.ok(await logoutButton.isEnabled(), 'el botón de logout debe estar habilitado')
