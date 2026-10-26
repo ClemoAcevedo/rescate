@@ -46,6 +46,8 @@
     "db:test:expiries:compose": "node scripts/test-expiries-compose.mjs",
     "db:test:notifications": "npm run build && node --import tsx scripts/test-notifications.mjs",
     "db:test:notifications:compose": "node scripts/test-notifications-compose.mjs",
+    "db:test:chat": "npm run build && node --import tsx scripts/test-chat.mjs",
+    "db:test:chat:compose": "node scripts/test-chat-compose.mjs",
     "db:test:queue-worker": "npm run build && node --import tsx scripts/test-queue-worker.mjs",
     "db:test:queue-worker:compose": "node scripts/test-queue-worker-compose.mjs",
     "db:test:operations": "npm run build && node scripts/test-operations.mjs",

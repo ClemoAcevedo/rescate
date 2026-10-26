@@ -9,6 +9,7 @@ import { PhotoRuleError } from "../domain/photos.js"
 import { LotRuleError } from "../domain/lots.js"
 import { MAX_PERIOD_DAYS, PeriodRuleError } from "../domain/panel.js"
 import { ReservationRuleError, ReservationTransitionError } from "../domain/reservations.js"
+import { ChatRuleError, MESSAGE_MAX_LENGTH } from "../domain/chat.js"
 import { WaitlistTransitionError } from "../domain/waitlist.js"
 import type { HttpSchemas } from "./openapi.js"
 
@@ -87,6 +88,10 @@ export function handleError(error: unknown, response: Response, log: Log): void 
     }[error.reason])
   } else if (error instanceof ReservationTransitionError) {
     sendError(response, 409, "CONFLICT", transitions[error.reason])
+  } else if (error instanceof ChatRuleError) {
+    if (error.reason === "invalid_text") sendError(response, 422, "VALIDATION_ERROR", "Revisa el mensaje.",
+      [{ path: "/text", message: `Escribe entre 1 y ${MESSAGE_MAX_LENGTH} caracteres.` }])
+    else sendError(response, 409, "CONFLICT", "La conversación está cerrada porque la reserva terminó.")
   } else if (error instanceof WaitlistTransitionError) {
     sendError(response, 409, "CONFLICT", waitlistTransitions[error.reason])
   } else if (error instanceof PhotoRuleError) {

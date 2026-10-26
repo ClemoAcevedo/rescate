@@ -98,9 +98,15 @@ export type WaitlistStatus = "waiting" | "offered" | "accepted" | "declined" | "
  */
 export type PickupCode = string
 /**
- * offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva.
+ * offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva. message_from_holder llega a los operadores del local y message_from_establishment al titular cuando la otra parte escribe en el chat de la reserva. No traen el texto, que se lee en la conversación.
  */
-export type NotificationKind = "offer_issued" | "offer_expired" | "reservation_confirmed" | "reservation_cancelled"
+export type NotificationKind =
+  | "offer_issued"
+  | "offer_expired"
+  | "reservation_confirmed"
+  | "reservation_cancelled"
+  | "message_from_holder"
+  | "message_from_establishment"
 /**
  * Fecha calendario en la zona del establecimiento, sin hora.
  */
@@ -171,6 +177,10 @@ export interface HttpSchemas {
   OperatorCommitmentPage: OperatorCommitmentPage
   ActivityEvent: ActivityEvent
   ActivityPage: ActivityPage
+  SendMessageRequest: SendMessageRequest
+  SentMessage: SentMessage
+  ChatMessage: ChatMessage
+  ChatMessagePage: ChatMessagePage
 }
 export interface LoginRequest {
   email: EmailInput
@@ -611,7 +621,7 @@ export interface Notification {
    */
   waitlistEntryId: string | null
   /**
-   * Reserva relacionada; null en avisos de oferta.
+   * Reserva relacionada; null en avisos de oferta. En los avisos de mensaje es la reserva de la conversación.
    */
   reservationId: string | null
   /**
@@ -796,4 +806,53 @@ export interface ActivityPage {
   items: ActivityEvent[]
   page: number
   hasNextPage: boolean
+}
+export interface SendMessageRequest {
+  /**
+   * Texto plano de 1 a 1000 caracteres, contados después de recortar los espacios de los bordes.
+   */
+  text: string
+  /**
+   * UUID generado por el cliente para una intención de envío.
+   */
+  idempotencyKey: string
+}
+/**
+ * Resultado del envío. No repite el texto porque el cliente ya lo tiene.
+ */
+export interface SentMessage {
+  id: PublicId
+  /**
+   * Posición del mensaje en la conversación.
+   */
+  sequence: number
+  createdAt: Instant
+}
+/**
+ * Mensaje del chat. Dice si lo escribió el titular o el establecimiento sin revelar qué operador fue.
+ */
+export interface ChatMessage {
+  id: PublicId
+  sequence: number
+  author: "holder" | "operator"
+  /**
+   * true si lo escribió quien consulta.
+   */
+  mine: boolean
+  text: string
+  createdAt: Instant
+}
+export interface ChatMessagePage {
+  /**
+   * @maxItems 50
+   */
+  items: ChatMessage[]
+  /**
+   * true si hay más mensajes después del último de items.
+   */
+  hasMore: boolean
+  /**
+   * true mientras se puede escribir. Cancelar, vencer o retirar la reserva o cerrar el lote lo dejan en false para siempre.
+   */
+  open: boolean
 }

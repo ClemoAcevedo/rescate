@@ -21,6 +21,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Cola de espera y ofertas | [Cola de espera](cola-de-espera.md) |
 | Vencimientos y worker | [Vencimientos](vencimientos.md) |
 | Avisos internos y outbox | [Avisos](avisos.md) |
+| Chat de la reserva | [Chat](chat.md) |
 | Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
 | Rendimiento y carga | [Rendimiento](rendimiento.md) |
@@ -46,6 +47,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0013](adr/0013-limite-de-codigos-de-retiro.md) | Cinco códigos de retiro inválidos por operador en 15 minutos suspenden revisar y confirmar; fallos persistidos y serializados por operador |
 | [0014](adr/0014-cupo-de-lecturas-por-usuario.md) | Lecturas autenticadas con cupo propio (300/min, ráfaga 60); las escrituras conservan 120/min con ráfaga 20 |
 | [0015](adr/0015-deploy-de-worker-y-web-en-paralelo.md) | Tras la API migrada, worker y web se despliegan en paralelo; la verificación pública espera a ambos |
+| [0016](adr/0016-chat-de-la-reserva.md) | Chat como mensajes de la reserva sin tabla de conversación, cierre derivado de reserva y lote, y retención que borra el texto y conserva el resultado del envío |
 
 ## Entregas y evidencia
 

@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, panel del establecimiento, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, chat de la reserva, panel del establecimiento, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -30,6 +30,9 @@ tags:
   -
     name: "Notifications"
     description: "RF09: avisos internos persistentes del titular y su lectura."
+  -
+    name: "Chat"
+    description: "RF13 conversación de texto entre el titular y el establecimiento sobre una reserva vigente."
   -
     name: "Operations"
     description: "RNF04: salud del proceso, de la base y del worker."
@@ -213,6 +216,64 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReservationDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/reservations/{reservationId}/messages":
+    parameters:
+      - $ref: "#/components/parameters/ReservationId"
+    get:
+      operationId: "listReservationMessages"
+      summary: "Leer el chat de una reserva"
+      description: "Lo leen el titular y los operadores del establecimiento del lote. Para cualquier otra persona responde 404, igual que una reserva inexistente. Devuelve hasta 50 mensajes con secuencia mayor que after, en orden. La consulta periódica manda la última secuencia que ya tiene y así recupera lo que se perdió al desconectarse. El historial se puede leer después del cierre hasta treinta días más tarde, y pasado ese plazo items llega vacío. open dice si todavía se puede escribir. Sin confirmaciones de lectura."
+      tags: ["Chat"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: after
+          in: query
+          description: "Última secuencia conocida. Con 0 se lee desde el primer mensaje."
+          schema: { type: integer, minimum: 0, maximum: 2147483647, default: 0 }
+      responses:
+        "200":
+          description: "Mensajes posteriores a after."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatMessagePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      operationId: "sendReservationMessage"
+      summary: "Enviar un mensaje en el chat de una reserva"
+      description: "Escriben el titular y los operadores del establecimiento mientras la reserva sigue confirmada, su ventana no terminó y el lote no cerró. Se decide bajo el bloqueo del lote, así que un envío que compite con cancelar o retirar se acepta solo si llegó antes. La conversación cerrada responde 409. idempotencyKey es un UUID por autor y repetirlo con el mismo texto devuelve el mensaje original sin duplicarlo, aunque la conversación ya haya cerrado. Otro texto u otra reserva con esa clave responde 409. El texto va sin espacios en los bordes y tiene entre 1 y 1000 caracteres. Máximo 12 envíos por minuto y usuario con ráfaga de 3, y el exceso recibe 429 con Retry-After. La otra parte recibe un aviso en su bandeja sin el texto. El mensaje no cambia la reserva ni acredita el retiro."
+      tags: ["Chat"]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/CsrfCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendMessageRequest" }
+      responses:
+        "201":
+          description: "Mensaje guardado, o el original si la clave ya se había usado. No afirma que la otra parte lo leyó."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SentMessage" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1777,6 +1838,42 @@ components:
       additionalProperties: false
       maxProperties: 0
       description: "Objeto vacío: la reserva sale de la ruta y el actor de la sesión."
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [text, idempotencyKey]
+      properties:
+        text: { type: string, description: "Texto plano de 1 a 1000 caracteres, contados después de recortar los espacios de los bordes." }
+        idempotencyKey: { type: string, format: uuid, description: "UUID generado por el cliente para una intención de envío." }
+    SentMessage:
+      type: object
+      additionalProperties: false
+      required: [id, sequence, createdAt]
+      description: "Resultado del envío. No repite el texto porque el cliente ya lo tiene."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        sequence: { type: integer, minimum: 1, maximum: 2147483647, description: "Posición del mensaje en la conversación." }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+    ChatMessage:
+      type: object
+      additionalProperties: false
+      required: [id, sequence, author, mine, text, createdAt]
+      description: "Mensaje del chat. Dice si lo escribió el titular o el establecimiento sin revelar qué operador fue."
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        sequence: { type: integer, minimum: 1, maximum: 2147483647 }
+        author: { type: string, enum: [holder, operator] }
+        mine: { type: boolean, description: "true si lo escribió quien consulta." }
+        text: { type: string, minLength: 1, maxLength: 1000 }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+    ChatMessagePage:
+      type: object
+      additionalProperties: false
+      required: [items, hasMore, open]
+      properties:
+        items: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ChatMessage" } }
+        hasMore: { type: boolean, description: "true si hay más mensajes después del último de items." }
+        open: { type: boolean, description: "true mientras se puede escribir. Cancelar, vencer o retirar la reserva o cerrar el lote lo dejan en false para siempre." }
     JoinWaitlistRequest:
       type: object
       additionalProperties: false
@@ -1863,8 +1960,8 @@ components:
         deliveredAt: { $ref: "#/components/schemas/Instant" }
     NotificationKind:
       type: string
-      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled]
-      description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva."
+      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled, message_from_holder, message_from_establishment]
+      description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva. message_from_holder llega a los operadores del local y message_from_establishment al titular cuando la otra parte escribe en el chat de la reserva. No traen el texto, que se lee en la conversación."
     Notification:
       type: object
       additionalProperties: false
@@ -1884,7 +1981,7 @@ components:
             description: { type: string }
         quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados según el tipo." }
         waitlistEntryId: { type: [string, "null"], description: "Solicitud de espera relacionada; null en una cancelación." }
-        reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta." }
+        reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta. En los avisos de mensaje es la reserva de la conversación." }
         offerExpiresAt: { type: [string, "null"], format: date-time, description: "Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo." }
     NotificationPage:
       type: object

@@ -25,6 +25,7 @@ const migrations = [
   '1791500000000_commitments-lot-index',
   '1791600000000_pickup-code-attempts',
   '1791700000000_worker-heartbeat',
+  '1791800000000_chat-messages',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -400,9 +401,35 @@ try {
   await query('DELETE FROM worker_heartbeat')
   ok('K036: latido del worker en una sola fila')
 
-  // K014, K022, los consentimientos, la cola, los avisos, K034 y K036 solo agregan tablas: las previas conservan OID.
+  // K037 · secuencia única por reserva, clave única por autor y texto de 1 a 1000 caracteres o NULL al borrarlo
+  const message = `INSERT INTO chat_messages (commitment_id, author_user_id, sequence, idempotency_key, body, created_at)
+    VALUES ($1, $2, $3, $4, $5, now())`
+  const chatKey = '0f8fad5b-d9cb-469f-a165-70867728950e'
+  await query(message, [data[0].id, consentUser, 1, chatKey, 'Hola'])
+  await rejected('secuencia repetida', message, [data[0].id, consentUser, 1, '7c9e6679-7425-40de-944b-e07fc1f90ae7', 'Otra'],
+    '23505', 'chat_messages_sequence_key')
+  await rejected('clave repetida del autor', message, [data[0].id, consentUser, 2, chatKey, 'Otra'],
+    '23505', 'chat_messages_author_idempotency_key')
+  await rejected('texto en blanco', message, [data[0].id, consentUser, 2, '7c9e6679-7425-40de-944b-e07fc1f90ae7', '  '],
+    '23514', 'chat_messages_body_check')
+  await rejected('secuencia cero', message, [data[0].id, consentUser, 0, '7c9e6679-7425-40de-944b-e07fc1f90ae7', 'Hola'],
+    '23514', 'chat_messages_sequence_check')
+  await query('UPDATE chat_messages SET body = NULL')
+  await query('DELETE FROM chat_messages')
+  // El aviso de un mensaje llega a varios operadores, así que el evento es único por destinatario
+  const [{ id: colleague }] = await query("INSERT INTO users (email) VALUES ('k037-migraciones@example.invalid') RETURNING id")
+  await query(event, ['message_from_holder', 1, consentUser, payload, 'pending', null])
+  await query(event, ['message_from_holder', 1, colleague, payload, 'pending', null])
+  await rejected('mismo aviso de mensaje dos veces', event, ['message_from_holder', 1, colleague, payload, 'pending', null],
+    '23505', 'outbox_events_subject_key')
+  await query("DELETE FROM outbox_events WHERE event_type = 'message_from_holder'")
+  await query('DELETE FROM users WHERE id = $1', [colleague])
+  ok('K037: mensajes con secuencia por reserva, clave por autor, texto borrable y un aviso por destinatario')
+
+  // K014, K022, los consentimientos, la cola, los avisos, K034, K036 y K037 solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const beforeHeartbeat = latest.filter(row => row.relname !== 'worker_heartbeat')
+  const beforeChat = latest.filter(row => row.relname !== 'chat_messages')
+  const beforeHeartbeat = beforeChat.filter(row => row.relname !== 'worker_heartbeat')
   const withIndex = beforeHeartbeat.filter(row => !['pickup_code_security_state', 'pickup_code_failures'].includes(row.relname))
   const withQueue = withIndex.filter(row => !['outbox_events', 'notifications'].includes(row.relname))
   const withConsents = withQueue.filter(row => row.relname !== 'waitlist_entries')
@@ -416,7 +443,8 @@ try {
   assert.ok(latest.some(row => row.relname === 'outbox_events') && latest.some(row => row.relname === 'notifications'))
   assert.ok(latest.some(row => row.relname === 'pickup_code_security_state') && latest.some(row => row.relname === 'pickup_code_failures'))
   assert.ok(latest.some(row => row.relname === 'worker_heartbeat'))
-  ok('K014, K022, consentimientos, cola, avisos, K034 y K036 agregan tablas sin recrear las existentes; el enum no recrea lots')
+  assert.ok(latest.some(row => row.relname === 'chat_messages'))
+  ok('K014, K022, consentimientos, cola, avisos, K034, K036 y K037 agregan tablas sin recrear las existentes; el enum no recrea lots')
   run('up')
   assert.deepEqual(await history(), applied)
   assert.deepEqual(await snapshot(), latest)
@@ -429,6 +457,10 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.equal((await query("SELECT to_regclass('public.chat_messages') AS name"))[0].name, null)
+  assert.deepEqual(await snapshot(), beforeChat)
+  ok('rollback K037 retira solo los mensajes del chat')
   run('down', '1')
   assert.equal((await query("SELECT to_regclass('public.worker_heartbeat') AS name"))[0].name, null)
   assert.deepEqual(await snapshot(), beforeHeartbeat)
@@ -548,7 +580,7 @@ try {
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
   await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries', 'outbox_events', 'notifications',
-    'pickup_code_security_state', 'pickup_code_failures', 'worker_heartbeat'])
+    'pickup_code_security_state', 'pickup_code_failures', 'worker_heartbeat', 'chat_messages'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

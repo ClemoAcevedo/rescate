@@ -131,6 +131,8 @@ jobs:
         run: npm --prefix api run db:test:panel:compose
       - name: K036 request logs, health with PostgreSQL, worker heartbeat and pending tasks
         run: npm --prefix api run db:test:operations:compose
+      - name: K037 reservation chat with idempotent retries, closing under the lot lock and daily retention
+        run: npm --prefix api run db:test:chat:compose
       - name: Worker
         run: |
           test "$(docker inspect --format '{{.State.Running}}' "$(docker compose ps -q worker)")" = true
