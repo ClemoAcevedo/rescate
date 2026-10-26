@@ -68,7 +68,7 @@ sin cancelar un despliegue a medio ejecutar:
 2. Espera `SUCCESS` del ID devuelto por ese upload, incluyendo healthcheck.
 3. En paralelo, sube el worker y espera su propio ID, y
 4. construye y publica web en Vercel con el mismo SHA y un `release.json` público.
-   La web depende solo de la API migrada, no del worker.
+   La web depende solo de la API migrada, no del worker ([ADR 0015](adr/0015-deploy-de-worker-y-web-en-paralelo.md)).
    La CLI devuelve JSON plano en CI y envuelto en modo no interactivo; se admiten
    ambas respuestas y se exige `READY` y una URL HTTPS antes de continuar.
 5. Con worker y web listos, Chromium (en caché, con reintentos) comprueba SHA en el dominio estable, rutas SPA, botón de conexión,
