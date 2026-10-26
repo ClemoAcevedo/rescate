@@ -5,19 +5,21 @@ import type { ChatRepository, ChatReservation, Participation, SentMessage } from
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
+import { appendEvent } from './outbox.js'
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 interface ReservationRow {
-  commitment_id: string; lot_id: string; participation: Participation
-  ended_at: Date | null; pickup_ends_at: Date; closed_at: Date | null
+  commitment_id: string; holder_user_id: string; quantity: number; lot_id: string; description: string
+  establishment_id: string; participation: Participation; ended_at: Date | null; pickup_ends_at: Date; closed_at: Date | null
 }
 
 /** El titular se reconoce primero. Un operador tiene que ser miembro del establecimiento del lote */
 async function findReservationRow(db: Pool | PoolClient, userId: string, reservationId: string) {
   if (!uuid.test(reservationId)) return null
   const { rows } = await db.query<ReservationRow>(
-    `SELECT c.id::text AS commitment_id, l.public_id::text AS lot_id, c.ended_at, l.pickup_ends_at, l.closed_at,
+    `SELECT c.id::text AS commitment_id, c.user_id::text AS holder_user_id, c.quantity, l.public_id::text AS lot_id,
+       l.description, l.establishment_id::text, c.ended_at, l.pickup_ends_at, l.closed_at,
        CASE WHEN c.user_id = $1 THEN 'holder'
          WHEN EXISTS (SELECT 1 FROM public.memberships m
            WHERE m.user_id = $1 AND m.establishment_id = l.establishment_id) THEN 'operator' END AS participation
@@ -73,14 +75,24 @@ export function createChatRepository(pool: Pool): ChatRepository {
         // Se relee después del bloqueo porque otra transacción pudo cancelarla o retirarla mientras esperaba
         const row = (await findReservationRow(client, userId, reservationId))!
         return operate({ existing: null, reservation: toReservation(row), now: locked.at }, {
-          async append(body, at) {
-            const { rows } = await client.query<{ id: string; sequence: number; created_at: Date }>(
+          async append(body, at, notify) {
+            const { rows } = await client.query<{ id: string; sequence: number; created_at: Date; internal_id: string }>(
               `INSERT INTO public.chat_messages AS m
                  (commitment_id, author_user_id, sequence, idempotency_key, body, created_at)
                SELECT $1, $2, COALESCE(max(sequence), 0) + 1, $3, $4, $5
                FROM public.chat_messages WHERE commitment_id = $1
-               RETURNING ${sentColumns}`, [row.commitment_id, userId, key, body, at])
-            return toSent(rows[0]!)
+               RETURNING ${sentColumns}, m.id::text AS internal_id`, [row.commitment_id, userId, key, body, at])
+            const message = rows[0]!
+            // Los operadores son los miembros actuales del local, sin contar a quien escribió
+            const recipients = notify === 'holder' ? [row.holder_user_id] : (await client.query<{ user_id: string }>(
+              `SELECT user_id::text FROM public.memberships WHERE establishment_id = $1 AND user_id <> $2 ORDER BY user_id`,
+              [row.establishment_id, userId])).rows.map(member => member.user_id)
+            for (const recipientUserId of recipients) {
+              await appendEvent(client, message.internal_id, { kind: notify === 'holder' ? 'message_from_establishment'
+                : 'message_from_holder', recipientUserId, payload: { lot: { id: row.lot_id, description: row.description },
+                quantity: row.quantity, waitlistEntryId: null, reservationId, offerExpiresAt: null } }, at)
+            }
+            return toSent(message)
           },
         })
       })

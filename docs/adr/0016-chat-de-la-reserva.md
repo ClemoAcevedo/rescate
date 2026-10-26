@@ -20,6 +20,10 @@ copiar el texto, y las claves se conservan durante todo el piloto (H p. 21).
   cuándo vence la retención, en Domain y en el SQL del borrado.
 - **Secuencia bajo el bloqueo.** La siguiente secuencia se calcula con el lote bloqueado, y la
   unicidad por reserva y secuencia la respalda.
+- **Un aviso por destinatario.** Cada mensaje avisa a la otra parte con `message_from_holder` o
+  `message_from_establishment`, y como un mensaje del titular le llega a todos los operadores, la
+  unicidad de `outbox_events_subject_key` pasa a incluir al destinatario. Conserva el nombre, así
+  que el resto del outbox de [ADR 0012](0012-avisos-y-outbox.md) no cambia. El aviso no copia el texto.
 - **Retención que borra el texto.** El worker deja `body` en NULL una vez al día. La fila queda
   como resultado del envío, con identificador, secuencia y clave, así que un reintento sigue
   devolviendo lo mismo y nunca crea otro mensaje. La respuesta del envío no repite el texto.
@@ -31,5 +35,9 @@ copiar el texto, y las claves se conservan durante todo el piloto (H p. 21).
 - **Guardar el estado abierto o cerrado.** Habría que actualizarlo en cancelar, retirar, vencer
   y cerrar el lote, y un worker detenido lo dejaría desfasado.
 - **Borrar las filas.** Perdería el resultado idempotente que H p. 21 pide conservar.
+- **Un solo tipo de aviso de mensaje.** La bandeja no sabría si llevar al detalle del titular o al
+  panel del operador sin agregar un campo nuevo al aviso.
+- **Usar la versión del evento para distinguir destinatarios.** Funciona, pero la versión deja de
+  significar una transición y confunde a quien lea el outbox.
 - **Clave en una tabla aparte de operaciones.** Duplica identificador y estado del mensaje sin
   ganar nada mientras la fila sin texto ya cumple ese papel.

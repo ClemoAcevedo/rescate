@@ -23,6 +23,10 @@ y las decisiones de modelo y retención en [ADR 0016](adr/0016-chat-de-la-reserv
 - **Texto.** Texto plano de 1 a 1000 caracteres después de recortar los bordes. Sin adjuntos,
   audio, escritura en vivo ni confirmaciones de lectura.
 - **Límite.** 12 envíos por minuto y usuario con ráfaga de 3 ([seguridad](seguridad.md)).
+- **Aviso a la otra parte.** Cada mensaje nuevo deja en la misma transacción un evento de
+  [aviso](avisos.md) para la otra parte. Si escribe el titular les llega a todos los operadores
+  del local, y si escribe un operador le llega al titular, nunca a sus compañeros. El aviso no
+  lleva el texto y un reintento no avisa de nuevo.
 - **No actúa.** Un mensaje no cambia la reserva, el inventario ni acredita el retiro.
 
 ## Retención

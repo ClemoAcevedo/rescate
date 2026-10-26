@@ -35,16 +35,20 @@ test('el historial se muestra hasta treinta días después del cierre', () => {
 function repository(reservation: ChatReservation | null, state: SendState = reservation
   ? { existing: null, reservation, now: at } : { existing: null, reservation: null }) {
   const appended: string[] = []
+  const notified: string[] = []
   const repo: ChatRepository = {
     findReservation: async () => reservation,
     listMessages: async (_user, _id, after, limit) => Array.from({ length: limit }, (_, index) => ({
       id: `m${after + index + 1}`, sequence: after + index + 1, author: 'holder' as const, mine: true, text: 'hola', createdAt: at })),
     withSendTransaction: async (_user, _id, _key, _text, operate) => operate(state, {
-      append: async (text, createdAt) => { appended.push(text); return { id: 'm1', sequence: 1, createdAt } },
+      append: async (text, createdAt, notify) => {
+        appended.push(text); notified.push(notify)
+        return { id: 'm1', sequence: 1, createdAt }
+      },
     }),
     eraseExpired: async () => 0,
   }
-  return { repo, appended }
+  return { repo, appended, notified }
 }
 
 test('participantes envían en una conversación abierta con el instante de la base', async () => {
@@ -53,6 +57,14 @@ test('participantes envían en una conversación abierta con el instante de la b
   const sent = await createChatUseCases(repo, processClock).send(actor, 'R', '  ¿A qué hora paso?  ', key.toUpperCase())
   assert.deepEqual(sent, { id: 'm1', sequence: 1, createdAt: at })
   assert.deepEqual(appended, ['¿A qué hora paso?'])
+})
+
+test('cada mensaje avisa a la otra parte y nunca a quien lo escribió', async () => {
+  const fromHolder = repository(open)
+  await createChatUseCases(fromHolder.repo, () => at).send(actor, 'r', 'hola', key)
+  const fromOperator = repository({ ...open, participation: 'operator' })
+  await createChatUseCases(fromOperator.repo, () => at).send(actor, 'r', 'hola', key)
+  assert.deepEqual([fromHolder.notified, fromOperator.notified], [['operators'], ['holder']])
 })
 
 test('cancelar, vencer o cerrar el lote impide enviar', async () => {

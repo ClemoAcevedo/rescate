@@ -2,7 +2,8 @@ import { HttpError, UnexpectedResponseError, request } from './http-client'
 import type { Notification, NotificationPage } from './openapi'
 
 export type { Notification, NotificationPage }
-const kinds = ['offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled']
+const kinds = ['offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled',
+  'message_from_holder', 'message_from_establishment']
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const instant = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value))
 const nullableId = (value: unknown) => value === null || (typeof value === 'string' && value.length > 0)

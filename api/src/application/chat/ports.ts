@@ -29,9 +29,12 @@ export interface SentMessage {
   createdAt: Date
 }
 
+/** A quién avisa un mensaje nuevo. El aviso nunca lleva el texto */
+export type MessageRecipients = 'holder' | 'operators'
+
 export interface MessageWriter {
-  /** Guarda el mensaje con la siguiente secuencia de la reserva */
-  append(text: string, at: Date): Promise<SentMessage>
+  /** Guarda el mensaje con la siguiente secuencia de la reserva y el evento de su aviso en la misma transacción */
+  append(text: string, at: Date, notify: MessageRecipients): Promise<SentMessage>
 }
 
 /**

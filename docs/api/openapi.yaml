@@ -256,7 +256,7 @@ paths:
     post:
       operationId: "sendReservationMessage"
       summary: "Enviar un mensaje en el chat de una reserva"
-      description: "Escriben el titular y los operadores del establecimiento mientras la reserva sigue confirmada, su ventana no terminó y el lote no cerró. Se decide bajo el bloqueo del lote, así que un envío que compite con cancelar o retirar se acepta solo si llegó antes. La conversación cerrada responde 409. idempotencyKey es un UUID por autor y repetirlo con el mismo texto devuelve el mensaje original sin duplicarlo, aunque la conversación ya haya cerrado. Otro texto u otra reserva con esa clave responde 409. El texto va sin espacios en los bordes y tiene entre 1 y 1000 caracteres. Máximo 12 envíos por minuto y usuario con ráfaga de 3, y el exceso recibe 429 con Retry-After. El mensaje no cambia la reserva ni acredita el retiro."
+      description: "Escriben el titular y los operadores del establecimiento mientras la reserva sigue confirmada, su ventana no terminó y el lote no cerró. Se decide bajo el bloqueo del lote, así que un envío que compite con cancelar o retirar se acepta solo si llegó antes. La conversación cerrada responde 409. idempotencyKey es un UUID por autor y repetirlo con el mismo texto devuelve el mensaje original sin duplicarlo, aunque la conversación ya haya cerrado. Otro texto u otra reserva con esa clave responde 409. El texto va sin espacios en los bordes y tiene entre 1 y 1000 caracteres. Máximo 12 envíos por minuto y usuario con ráfaga de 3, y el exceso recibe 429 con Retry-After. La otra parte recibe un aviso en su bandeja sin el texto. El mensaje no cambia la reserva ni acredita el retiro."
       tags: ["Chat"]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -1960,8 +1960,8 @@ components:
         deliveredAt: { $ref: "#/components/schemas/Instant" }
     NotificationKind:
       type: string
-      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled]
-      description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva."
+      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled, message_from_holder, message_from_establishment]
+      description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva. message_from_holder llega a los operadores del local y message_from_establishment al titular cuando la otra parte escribe en el chat de la reserva. No traen el texto, que se lee en la conversación."
     Notification:
       type: object
       additionalProperties: false
@@ -1981,7 +1981,7 @@ components:
             description: { type: string }
         quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados según el tipo." }
         waitlistEntryId: { type: [string, "null"], description: "Solicitud de espera relacionada; null en una cancelación." }
-        reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta." }
+        reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta. En los avisos de mensaje es la reserva de la conversación." }
         offerExpiresAt: { type: [string, "null"], format: date-time, description: "Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo." }
     NotificationPage:
       type: object

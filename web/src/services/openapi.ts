@@ -98,9 +98,15 @@ export type WaitlistStatus = "waiting" | "offered" | "accepted" | "declined" | "
  */
 export type PickupCode = string
 /**
- * offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva.
+ * offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva. message_from_holder llega a los operadores del local y message_from_establishment al titular cuando la otra parte escribe en el chat de la reserva. No traen el texto, que se lee en la conversación.
  */
-export type NotificationKind = "offer_issued" | "offer_expired" | "reservation_confirmed" | "reservation_cancelled"
+export type NotificationKind =
+  | "offer_issued"
+  | "offer_expired"
+  | "reservation_confirmed"
+  | "reservation_cancelled"
+  | "message_from_holder"
+  | "message_from_establishment"
 /**
  * Fecha calendario en la zona del establecimiento, sin hora.
  */
@@ -615,7 +621,7 @@ export interface Notification {
    */
   waitlistEntryId: string | null
   /**
-   * Reserva relacionada; null en avisos de oferta.
+   * Reserva relacionada; null en avisos de oferta. En los avisos de mensaje es la reserva de la conversación.
    */
   reservationId: string | null
   /**

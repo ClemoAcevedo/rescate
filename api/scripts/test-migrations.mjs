@@ -416,7 +416,15 @@ try {
     '23514', 'chat_messages_sequence_check')
   await query('UPDATE chat_messages SET body = NULL')
   await query('DELETE FROM chat_messages')
-  ok('K037: mensajes con secuencia por reserva, clave por autor y texto que la retención puede borrar')
+  // El aviso de un mensaje llega a varios operadores, así que el evento es único por destinatario
+  const [{ id: colleague }] = await query("INSERT INTO users (email) VALUES ('k037-migraciones@example.invalid') RETURNING id")
+  await query(event, ['message_from_holder', 1, consentUser, payload, 'pending', null])
+  await query(event, ['message_from_holder', 1, colleague, payload, 'pending', null])
+  await rejected('mismo aviso de mensaje dos veces', event, ['message_from_holder', 1, colleague, payload, 'pending', null],
+    '23505', 'outbox_events_subject_key')
+  await query("DELETE FROM outbox_events WHERE event_type = 'message_from_holder'")
+  await query('DELETE FROM users WHERE id = $1', [colleague])
+  ok('K037: mensajes con secuencia por reserva, clave por autor, texto borrable y un aviso por destinatario')
 
   // K014, K022, los consentimientos, la cola, los avisos, K034, K036 y K037 solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()

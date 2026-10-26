@@ -231,7 +231,7 @@ Cada Pull Request debe:
 - indicar la tarjeta asociada
 - explicar brevemente los cambios realizados
 - indicar cómo comprobar los cambios
-- ser revisado por al menos otro integrante antes de integrarse
+- la revisión de otro integrante es recomendada, pero no bloquea la integración
 
 No se realizan cambios directamente sobre `main` o `development`.
 
@@ -260,7 +260,8 @@ lo cambia.
   y cancelación con resultado comprobado (K023); revisión de código y confirmación
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
-  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030);
+  avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030),
+  que también muestra los avisos de mensajes del chat (K037);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
   período (K035).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
@@ -277,7 +278,8 @@ lo cambia.
   vencimiento (K027), avisos internos de ofertas y reservas con outbox transaccional
   (K030), panel del establecimiento con compromisos, historial y resultados por período
   sobre lotes cerrados (K035), chat de la reserva entre titular y establecimiento con
-  secuencia, reintentos sin duplicar y cierre al cancelar, vencer o retirar (K037, [chat](docs/chat.md)),
+  secuencia, reintentos sin duplicar, aviso a la otra parte y cierre al cancelar, vencer o retirar
+  (K037, [chat](docs/chat.md)),
   según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y

@@ -47,8 +47,10 @@ export function createChatUseCases(repository: ChatRepository, now: () => Date) 
         }
         if (!state.reservation) throw reservationNotFound()
         // La participación se vuelve a mirar porque pudo cambiar mientras se esperaba el bloqueo
-        requireOpenConversation(requireParticipant(state.reservation), state.now)
-        return writer.append(text, state.now)
+        const { participation } = requireParticipant(state.reservation)
+        requireOpenConversation(state.reservation, state.now)
+        // Se avisa a la otra parte, así que lo que escribe un operador no le llega a sus compañeros
+        return writer.append(text, state.now, participation === 'holder' ? 'operators' : 'holder')
       })
     },
   }

@@ -21,5 +21,30 @@ CREATE TABLE public.chat_messages (
   CONSTRAINT chat_messages_author_idempotency_key UNIQUE (author_user_id, idempotency_key)
 );
 
+-- Cada mensaje avisa a la otra parte (anexos A p. 2 y C p. 5). Un mensaje del titular le
+-- llega a todos los operadores del local, así que la unicidad del evento ahora incluye al
+-- destinatario. Conserva el nombre para que appendEvent siga igual.
+ALTER TABLE public.outbox_events
+  DROP CONSTRAINT outbox_events_type_check,
+  ADD CONSTRAINT outbox_events_type_check CHECK (event_type IN ('offer_issued', 'offer_expired',
+    'reservation_confirmed', 'reservation_cancelled', 'message_from_holder', 'message_from_establishment')),
+  DROP CONSTRAINT outbox_events_subject_key,
+  ADD CONSTRAINT outbox_events_subject_key UNIQUE (event_type, subject_id, version, recipient_user_id);
+ALTER TABLE public.notifications
+  DROP CONSTRAINT notifications_kind_check,
+  ADD CONSTRAINT notifications_kind_check CHECK (kind IN ('offer_issued', 'offer_expired',
+    'reservation_confirmed', 'reservation_cancelled', 'message_from_holder', 'message_from_establishment'));
+
 -- Down Migration
+-- Volver atrás exige que no queden avisos ni eventos de mensajes.
+ALTER TABLE public.notifications
+  DROP CONSTRAINT notifications_kind_check,
+  ADD CONSTRAINT notifications_kind_check CHECK (kind IN
+    ('offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled'));
+ALTER TABLE public.outbox_events
+  DROP CONSTRAINT outbox_events_subject_key,
+  ADD CONSTRAINT outbox_events_subject_key UNIQUE (event_type, subject_id, version),
+  DROP CONSTRAINT outbox_events_type_check,
+  ADD CONSTRAINT outbox_events_type_check CHECK (event_type IN
+    ('offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled'));
 DROP TABLE public.chat_messages;

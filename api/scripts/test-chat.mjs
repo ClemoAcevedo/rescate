@@ -8,6 +8,8 @@ import { createApi } from '../dist/composition.js'
 import { createPool } from '../dist/infrastructure/postgres/pool.js'
 import { createChatRepository } from '../dist/infrastructure/postgres/chat-repository.js'
 import { createChatRetention } from '../dist/application/chat/use-cases.js'
+import { createOutboxRepository } from '../dist/infrastructure/postgres/notification-repository.js'
+import { createOutboxProcessor } from '../dist/application/notifications/use-cases.js'
 
 const connectionString = process.env.DATABASE_URL
 assert.ok(connectionString && /^rescate_k037_test_/.test(new URL(connectionString).pathname.slice(1)),
@@ -63,8 +65,15 @@ const stored = async reservation => (await database.query(
   `SELECT m.sequence, m.body, m.created_at, c.ended_at FROM chat_messages m
    JOIN commitments c ON c.id = m.commitment_id WHERE c.public_id = $1 ORDER BY m.sequence`, [reservation])).rows
 
+/** Eventos de aviso de los mensajes de una reserva, como pares de tipo y destinatario */
+const notices = async reservation => (await database.query(
+  `SELECT e.event_type, e.recipient_user_id::text AS recipient, e.payload FROM outbox_events e
+   JOIN chat_messages m ON m.id = e.subject_id JOIN commitments c ON c.id = m.commitment_id
+   WHERE e.event_type LIKE 'message_from_%' AND c.public_id = $1 ORDER BY e.id`, [reservation])).rows
+
 const pool = createPool({ connectionString })
 const retention = createChatRetention(createChatRepository(pool), () => {})
+const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), () => 0.5)
 
 try {
   await database.connect()
@@ -123,6 +132,20 @@ try {
   assert.equal((await stored(reservation)).length, 3)
   ok('repetir la clave devuelve el mismo mensaje y usarla con otro texto o reserva responde 409')
 
+  // Cada mensaje nuevo avisa a la otra parte en la misma transacción, sin el texto, y el reintento no avisa otra vez
+  const sentNotices = await notices(reservation)
+  assert.deepEqual(sentNotices.map(row => [row.event_type, row.recipient]), [
+    ['message_from_holder', operator.userId], ['message_from_establishment', ana.userId],
+    ['message_from_holder', operator.userId]])
+  assert.ok(!JSON.stringify(sentNotices).includes('bolsa') && !JSON.stringify(sentNotices).includes('19 h'))
+  assert.equal(sentNotices[0].payload.reservationId, reservation)
+  while (await outbox.processNext() > 0) { /* el worker vacía lo pendiente */ }
+  const anaInbox = (await ana.call('GET', '/notifications')).body
+  assert.deepEqual(anaInbox.items.filter(item => item.kind.startsWith('message_')).map(item => [item.kind, item.reservationId]),
+    [['message_from_establishment', reservation]])
+  assert.equal((await operator.call('GET', '/notifications')).body.items.filter(item => item.kind === 'message_from_holder').length, 2)
+  ok('cada mensaje avisa una vez a la otra parte sin el texto y el worker lo deja en su bandeja')
+
   // Nadie fuera de la reserva lee ni escribe, ni siquiera un operador de otro local
   for (const stranger of [outsider, foreignOperator]) {
     assert.equal((await read(stranger, reservation)).status, 404)
@@ -157,7 +180,12 @@ try {
     [1, 2, 3].map(n => send(who, busy.reservation, `Simultáneo ${n}`))))
   assert.ok(results.every(result => result.status === 201))
   assert.deepEqual((await stored(busy.reservation)).map(row => row.sequence), [1, 2, 3, 4, 5, 6, 7, 8, 9])
-  ok('nueve envíos simultáneos de tres personas quedan con secuencias 1 a 9 sin huecos ni repetidas')
+  const fanOut = (await notices(busy.reservation)).map(row => `${row.event_type}:${row.recipient}`)
+  assert.equal(fanOut.filter(item => item === `message_from_holder:${operator.userId}`).length, 3)
+  assert.equal(fanOut.filter(item => item === `message_from_holder:${second.userId}`).length, 3)
+  assert.equal(fanOut.filter(item => item === `message_from_establishment:${cata.userId}`).length, 6)
+  assert.equal(fanOut.length, 12, 'lo que escribe un operador no avisa a su compañero')
+  ok('nueve envíos simultáneos quedan con secuencias 1 a 9 y cada uno avisa solo a la otra parte')
 
   // Cancelar compite con enviar bajo el mismo bloqueo, así que ningún mensaje queda después del cierre
   const dani = await person('dani')

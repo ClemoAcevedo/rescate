@@ -1,7 +1,8 @@
 // K030 · Domain: avisos internos (RF09) y política del outbox. Reglas puras: no conocen
 // SQL, HTTP ni el reloj; reciben los instantes y la aleatoriedad como valores.
 
-export const NOTIFICATION_KINDS = ['offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled'] as const
+export const NOTIFICATION_KINDS = ['offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled',
+  'message_from_holder', 'message_from_establishment'] as const
 export type NotificationKind = typeof NOTIFICATION_KINDS[number]
 
 /**
