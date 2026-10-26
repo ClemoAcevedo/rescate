@@ -24,6 +24,11 @@ test("límites generales y login IP: ráfaga, recarga y ventana móvil", () => {
   for (let i = 0; i < 20; i++) limits.user("1")
   assert.throws(() => limits.user("1"), TrafficLimitError)
   time += 500; limits.user("1")
+  // Las lecturas tienen su propio cupo: agotar las escrituras no las frena, ni al revés.
+  for (let i = 0; i < 60; i++) limits.userRead("1")
+  assert.throws(() => limits.userRead("1"), TrafficLimitError)
+  assert.throws(() => limits.user("1"), TrafficLimitError)
+  time += 200; limits.userRead("1")
   for (let i = 0; i < 100; i++) limits.ip("ip")
   assert.throws(() => limits.ip("ip"), TrafficLimitError)
   for (let i = 0; i < 30; i++) limits.login("ip")

@@ -176,8 +176,6 @@ try {
   ok('período elegido: validación local de fechas y tasa sin datos cuando no hay denominador')
 
   // Más de 366 días: el formulario lo frena; si llega por la URL, el 422 deja el formulario para corregirlo.
-  // Recargar y corregir cuesta unas seis lecturas: se espera a que el cupo por usuario (2/s) se recupere.
-  await page.waitForTimeout(5000)
   panelRequests = 0
   await period.getByLabel('Desde').fill('2025-01-09')
   await period.getByRole('button', { name: 'Ver período' }).click()

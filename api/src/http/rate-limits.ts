@@ -39,6 +39,8 @@ export function createTrafficLimits(now: () => number = Date.now) {
   return {
     ip: (ip: string) => bucket(`ip:${ip}`, 3000, 100),
     user: (id: string) => bucket(`user:${id}`, 120, 20),
+    /** Lecturas autenticadas (GET y HEAD): cupo propio para navegar el panel sin gastar el de escrituras (ADR 0014). */
+    userRead: (id: string) => bucket(`user-read:${id}`, 300, 60),
     login: (ip: string) => slidingWindow(`login:${ip}`, 30, 900000),
     /** Revisar o confirmar un código de retiro (K034): 30 por IP cada minuto, cobrado tras el permiso. */
     pickupCode: (ip: string) => slidingWindow(`pickup-code:${ip}`, 30, 60000),
