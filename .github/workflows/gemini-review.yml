@@ -51,7 +51,7 @@ jobs:
       - name: Review current PR commit
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: invalid-test-key # Temporary: force OpenRouter fallback in this disposable PR.
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           REVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}
           REVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
