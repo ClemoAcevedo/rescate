@@ -386,7 +386,7 @@ function report(run, context, results) {
         + 'último pack, misma intención, oferta y vencimiento y operador de otro establecimiento en `db:test:integrity:compose`; cancelar '
         + 'y retirar y respuesta perdida en `db:test:reservations:compose`; usuarios y operadores ajenos en `db:test:security:compose`; '
         + 'caída del worker con una tarea reclamada en `db:test:expiries:compose` y `db:test:queue-worker:compose`'],
-      ['Chat visible P95 ≤ 7 s', 'No se mide aquí: requiere dos navegadores con Playwright'],
+      ['Chat visible P95 ≤ 7 s', 'No se mide aquí: `test:web:chat-latency:compose` alterna 100 mensajes en dos navegadores con Playwright'],
       ['Tareas vencidas P95 ≤ 30 s', 'No se mide aquí: `db:test:integrity:compose` vence 100 ofertas sembradas con el worker real'],
     ]), '',
     `Protocolo (tres ensayos de 120 + 600 s; mezcla e2 en E2 y e3 desde E3): ${protocol ? `cumple la forma con ${mix}` : 'no cumple la forma; esta corrida es parcial'}. `

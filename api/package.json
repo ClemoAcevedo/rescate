@@ -67,6 +67,8 @@
     "test:web:pickups": "node --env-file-if-exists=.env scripts/test-web-pickups.mjs",
     "test:web:panel": "node --env-file-if-exists=.env scripts/test-web-panel.mjs",
     "test:web:chat": "node scripts/test-web-chat.mjs",
+    "test:web:chat-latency": "node --env-file-if-exists=.env scripts/test-web-chat-latency.mjs",
+    "test:web:chat-latency:compose": "npm run build && WEB_SCRIPTS=test:web:chat-latency node scripts/test-web-compose.mjs",
     "test:web:notifications": "node --env-file-if-exists=.env scripts/test-web-notifications.mjs",
     "test:web:queue-worker": "node --env-file-if-exists=.env scripts/test-web-queue-worker.mjs",
     "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs",

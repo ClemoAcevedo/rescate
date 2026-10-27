@@ -144,7 +144,7 @@ con `DATABASE_URL` repite la suite sobre una existente.
 | Caída y recuperación del trabajador y respuesta perdida | [Vencimientos](vencimientos.md#pruebas) y [reservas](reservas.md#pruebas) |
 | Restaurar copia | K053 (#56) |
 | Tareas vencidas: P95 ≤ 30 s con 100 ofertas | Integridad, con el worker real y todas las ofertas venciendo a la vez |
-| Chat visible: P95 ≤ 7 s en otro navegador | Requiere la vista del chat, K038 (#41) |
+| Chat visible: P95 ≤ 7 s en otro navegador | Chat visible (abajo) |
 
 Los resultados quedan en `api/.k039-results/<base>/integrity.json`, junto con el
 ambiente y el hash de los scripts. Cada caso registra la referencia al anexo, los
@@ -157,6 +157,23 @@ OpenAPI. Un 429 de otro límite, un 5xx o un timeout se cuenta como inesperado y
 como cumple o no cumple, sin hacer fallar la suite. Las latencias de los casos HTTP son
 informativas: la API corre en el mismo proceso que el generador, y la meta de reserva la
 mide k6.
+
+### Chat visible
+
+```bash
+npm --prefix api run test:web:chat-latency:compose
+```
+
+[`test-web-chat-latency.mjs`](../api/scripts/test-web-chat-latency.mjs) usa el arnés de los
+recorridos web: Vite HTTPS, la API y el worker reales sobre una base aislada. Un titular y
+un operador del establecimiento abren la [vista del chat](chat.md) en dos navegadores. El
+titular envía 50 mensajes y después el operador otros 50, uno cada 6 s, bajo el cupo de
+mensajes. Quien recibe no escribe, porque la vista recarga la conversación tras cada envío
+propio y eso ocultaría la consulta cada 5 s, que es lo que se mide. La demora va desde que
+llega el 201 a quien envía hasta que la otra página muestra el mensaje, con el reloj del
+equipo, que comparten ambos navegadores. El resultado queda en
+`api/.k039-results/<base>/chat-visible.json`, con n, p50, p95 y máximo frente a la meta.
+La prueba falla solo si un envío se rechaza o un mensaje no aparece.
 
 ## Índices
 
@@ -174,5 +191,4 @@ consulta tarda decenas de milisegundos. Por eso el panel no agrega índices.
 
 - Generador, API, worker y PostgreSQL corren en un mismo equipo. El anexo exige declarar
   esa interferencia: el resultado no sustituye la prueba con otro equipo (p. 18).
-- Chat visible depende de la vista web del chat, K038 (#41).
 - Restaurar copia y conciliar después es K053 (#56).
