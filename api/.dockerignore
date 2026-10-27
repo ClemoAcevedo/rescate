@@ -1,6 +1,8 @@
 node_modules
 dist
 coverage
+.k032-results
+.k039-results
 .env
 .env.*
 *.log
