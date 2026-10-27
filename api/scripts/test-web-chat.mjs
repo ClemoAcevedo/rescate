@@ -63,10 +63,11 @@ try {
   assert.equal(await holder.locator('.chat__messages li').count(), 2)
   // Reconectar drena varias páginas sin adelantar el cursor por un POST.
   await holder.context().setOffline(true)
+  // El día 27 junto al mensaje 5 reproduce la coincidencia parcial con «52» del selector anterior.
   for (let i = 0; i < 53; i++) messages.push({ id: `backlog_${i}`, sequence: messages.length + 1,
-    author: 'operator', text: `Mensaje recuperado ${i}`, createdAt: new Date().toISOString() })
+    author: 'operator', text: `Mensaje recuperado ${i}`, createdAt: '2026-10-27T11:52:34Z' })
   await holder.context().setOffline(false)
-  await holder.locator('.chat__messages li').filter({ hasText: 'Mensaje recuperado 52' }).waitFor()
+  await holder.locator('.chat__messages').getByText('Mensaje recuperado 52', { exact: true }).waitFor()
   assert.equal(await holder.locator('.chat__messages li').count(), 55)
   assert.ok(queries.some(q => q.author === 'holder' && q.after === 52))
   // El reloj comprueba 5 s y ausencia de consultas con la vista oculta.
