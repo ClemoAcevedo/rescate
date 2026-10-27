@@ -13,7 +13,8 @@ const firstSend = new Promise(resolve => { releaseFirst = resolve })
 try {
   const pages = []
   for (const author of ['holder', 'operator']) {
-    const context = await browser.newContext({ viewport: { width: 360, height: 800 } })
+    // El runner HTTPS usa un certificado local autofirmado, igual que los demás recorridos.
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 } })
     const page = await context.newPage()
     page.setDefaultTimeout(10000)
     await page.clock.install()
