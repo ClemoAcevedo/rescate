@@ -144,13 +144,15 @@ jobs:
         if: always()
         run: docker compose down --volumes --remove-orphans
 
-  # Los recorridos con Chromium solo usan el PostgreSQL de Compose: corren en paralelo
-  # con las pruebas de base de datos en vez de después de ellas.
+  # Playwright y Chromium vienen de una imagen fijada a la misma versión que api/package.json.
+  # El contenedor comparte la red del runner para que los tests conserven su conexión local a PostgreSQL.
   browser:
     name: Browser / HTTPS flows
     needs: [web, api]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://rescate_dev:rescate_dev_only@127.0.0.1:5432/rescate
     steps:
       - uses: actions/checkout@v4
       - name: Start PostgreSQL
@@ -166,17 +168,14 @@ jobs:
         run: |
           npm --prefix api ci
           npm --prefix web ci
-      - name: Cache Chromium
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('api/package-lock.json') }}
-      - name: Install Chromium
-        run: .github/scripts/install-chromium.sh
-      - name: K008 auth, restart and K010 integration over HTTPS
-        run: npm --prefix api run db:test:auth:compose
-      - name: K009 auth, K011 lot form, K015 discovery/reservation, K022 cancellation/pickup, K031 three-browser queue flow and K035 panel
-        run: npm --prefix api run test:web:compose
+      - name: Browser flows in pinned Playwright image
+        run: |
+          docker run --rm --init --network host --ipc=host \
+            --env DATABASE_URL \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            mcr.microsoft.com/playwright:v1.63.0-noble \
+            bash -lc "npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose"
       - name: Service logs
         if: always()
         run: docker compose logs --no-color

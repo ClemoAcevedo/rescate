@@ -9,6 +9,7 @@ import { request } from 'node:https'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createTestDatabase } from './create-test-database.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const api = fileURLToPath(new URL('../', import.meta.url))
@@ -29,18 +30,24 @@ function ready(ca) {
 
 const children = []
 let database
+let databaseUrl
 let dir
 try {
-  const user = docker('exec', '-T', 'db', 'printenv', 'POSTGRES_USER').trim()
-  const password = docker('exec', '-T', 'db', 'printenv', 'POSTGRES_PASSWORD').trim()
-  const address = docker('port', 'db', '5432').trim()
-  if (!/^127\.0\.0\.1:\d+$/.test(address)) throw new Error('Se requiere el puerto loopback de K006')
   database = `rescate_web_test_${Date.now()}_${randomBytes(4).toString('hex')}`
-  docker('exec', '-T', 'db', 'createdb', '-U', user, '--template=template0', database)
-  const url = new URL(`postgresql://${address}/${database}`)
-  url.username = user
-  url.password = password
-  const env = { ...process.env, DATABASE_URL: url.href }
+  if (process.env.DATABASE_URL) {
+    databaseUrl = await createTestDatabase(process.env.DATABASE_URL, database)
+  } else {
+    const user = docker('exec', '-T', 'db', 'printenv', 'POSTGRES_USER').trim()
+    const password = docker('exec', '-T', 'db', 'printenv', 'POSTGRES_PASSWORD').trim()
+    const address = docker('port', 'db', '5432').trim()
+    if (!/^127\.0\.0\.1:\d+$/.test(address)) throw new Error('Se requiere el puerto loopback de K006')
+    docker('exec', '-T', 'db', 'createdb', '-U', user, '--template=template0', database)
+    const url = new URL(`postgresql://${address}/${database}`)
+    url.username = user
+    url.password = password
+    databaseUrl = url.href
+  }
+  const env = { ...process.env, DATABASE_URL: databaseUrl }
   console.log(`Base dedicada web creada: ${database}`)
   execFileSync(process.execPath, ['node_modules/node-pg-migrate/bin/node-pg-migrate.js', 'up'], { cwd: api, env, stdio: 'ignore' })
 
@@ -71,7 +78,7 @@ try {
   }
   if (!up) throw new Error('API o Vite no respondieron')
 
-  for (const script of ['test:web:auth', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:panel', 'test:web:waitlist', 'test:web:notifications', 'test:web:queue-worker']) {
+  for (const script of ['test:web:auth', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:panel', 'test:web:waitlist', 'test:web:notifications', 'test:web:chat', 'test:web:queue-worker']) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }
   console.log(`Base de prueba conservada: ${database}. No se alteró la base de desarrollo.`)

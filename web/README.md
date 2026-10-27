@@ -35,6 +35,8 @@ levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth`,
 
 `/` redirige a `/lotes`. `/lotes` y `/lotes/:id` consumen la búsqueda pública y reserva directa;
 `/reservas` y `/reservas/:id` muestran historial, detalle y cancelación;
+`/reservas/:id/chat` integra la [conversación de la reserva](../docs/chat.md), accesible
+también para el operador desde su panel y los avisos;
 `/registro` y `/login` integran K008. `/operador/lotes/nuevo` y
 `/operador/lotes/:lotId` integran el borrador y la publicación de K010 (K011);
 `/operador/lotes/:lotId/retiros` revisa códigos y confirma retiros (K024); `/operador/panel` muestra el

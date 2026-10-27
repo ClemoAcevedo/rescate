@@ -261,7 +261,9 @@ lo cambia.
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
   avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030),
-  que también muestra los avisos de mensajes del chat (K037);
+  que también muestra los avisos de mensajes del chat (K037); conversación entre titular y
+  establecimiento con polling visible cada 5 s, recuperación por secuencia y reintentos
+  del mismo envío (K038);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
   período (K035).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y

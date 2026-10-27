@@ -176,6 +176,7 @@ function Commitments({ establishmentId, lotId, state, refresh, timeZone }: {
                   {item.kind === 'reservation' ? packs(item.quantity)
                     : item.offeredQuantity === null ? `Pide ${packs(item.quantity)}` : `Pide ${packs(item.quantity)} · ofrecidos ${item.offeredQuantity}`}
                 </p>
+                {item.kind === 'reservation' && <Link to={`/reservas/${encodeURIComponent(item.id)}/chat`}>Abrir chat de la reserva</Link>}
                 <p className="panel-commitment__lot">{lotTitle(item.lot.description)}</p>
                 <p className="panel-commitment__time">
                   Desde {formatInstant(item.createdAt, timeZone)}
