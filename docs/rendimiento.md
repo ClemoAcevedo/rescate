@@ -190,5 +190,6 @@ consulta tarda decenas de milisegundos. Por eso el panel no agrega índices.
 ## Limitaciones
 
 - Generador, API, worker y PostgreSQL corren en un mismo equipo. El anexo exige declarar
-  esa interferencia: el resultado no sustituye la prueba con otro equipo (p. 18).
+  esa interferencia: el resultado no sustituye la prueba con otro equipo (p. 18). Esa
+  prueba, con un servidor que cumpla los mínimos del anexo, es #170.
 - Restaurar copia y conciliar después es K053 (#56).
