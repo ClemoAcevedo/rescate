@@ -175,6 +175,39 @@ El test usa un puerto efímero, no requiere PostgreSQL y cierra el servidor incl
 ante una aserción fallida. Un fallo de `npm test` interrumpe el job API; no hay
 `continue-on-error`. Los comandos del job Compose están en el workflow.
 
+### Cobertura de la API
+
+```bash
+npm --prefix api run test:coverage
+# Con el servicio db de Compose levantado:
+npm --prefix api run test:coverage:compose
+```
+
+El primero mide las pruebas unitarias con la cobertura de `node:test`. El segundo ejecuta
+uno a uno los envoltorios del job `compose` de CI y mide también la API y el worker que
+esos envoltorios lanzan. Cada corrida deja en `api/coverage/` (ignorado por git) su lcov,
+su salida y su código de salida. [`coverage-summary.mjs`](../api/scripts/coverage-summary.mjs)
+escribe `summary.md` y `summary.json` y termina con el código del runner. Las cifras van en
+la descripción del PR. E1 no fija una meta de cobertura.
+
+Para leer el resumen:
+
+- La cifra de líneas que se cita incluye los archivos con código que ninguna prueba cargó.
+  «Solo cargados» equivale al total de Node, que los omite y sobrestima.
+- `--enable-source-maps` es obligatorio. Sin él Node asigna las líneas del JavaScript
+  generado al TypeScript y las cifras salen falsas. El resumen guarda el comando de cada
+  corrida y la marca como no válida si falta.
+- Las unitarias cargan `src` con `tsx` y la integración carga `dist`, así que ramas y
+  funciones no se suman entre corridas: solo se unen las líneas. Las ramas salen infladas
+  porque V8 no informa las de funciones que nunca se ejecutaron.
+- Una corrida con pruebas fallidas deja un lcov parcial; el resumen lista los envoltorios
+  que corrieron y las pruebas que fallaron. La instrumentación vuelve más lentos la API y
+  el worker: un fallo por plazo se confirma repitiendo ese envoltorio sin cobertura.
+- No se miden `web/` (no tiene pruebas unitarias y Playwright no instrumenta el
+  navegador), los contenedores de Compose, los procesos terminados con `SIGKILL` ni los
+  scripts fuera del job `compose`. La carga y la integridad se miden sin cobertura,
+  porque la instrumentación cambia las latencias.
+
 ## Revisión automática de PR
 
 [Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
