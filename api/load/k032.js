@@ -38,15 +38,17 @@ const expected = new Counter('k032_esperados')
 const uncertain = new Counter('k032_inciertas')
 const connections = new Counter('k032_conexiones_nuevas')
 
-// Dos VU por solicitud por segundo: k6 los rota y cada uno vuelve a usarse en unos 2 s, antes
-// de que la API cierre la conexión ociosa (keepAliveTimeout de Node, 5 s).
+// Cuatro VU por solicitud por segundo. k6 descarta la iteración que no encuentra un VU libre:
+// con dos, una pausa de unos 3 s del equipo ya descartaba iteraciones de las operaciones de 1/s.
+// k6 los rota y cada uno vuelve a usarse en unos 4 s, antes de que la API cierre la conexión
+// ociosa (keepAliveTimeout de Node, 5 s).
 function scenarios() {
   const result = {}
   for (const [op, rate] of Object.entries(rates)) {
     for (const [phase, startTime, seconds] of [['preparacion', 0, warmup], ['medida', warmup, measured]]) {
       result[`${op}_${phase}`] = { executor: 'constant-arrival-rate', exec: op, rate, timeUnit: '1s',
-        startTime: `${startTime}s`, duration: `${seconds}s`, preAllocatedVUs: rate * 2,
-        maxVUs: rate * 6, tags: { fase: phase }, env: { FASE: phase } }
+        startTime: `${startTime}s`, duration: `${seconds}s`, preAllocatedVUs: rate * 4,
+        maxVUs: rate * 8, tags: { fase: phase }, env: { FASE: phase } }
     }
   }
   return result
