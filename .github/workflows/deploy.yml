@@ -135,6 +135,9 @@ jobs:
     needs: [worker, web]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
     environment: production
     env:
       WEB_URL: ${{ vars.WEB_URL }}
@@ -150,13 +153,6 @@ jobs:
           cache: npm
           cache-dependency-path: api/package-lock.json
       - run: npm --prefix api ci
-      - name: Cache Chromium
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('api/package-lock.json') }}
-      - name: Install Chromium
-        run: .github/scripts/install-chromium.sh
       - name: Browser smoke against the public deployment
         run: |
           test -n "$DEPLOY_SMOKE_EMAIL"

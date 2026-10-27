@@ -14,7 +14,12 @@ const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 const page = await context.newPage()
 const pageErrors = []
+const failedRequests = []
 page.on('pageerror', error => pageErrors.push(error.message))
+page.on('requestfailed', request => {
+  const path = new URL(request.url()).pathname
+  failedRequests.push(`${request.method()} ${path}: ${request.failure()?.errorText ?? 'fallo de red'}`)
+})
 page.setDefaultTimeout(30000)
 
 try {
@@ -76,10 +81,54 @@ try {
     const sessionCookie = (await context.cookies(origin)).find(cookie => cookie.name === '__Host-rescate_session')
     assert.ok(sessionCookie?.secure && sessionCookie.httpOnly)
     assert.equal(sessionCookie.domain, new URL(origin).hostname)
-    const persisted = await page.evaluate(async () => (await fetch('/api/auth/session')).json())
+    // Rehidratar el proveedor de autenticación desde la cookie emitida por el
+    // login antes de probar acciones protegidas. La respuesta de fetch directa
+    // solo verifica el servidor y no actualiza el token CSRF en la aplicación.
+    const persistedResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/session')
+    await page.reload()
+    const persisted = await (await persistedResponse).json()
     assert.ok(persisted.session)
-    const logoutResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/logout')
-    await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+    assert.equal(typeof persisted.csrfToken, 'string', 'la sesión autenticada debe rehidratar también el token CSRF')
+    assert.ok(persisted.csrfToken.length > 0, 'la sesión autenticada debe rehidratar también el token CSRF')
+
+    const sessionStatus = page.locator('.session-status')
+    const logoutButton = page.getByRole('button', { name: 'Cerrar sesión', exact: true })
+    try {
+      await sessionStatus.waitFor({ state: 'attached', timeout: 10000 })
+      const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+      if (await menu.isVisible()) await menu.click()
+      await sessionStatus.waitFor({ state: 'visible', timeout: 10000 })
+      await logoutButton.waitFor({ state: 'visible', timeout: 10000 })
+      assert.ok(await logoutButton.isEnabled(), 'el botón de logout debe estar habilitado')
+    } catch (error) {
+      const sessionVisible = await sessionStatus.isVisible().catch(() => false)
+      const buttonVisible = await logoutButton.isVisible().catch(() => false)
+      const sessionNotice = await page.locator('.session-notice [role="alert"]').allTextContents().catch(() => [])
+      console.error('Diagnóstico de logout antes del click:', JSON.stringify({
+        apiSession: Boolean(persisted.session), csrfTokenReady: Boolean(persisted.csrfToken),
+        sessionVisible, buttonVisible, sessionNotice, pageErrors: pageErrors.length, failedRequests,
+      }))
+      throw error
+    }
+
+    let logoutResponse
+    try {
+      const [response] = await Promise.all([
+        page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/logout', { timeout: 15000 }),
+        logoutButton.click(),
+      ])
+      logoutResponse = response
+    } catch (error) {
+      const sessionVisible = await sessionStatus.isVisible().catch(() => false)
+      const buttonEnabled = await logoutButton.isEnabled().catch(() => false)
+      const buttonBusy = await logoutButton.getAttribute('aria-busy').catch(() => null)
+      const sessionNotice = await page.locator('.session-notice [role="alert"]').allTextContents().catch(() => [])
+      console.error('Diagnóstico de logout después del click:', JSON.stringify({
+        csrfTokenReady: Boolean(persisted.csrfToken), sessionVisible, buttonEnabled, buttonBusy,
+        sessionNotice, pageErrors: pageErrors.length, failedRequests,
+      }))
+      throw error
+    }
     assert.equal((await logoutResponse).status(), 204)
     const loggedOut = await page.evaluate(async () => (await fetch('/api/auth/session')).json())
     assert.equal(loggedOut.session, null)
