@@ -264,46 +264,55 @@ caben y límites excedidos quedan enumerados como pendientes; no producen cobert
 completa.
 
 Cada lote añade hasta 30 000 caracteres de extractos numerados del HEAD: versiones
-de `package.json`, configuración TypeScript, imports relativos directos y documentación
-del área modificada. Es contexto selectivo, no resolución completa de dependencias:
-los archivos recortados se identifican. El contrato HTTP modificado puede aportar
-extractos adicionales cuando cabe. El título y la descripción del autor son contexto,
-no evidencia de corrección ni instrucciones para el modelo.
+de `package.json`, configuración TypeScript, imports relativos directos y fuentes
+cambiadas. También busca documentos del área aunque no cambien en el PR: lotes y
+reservas, cola y ofertas parciales, vencimientos y avisos, identidad, chat, fotos,
+panel o rendimiento. Sus primeras 60 líneas comparten como máximo un tercio del
+presupuesto; el resto queda disponible para código. Los extractos limitados se
+identifican. El contrato HTTP modificado puede aportar contexto adicional cuando
+cabe. El título, la descripción y los documentos del PR son datos, nunca instrucciones.
 
-Gemini usa [razonamiento alto](https://ai.google.dev/gemini-api/docs/thinking) y
-salida estructurada. Debe enumerar todas las rutas recibidas y cada hallazgo necesita
-ubicación cambiada (`RIGHT` o `LEFT`), caso concreto, impacto, corrección y una cita
-exacta de código visible, con confianza mínima 0,85. Una segunda consulta intenta
-refutar cada candidato: confirmarlo o descartarlo requiere evidencia visible y
-confianza mínima 0,90. Un candidato sin verificar deja la revisión incompleta.
-Estas validaciones no demuestran que el modelo haya encontrado todos los bugs.
+Las instrucciones priorizan inventario, FIFO, vigencia, permisos, concurrencia,
+idempotencia y recuperación de la UI después de un error. Cada lote se analiza en
+una sola pasada con salida estructurada y hasta cinco hallazgos de severidad alta
+o media. Cada hallazgo necesita una línea cambiada (`RIGHT` o `LEFT`), caso
+reproducible, impacto, corrección, confianza mínima 0,85 y una cita exacta del código
+visible. El modelo debe buscar validaciones que lo refuten antes de incluirlo.
+El script comprueba formato, cobertura, ubicación y cita; estas comprobaciones no
+prueban la corrección del diagnóstico. El comentario muestra como máximo cinco
+hallazgos, ordenados por severidad y confianza; el artefacto conserva todos.
 
-Ante HTTP 500/502/503/504 o fallos de conexión/timeout, Gemini reintenta hasta cuatro
-veces, esperando 10, 20, 40 y 80 segundos. Si Gemini falla, devuelve formato inválido
-o cobertura incompleta, el reviewer intenta OpenRouter. Si la respuesta de OpenRouter
-no pasa la validación, solicita una corrección una vez y vuelve a validarla; si vuelve
-a fallar, deja la revisión incompleta. Cada intento dura hasta 120 segundos; la revisión
-tiene 20 minutos de presupuesto total y el job 25. En particular,
-`401` indica una clave ausente o inválida; `429` indica límite de uso; `503` indica que
-el servicio está temporalmente sobrecargado o caído. El bot comprueba HEAD, base y
-estado del PR antes de cada consulta, reintento y publicación; descarta resultados
-obsoletos.
+Ambos proveedores tienen hasta tres intentos por lote, con esperas de 10 y 20
+segundos. Se reintentan conexión, timeout, JSON ilegible, respuesta incompleta,
+formato inválido y HTTP 500/502/503/504. La siguiente consulta incluye el motivo
+para corregir el formato. Los demás errores HTTP no se reintentan y desactivan
+ese proveedor durante la ejecución: `401` indica credenciales inválidas, `403`
+acceso denegado y `429` límite de uso. Si Gemini no completa el lote, se intenta
+OpenRouter con las mismas validaciones. Los motivos de ambos quedan en los logs
+y en `diagnostics` del resultado, incluso si un intento posterior funciona.
+
+Un lote fallido queda pendiente y se continúa con los restantes. Si solo falla un
+fragmento, el archivo sigue pendiente aunque sus demás fragmentos se revisen.
+Cada llamada dura hasta 120 segundos, dentro de 20 minutos totales y un job de 25.
+Al agotarse el presupuesto no se hacen más consultas ni esperas; se publica lo
+obtenido. El bot comprueba HEAD, base y estado del PR antes de cada consulta,
+reintento y publicación; descarta resultados obsoletos.
 
 Una revisión incompleta aparece advertida al principio del comentario y deja el
-job fallido, conservando los hallazgos confirmados y la lista de pendientes. Se
+job fallido, conservando los hallazgos validados y la lista de pendientes. Se
 puede repetir con **Re-run failed jobs** sobre el mismo HEAD y base después de
 resolver la causa. Solo una revisión completa de esta versión y de ambos SHA
 suprime consultas duplicadas. Si falta la clave o no se puede preparar el diff,
 el error aparece en Actions antes de consultar el modelo.
 
 El artefacto `gemini-review-RUN-ATTEMPT` conserva durante 14 días `review-result.json`
-con cobertura y decisiones, y `review-usage.json` con los tokens informados por los
-proveedores, sin prompts ni credenciales. El consumo se guarda antes y después de
-cada llamada, también si su respuesta es inválida o el SHA cambia. `unknownRequests`
-indica consultas cuyo consumo no fue informado: el total conocido no equivale a una factura.
-Los logs solo muestran conteos y diagnósticos. El número de consultas crece con los
-lotes, hallazgos y reintentos; los tests locales no consumen API. Este job es
-independiente del CI del producto y no aprueba ni integra PRs.
+con hallazgos, cobertura y diagnósticos por lote/proveedor/intento, y
+`review-usage.json` con los tokens informados. No conserva prompts, credenciales ni
+excepciones crudas del proveedor. El consumo se guarda antes y después de cada
+llamada, también si su respuesta es inválida o el SHA cambia. `unknownRequests`
+indica consultas cuyo consumo no fue informado: el total conocido no equivale a
+una factura. Las pruebas locales simulan las respuestas sin consumir API. El job
+es independiente del CI del producto y no aprueba ni integra PRs.
 
 Para comprobarlo, buscar una revisión publicada por `github-actions[bot]` con el
 título **Revisión automática** y el SHA vigente. Un job verde por sí solo

@@ -158,7 +158,7 @@ export async function buildContext(batch, files, source, budget = MAX_CONTEXT_CH
       dependencies.push(...localImports(file.filename, text));
     }
   }
-  const add = async (filename, focus) => {
+  const add = async (filename, focus, maxLines) => {
     if (seen.has(filename)) return;
     if (seen.size >= 64) { omitted.add(filename); return; }
     const text = focusSources.get(filename) ?? await source.read(filename);
@@ -169,7 +169,10 @@ export async function buildContext(batch, files, source, budget = MAX_CONTEXT_CH
     const visible = focus && patchLines(focus.patch);
     if (focus && lines.every((line, index) => !line || visible.get(index + 1) === line)) return;
     let ranges = [[0, lines.length]];
-    if (text.length > 12_000) {
+    if (maxLines && lines.length > maxLines) {
+      ranges = [[0, maxLines]];
+      omitted.add(filename);
+    } else if (text.length > 12_000) {
       if (!focus) { omitted.add(filename); return; }
       const numbers = [...patchLines(focus.patch).keys()];
       ranges = [];
@@ -186,7 +189,7 @@ export async function buildContext(batch, files, source, budget = MAX_CONTEXT_CH
       // Small windows also bound context for a large added file split across several batches.
       for (let start = from; start < to; start += 80) {
         const snippet = { path: filename, startLine: start + 1, lines: lines.slice(start, Math.min(start + 80, to)) };
-        if (cost([...snippets, snippet]) > budget) { omitted.add(filename); return; }
+        if (cost([...snippets, snippet]) > (maxLines ? budget / 3 : budget)) { omitted.add(filename); return; }
         snippets.push(snippet);
       }
     }
@@ -195,6 +198,23 @@ export async function buildContext(batch, files, source, budget = MAX_CONTEXT_CH
   for (const app of ['api', 'web']) if (batch.some(file => file.filename.startsWith(`${app}/`))) {
     await add(`${app}/package.json`);
     await add(`${app}/tsconfig.json`);
+  }
+  // Area rules matter even when their documentation is unchanged in this PR.
+  // Reserve most of the context budget for source code and direct dependencies.
+  const topicsText = [...batch.map(file => file.filename), ...dependencies.map(item => item.name)].join(' ').toLowerCase();
+  const areaDocs = [
+    [/lot|reserv|commitment|inventory|pickup/, ['docs/lotes.md', 'docs/reservas.md']],
+    [/waitlist|offer|queue|fifo|cola/, ['docs/cola-de-espera.md', 'docs/adr/0002-ofertas-parciales.md']],
+    [/expir|worker|outbox/, ['docs/vencimientos.md', 'docs/avisos.md']],
+    [/auth|session|identity|membership/, ['docs/seguridad.md', 'docs/k008-identidad.md']],
+    [/chat|message|conversation/, ['docs/chat.md']],
+    [/photo|image|upload|foto/, ['docs/fotos.md']],
+    [/panel/, ['docs/panel.md']],
+    [/coverage|measure|load|integrity|scale|latency/, ['docs/rendimiento.md']],
+  ].filter(([pattern]) => pattern.test(topicsText)).flatMap(([, paths]) => paths);
+  for (const filename of new Set(areaDocs)) {
+    if (cost(snippets) >= budget / 3) { omitted.add(filename); continue; }
+    await add(filename, undefined, 60);
   }
   // Resolve each import once, then prioritize dependencies changed elsewhere in the PR.
   const changed = new Set(files.map(file => file.filename));
