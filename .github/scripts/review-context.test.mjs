@@ -144,3 +144,33 @@ test('diff metadata between renamed sections never becomes source evidence', () 
   assert.equal(fragments.length, 2);
   assert.ok(fragments.every(fragment => !fragment.includes('/dev/null')));
 });
+
+test('unchanged area documentation supplies business rules before source context', async () => {
+  const reservation = { ...file, filename: 'api/src/application/reservations/use-cases.ts' };
+  const sources = {
+    [reservation.filename]: "import { lock } from '../../infrastructure/lock.js';\nexport const reserve = () => lock();",
+    'api/src/infrastructure/lock.ts': 'export const lock = () => true;',
+    'docs/lotes.md': 'Q = F + O + R + E + X; sin sobreasignación.',
+    'docs/reservas.md': 'Cancelar dos veces no libera dos veces.',
+    'docs/chat.md': 'No relacionado.',
+  };
+  const context = await buildContext([reservation], [reservation], { read: async name => sources[name] ?? null });
+  const paths = context.snippets.map(item => item.path);
+  assert.ok(paths.includes('docs/lotes.md'));
+  assert.ok(paths.includes('docs/reservas.md'));
+  assert.ok(paths.includes('api/src/infrastructure/lock.ts'));
+  assert.ok(!paths.includes('docs/chat.md'));
+});
+
+test('area docs are bounded so large business documents leave room for dependencies', async () => {
+  const chat = { ...file, filename: 'web/src/pages/ChatPage.tsx' };
+  const sources = {
+    [chat.filename]: "import { send } from '../services/chat-service.js';\nexport const page = () => send();",
+    'web/src/services/chat-service.ts': 'export const send = () => true;',
+    'docs/chat.md': Array.from({ length: 1000 }, (_, i) => `Regla ${i} ${'x'.repeat(40)}`).join('\n'),
+  };
+  const context = await buildContext([chat], [chat], { read: async name => sources[name] ?? null }, 5000);
+  assert.ok(context.limitedFiles.includes('docs/chat.md'));
+  assert.ok(context.snippets.some(item => item.path === 'web/src/services/chat-service.ts'));
+  assert.ok(encoded(context.snippets) <= 5000);
+});
