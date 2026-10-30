@@ -1,4 +1,4 @@
-// K032: planes reales de búsqueda, reserva, cola, compromisos, panel y worker sobre la semilla de escala.
+// K032: planes reales de búsqueda, reserva, cola, compromisos, panel, chat y worker sobre la semilla de escala.
 // Intercepta pg para analizar cada sentencia que emite la API con EXPLAIN (ANALYZE, BUFFERS)
 // dentro de un savepoint que se revierte; luego la sentencia corre normalmente. Así el plan
 // corresponde al SQL de los repositorios y no a una copia que pueda quedar desactualizada.
@@ -71,7 +71,8 @@ export function summarize(plans) {
 export async function explainScale(connectionString, seed, environment) {
   const plans = []
   const probe = instrument(plans)
-  const api = createApi({ ...environment, DATABASE_URL: connectionString })
+  // Sin el registro por solicitud de K036: aquí solo interesan los planes.
+  const api = createApi({ ...environment, DATABASE_URL: connectionString }, () => {})
   const server = api.app.listen(0, '127.0.0.1')
   await new Promise(resolve => server.once('listening', resolve))
   const base = `http://127.0.0.1:${server.address().port}`
@@ -113,6 +114,10 @@ export async function explainScale(connectionString, seed, environment) {
     ['cancelación', () => call('POST', `/reservations/${seed.probe.cancels[0]}/cancel`, {}), 200],
     ['ingreso a la espera', () => call('POST', `/public/lots/${seed.queuedLots[0]}/waitlist`, { quantity: 1, idempotencyKey: randomUUID() }), 201],
     ['avisos', () => call('GET', '/notifications'), 200],
+    // K039: conversación abierta de la sonda con 60 mensajes; k6 no la usa.
+    ['chat: lectura desde el inicio', () => call('GET', `/reservations/${seed.probe.chat}/messages?after=0`), 200],
+    ['chat: envío', () => call('POST', `/reservations/${seed.probe.chat}/messages`,
+      { text: 'Mensaje de la sonda K032.', idempotencyKey: randomUUID() }), 201],
     ['panel del establecimiento', () => call('GET', `${establishment}/panel`), 200],
     ['panel con período de 60 días', () => call('GET', `${establishment}/panel?from=${new Date(Date.now() - 59 * 86400000).toISOString().slice(0, 10)}`), 200],
     ['compromisos del establecimiento', () => call('GET', `${establishment}/commitments`), 200],

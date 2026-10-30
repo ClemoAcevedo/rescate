@@ -78,7 +78,9 @@ try {
   }
   if (!up) throw new Error('API o Vite no respondieron')
 
-  for (const script of ['test:web:auth', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:panel', 'test:web:waitlist', 'test:web:notifications', 'test:web:chat', 'test:web:queue-worker']) {
+  // WEB_SCRIPTS elige otros recorridos sobre los mismos servicios (K039: chat visible).
+  const scripts = process.env.WEB_SCRIPTS?.split(',') ?? ['test:web:auth', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:panel', 'test:web:waitlist', 'test:web:notifications', 'test:web:chat', 'test:web:queue-worker']
+  for (const script of scripts) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }
   console.log(`Base de prueba conservada: ${database}. No se alteró la base de desarrollo.`)
