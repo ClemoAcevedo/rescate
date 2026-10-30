@@ -58,7 +58,7 @@ export function planOffers(free: number, waiting: readonly QueuedRequest[], now:
   let remaining = free
   for (const request of waiting) {
     if (remaining <= 0) break
-    const quantity = Math.min(request.requestedQuantity, remaining)
+    const quantity = request.requestedQuantity
     plan.push({ id: request.id, quantity, expiresAt })
     remaining -= quantity
   }
