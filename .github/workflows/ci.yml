@@ -241,7 +241,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             mcr.microsoft.com/playwright:v1.63.0-noble \
-            bash -lc "npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose && node api/scripts/web-coverage-report.mjs"
+            bash -lc "node api/scripts/test-web-coverage-collector.mjs && npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose && node api/scripts/web-coverage-report.mjs"
       - name: Frontend coverage by module
         if: always()
         uses: actions/upload-artifact@v4

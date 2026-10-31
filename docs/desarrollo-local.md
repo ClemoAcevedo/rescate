@@ -225,6 +225,13 @@ comportamientos: se revisan las aserciones y las ramas sin recorrer antes de añ
 pruebas. E1 no fija un porcentaje óptimo universal; un módulo que decide autorizaciones
 requiere más atención que un adaptador de presentación.
 
+`npm --prefix api run test:web:lot-rules` verifica reglas puras del cliente en el
+navegador, sin React ni API: zona del lote independiente del equipo del operador,
+cambio de horario y calendario, validación de packs/coordenadas/plazos, y PATCH de
+solo los campos modificados comparando instantes equivalentes. Son cuatro escenarios
+agrupados por riesgo. El recolector tiene además una regresión propia de navegación;
+esa comprobación de instrumentación se informa separada de las pruebas del producto.
+
 Para explicar el reporte de API: `domain` contiene reglas puras; `application`, casos
 de uso y permisos; `http`, parsing y traducción de errores; `infrastructure`, SQL,
 sesiones, cifrado y almacenamiento. Las unitarias aíslan dependencias; las integraciones
@@ -237,13 +244,16 @@ aportan evidencia sobre la infraestructura real. El reporte separa estas corrida
 npm --prefix api run test:web:coverage
 ```
 
-El comando levanta Vite temporalmente y recorre accesibilidad, distribución, logout y
-chat con respuestas controladas, sin PostgreSQL. En CI el mismo recolector mide todos
+El comando levanta Vite temporalmente y verifica las reglas puras del cliente, además
+de accesibilidad, distribución, logout y chat con respuestas controladas, sin
+PostgreSQL. En CI el mismo recolector mide todos
 los recorridos de `test:web:compose` contra API, worker y base reales. Son alcances
 distintos: el resumen identifica cuál produjo cada cifra.
 
-Chromium recoge V8 antes de navegar y conserva datos entre navegaciones. Al cerrar cada
-página o contexto se guarda su cobertura; Monocart recupera los TypeScript/TSX usando
+Chromium recoge V8 y guarda los contadores antes de cada navegación o recarga, y al
+cerrar la página o contexto. Una regresión con dos documentos comprueba que las
+ejecuciones anteriores se conservan al volver, avanzar y recargar.
+Monocart recupera los TypeScript/TSX usando
 los source maps de Vite. Incluye con cero los archivos con código no ejecutado y excluye
 los que solo declaran tipos. No modifica el código enviado a producción.
 

@@ -15,7 +15,7 @@ const vite = await createServer({ root: web, server: { host: '127.0.0.1', port: 
 let passed = false
 try {
   await vite.listen()
-  for (const script of ['test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:chat']) {
+  for (const script of ['test:web:lot-rules', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:chat']) {
     const { stdout, stderr } = await promisify(execFile)('npm', ['run', script], { cwd: api, maxBuffer: 10 * 1024 * 1024,
       env: { ...process.env, WEB_URL: vite.resolvedUrls.local[0].replace(/\/$/, ''), WEB_COVERAGE_DIR: dir } })
     process.stdout.write(stdout); process.stderr.write(stderr)
@@ -25,7 +25,7 @@ try {
   await vite.close()
   if (passed) {
     const { stdout } = await promisify(execFile)(process.execPath, ['scripts/web-coverage-report.mjs'], {
-      cwd: api, env: { ...process.env, WEB_COVERAGE_DIR: dir, WEB_COVERAGE_SCOPE: 'Respuestas controladas: accesibilidad, responsive, logout y chat' } })
+      cwd: api, env: { ...process.env, WEB_COVERAGE_DIR: dir, WEB_COVERAGE_SCOPE: 'Reglas puras del cliente y respuestas controladas: accesibilidad, responsive, logout y chat' } })
     process.stdout.write(stdout)
   }
 }
