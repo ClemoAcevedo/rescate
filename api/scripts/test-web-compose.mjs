@@ -79,7 +79,7 @@ try {
   if (!up) throw new Error('API o Vite no respondieron')
 
   // WEB_SCRIPTS elige otros recorridos sobre los mismos servicios (K039: chat visible).
-  const scripts = process.env.WEB_SCRIPTS?.split(',') ?? ['test:web:auth', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:lots', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:panel', 'test:web:waitlist', 'test:web:notifications', 'test:web:chat', 'test:web:queue-worker']
+  const scripts = process.env.WEB_SCRIPTS?.split(',') ?? ['test:web:auth', 'test:web:accessibility', 'test:web:responsive', 'test:web:logout', 'test:web:lots', 'test:web:lot-management', 'db:test:discovery', 'db:test:reservations', 'test:web:discovery', 'test:web:reservations', 'test:web:pickups', 'test:web:panel', 'test:web:waitlist', 'test:web:notifications', 'test:web:chat', 'test:web:queue-worker']
   for (const script of scripts) {
     execFileSync('npm', ['run', script], { cwd: api, stdio: 'inherit', env: { ...env, WEB_URL: webUrl } })
   }

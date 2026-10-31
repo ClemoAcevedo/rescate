@@ -420,9 +420,12 @@ try {
        OR LEAST(l.free_quantity, l.offered_quantity, l.reserved_quantity, l.delivered_quantity, l.expired_quantity) < 0
        OR l.reserved_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'confirmed'), 0)
        OR l.delivered_quantity <> COALESCE((SELECT sum(d.quantity) FROM deliveries d JOIN commitments c ON c.id = d.commitment_id WHERE c.lot_id = l.id), 0)
-       -- Abierto: X son las reservas vencidas. Vencido (K028): no queda F, O ni R, y X = Q - E.
-       OR l.status <> 'expired' AND l.expired_quantity <> COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'expired'), 0)
-       OR l.status = 'expired' AND l.free_quantity + l.offered_quantity + l.reserved_quantity <> 0
+       -- Abierto: X incluye reservas vencidas y descuentos externos con historial.
+       -- Cerrado por plazo o retiro: no queda F/O/R; la suma anterior obliga X = Q - E.
+       OR l.status NOT IN ('expired', 'withdrawn') AND l.expired_quantity <>
+         COALESCE((SELECT sum(c.quantity) FROM commitments c WHERE c.lot_id = l.id AND c.status = 'expired'), 0)
+         + COALESCE((SELECT sum(o.quantity) FROM lot_operations o WHERE o.lot_id = l.id AND o.action = 'reduce_stock'), 0)
+       OR l.status IN ('expired', 'withdrawn') AND l.free_quantity + l.offered_quantity + l.reserved_quantity <> 0
        OR EXISTS (SELECT 1 FROM commitments c WHERE c.lot_id = l.id
          AND (SELECT count(*) FROM deliveries d WHERE d.commitment_id = c.id) <> CASE WHEN c.status = 'delivered' THEN 1 ELSE 0 END)
        OR EXISTS (SELECT 1 FROM deliveries d JOIN commitments c ON c.id = d.commitment_id

@@ -38,7 +38,7 @@ function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
       <div className="my-lot__media"><LotPhoto src={lot.photoUrl} description={`Fotografía del pack: ${title}`} /></div>
       <div className="my-lot__body">
         <div className="my-lot__labels">
-          {lot.status === 'published' && ended ? <Badge>Retiro finalizado</Badge> : <Badge tone={badge.tone}>{badge.label}</Badge>}
+          {lot.status === 'published' && ended ? <Badge>Retiro finalizado</Badge> : lot.paused ? <Badge tone="warning">Pausado</Badge> : <Badge tone={badge.tone}>{badge.label}</Badge>}
           <span className="my-lot__category">{lot.category}</span>
         </div>
         <h2><Link to={editorPath}>{title}</Link></h2>
@@ -56,7 +56,7 @@ function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
         {lot.status !== 'draft' && (
           <Link className="ui-button ui-button--secondary" to={`${editorPath}/retiros`}>Validar retiros</Link>
         )}
-        {lot.status === 'published' && !ended && (
+        {lot.status === 'published' && !lot.paused && !ended && (
           <Link className="ui-button ui-button--ghost" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Vista pública</Link>
         )}
       </div>

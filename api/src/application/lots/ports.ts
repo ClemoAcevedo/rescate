@@ -31,6 +31,7 @@ export interface LotPublication {
 
 /** Resumen de un lote para el listado de su establecimiento. */
 export interface LotSummary {
+  paused?: boolean
   publicId: string
   status: LotStatus
   version: number

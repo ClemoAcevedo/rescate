@@ -7,6 +7,8 @@ import {
   type ResponseParser,
 } from './http-client'
 import type {
+  LotManagementRequest,
+  LotManagementResponse,
   CreateLotDraftRequest,
   ErrorResponse,
   LotPhoto,
@@ -125,8 +127,9 @@ function parsePhoto(value: unknown): LotPhoto {
 }
 
 const parsePhotoList: ResponseParser<LotPhotoList> = (value) => {
-  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 3) throw new Error('La lista de fotos no tiene el formato esperado.')
-  return { items: value.items.map(parsePhoto) }
+  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 50) throw new Error('La lista de fotos no tiene el formato esperado.')
+  if (value.limit !== undefined && (!Number.isInteger(value.limit) || Number(value.limit) < 1 || Number(value.limit) > 50)) throw new Error('Cupo de fotos inválido.')
+  return { items: value.items.map(parsePhoto), limit: value.limit as number | undefined }
 }
 
 function parseSummary(value: unknown): OperatorLotSummary {
@@ -205,9 +208,13 @@ export async function listEstablishmentLots(establishmentId: string, query: { st
 const photosPath = (lotId: string) => `${lotPath(lotId)}/photos`
 
 export async function listLotPhotos(lotId: string, signal?: AbortSignal): Promise<LotPhoto[]> {
+  return (await listLotPhotoPage(lotId, signal)).items
+}
+
+export async function listLotPhotoPage(lotId: string, signal?: AbortSignal): Promise<LotPhotoList> {
   const list = await send(photosPath(lotId), 'GET', { signal, parse: parsePhotoList })
   if (list === undefined) throw new UnexpectedResponseError('La API no devolvió las fotos.', undefined)
-  return [...list.items].sort((a, b) => a.position - b.position)
+  return { ...list, items: [...list.items].sort((a, b) => a.position - b.position) }
 }
 
 /** El archivo viaja como cuerpo binario con su propio Content-Type (OpenAPI `uploadLotPhoto`). */
@@ -222,3 +229,28 @@ export async function removeLotPhoto(lotId: string, photoId: string, csrfToken: 
 }
 
 export { ConnectionError, UnexpectedResponseError }
+
+export type { LotManagementRequest, LotManagementResponse }
+const parseManagement: ResponseParser<LotManagementResponse> = value => {
+  if (!isRecord(value) || !isLotStatus(value.status) || !Number.isSafeInteger(value.version) || Number(value.version) < 1
+      || typeof value.paused !== 'boolean' || !Array.isArray(value.history) || value.history.length > 20
+      || ['freeQuantity','offeredQuantity','reservedQuantity','deliveredQuantity','unassignableQuantity']
+        .some(key => !Number.isSafeInteger(value[key]) || Number(value[key]) < 0)
+      || value.history.some(item => !isRecord(item) || typeof item.id !== 'string'
+        || !['reduce_stock','pause','resume','withdraw'].includes(String(item.action)) || typeof item.reason !== 'string'
+        || typeof item.createdAt !== 'string' || !Number.isFinite(Date.parse(item.createdAt))
+        || !Number.isSafeInteger(item.version) || (item.quantity !== null && (!Number.isSafeInteger(item.quantity) || Number(item.quantity) < 1)))) {
+    throw new Error('El inventario no tiene el formato esperado.')
+  }
+  return value as unknown as LotManagementResponse
+}
+export async function getLotManagement(lotId: string, signal?: AbortSignal): Promise<LotManagementResponse> {
+  const result = await send(`${lotPath(lotId)}/management`, 'GET', { signal, parse: parseManagement })
+  if (!result) throw new UnexpectedResponseError('La API no devolvió el inventario.', undefined)
+  return result
+}
+export async function manageLot(lotId: string, body: LotManagementRequest, csrfToken: string): Promise<LotManagementResponse> {
+  const result = await send(`${lotPath(lotId)}/management`, 'POST', { body, csrfToken, parse: parseManagement })
+  if (!result) throw new UnexpectedResponseError('La API no devolvió la operación.', undefined)
+  return result
+}

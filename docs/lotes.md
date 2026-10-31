@@ -1,7 +1,7 @@
 # Lotes, búsqueda y reserva directa (RF02–RF04)
 
 Un operador crea un borrador de lote para un establecimiento del que es miembro,
-lo edita y lo publica. Lo publicado no cambia. El contrato HTTP está en
+lo edita y lo publica. El contenido publicado queda fijo; su disponibilidad se gestiona mediante operaciones con historial. El contrato HTTP está en
 [OpenAPI S02](api/openapi.yaml); este documento explica reglas, decisiones y
 cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identidad.md).
 
@@ -20,7 +20,7 @@ cómo probarlo. La sesión, las cookies y el CSRF están en [K008](k008-identida
   ([fotos](fotos.md)).
 - **Fotos fijas.** Publicado, no se agregan ni quitan fotos (409).
 - **Inmutabilidad.** Un lote publicado no se edita ni se republica (409):
-  cantidad, contenido, lugar y plazo quedan fijos.
+  cantidad declarada, contenido, lugar y plazo quedan fijos. Descontar stock modifica unidades libres, no esa declaración.
 - **Autorización del operador.** Cada operación de borrador/publicación comprueba la membership actual sobre el
   establecimiento del lote. La lista de establecimientos de la sesión solo orienta
   la navegación; los UUID públicos no conceden permisos.
@@ -51,8 +51,7 @@ Las rutas son relativas a la base de la API; el proxy de la web quita `/api`. La
 - Vencido (`expired`) y retirado (`withdrawn`) son cierres lógicos: el lote no se
   borra, deja de aparecer en la búsqueda pública y queda con `closed_at`
   ([ADR 0008](adr/0008-estado-del-lote-y-cierre-logico.md)). El worker vence un lote
-  publicado al llegar su cierre ([vencimientos](vencimientos.md)); retirar aún no
-  tiene comando.
+  publicado al llegar su cierre ([vencimientos](vencimientos.md)); el operador también puede retirar explícitamente la publicación.
 - Se rechazan propiedades desconocidas, cambio de establecimiento y campos del
   servidor. Las fechas son RFC 3339 con zona explícita; las respuestas usan UTC.
 - Las respuestas exponen solo `LotResponse`, con `Cache-Control: no-store`. Los
@@ -85,7 +84,7 @@ identifica un establecimiento y responde 404.
 | --- | --- |
 | `/operador/lotes` | «Mis lotes»: lotes del establecimiento con su estado (borrador, publicado, vencido o retirado), filtros Todos/Borradores/Publicados, reservas y acceso a la vista pública. Con varios establecimientos se elige uno. |
 | `/operador/lotes/nuevo` | Formulario completo; «Guardar borrador» crea el lote y navega a su ruta. |
-| `/operador/lotes/:lotId` | Carga, edita y publica el borrador; un lote publicado se muestra en solo lectura. |
+| `/operador/lotes/:lotId` | Carga, edita y publica el borrador; el contenido publicado se muestra en solo lectura y permite gestionar disponibilidad. |
 
 La cabecera muestra «Mis lotes» y «Publicar lote» solo si la sesión tiene
 establecimientos operables. Un lote publicado ofrece «Ver como rescatista» mientras
@@ -219,3 +218,48 @@ y crean una base aislada que conservan para inspección.
 - Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
   elegir en un mapa requiere decidir proveedor, claves y costo.
 - El filtro de establecimientos opera sobre la lista completa de la sesión (#99).
+
+## Disponibilidad después de publicar
+
+`GET /lots/:lotId/management` consulta inventario, pausa y las últimas veinte operaciones.
+`POST` en esa ruta recibe acción, versión, motivo e `idempotencyKey`. La sesión y la
+membership actual se comprueban antes de competir por el lote y dentro de su bloqueo.
+[ADR 0017](adr/0017-gestion-de-publicaciones.md) explica las decisiones.
+
+| Acción | Resultado |
+| --- | --- |
+| `reduce_stock` | Descuenta solo packs libres por venta presencial, merma u otro motivo. F → X; Q, ofertas, reservas y entregas se conservan. |
+| `pause` | Oculta el lote de búsqueda y detalle públicos e impide reservas, ingresos a la espera y ofertas nuevas. Conserva ofertas vigentes, reservas y posición FIFO. |
+| `resume` | Vuelve a ofrecer el lote y asienta la cola en su orden. No amplía el cierre ni el plazo de las ofertas. |
+| `withdraw` | Retira definitivamente la publicación, cancela reservas pendientes e invalida sus códigos, termina ofertas y espera y mueve F/O/R a X. Conserva las entregas E, fotos e historial. |
+
+Dos berlines publicados menos una venta presencial dejan un pack libre en la app.
+Si ya está reservado u ofrecido, no se puede descontar como libre: se rechaza el ajuste.
+La pausa permite suspender nuevas asignaciones mientras se revisa el stock. Los packs
+no asignables incluyen ventas externas y merma declarada; X no demuestra desperdicio
+físico ni cuenta como entrega acreditada por la app.
+
+El cierre de retiro expresa «ofrecer solo por hoy»: se elige ese día y hora en el
+formulario. Al llegar el cierre, incluso pausado, el lote vence. Es el límite de la
+oferta, no una certificación de vida útil del alimento. No se requiere otra fecha para
+ese caso de uso.
+
+Cada operación confirma efectos, motivo, autor, versión y resultado idempotente en la
+misma transacción. Repetir la clave con idénticos parámetros devuelve el resultado
+original; cambiar parámetros responde 409. La web conserva la intención ante una
+respuesta perdida y permite reintentar la misma operación. Después consulta el estado
+actual, porque un resultado reproducido puede ser histórico. La retirada exige una
+confirmación explícita y no tiene reapertura.
+
+`npm --prefix api run db:test:lot-management:compose` comprueba ventas externas contra
+reservas, pausa, cola, retiro contra entrega, invalidación, avisos y vencimiento de un
+lote pausado en PostgreSQL real. `test:web:lot-management` recorre la interfaz a 360 px,
+incluida una respuesta perdida después del commit; forma parte de `test:web:compose`.
+
+Los reportes, versiones, instrucciones y seguimiento de incidencias siguen en
+[K043](https://github.com/ClemoAcevedo/rescate/issues/46) (Felipe Arnolds),
+[K044](https://github.com/ClemoAcevedo/rescate/issues/49) (Clemente Acevedo),
+[K045](https://github.com/ClemoAcevedo/rescate/issues/47) (Jorge Molina),
+[K046](https://github.com/ClemoAcevedo/rescate/issues/48) (Felipe Espinoza) y
+[K047](https://github.com/ClemoAcevedo/rescate/issues/51) (Vicente Reñasco).
+El cierre voluntario no implementa ese circuito de incidencias.

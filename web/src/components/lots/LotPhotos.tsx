@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type { LotPhoto as LotPhotoData } from '../../services/lots-service'
 import { buildUrl } from '../../services/http-client'
-import { ACCEPTED_PHOTO_TYPES, MAX_PHOTOS, type PhotoBusy, type PhotoNotice } from '../../lots/use-lot-photos'
+import { ACCEPTED_PHOTO_TYPES, type PhotoBusy, type PhotoNotice } from '../../lots/use-lot-photos'
 import { Alert } from '../ui/Alert'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -24,6 +24,7 @@ function PhotoState({ photo }: { photo: LotPhotoData }) {
 }
 
 type LotPhotosProps = {
+  limit?: number
   photos: LotPhotoData[] | null
   loadFailed: boolean
   notice: PhotoNotice | null
@@ -36,21 +37,21 @@ type LotPhotosProps = {
   onRetry: () => void
 }
 
-export function LotPhotos({ photos, loadFailed, notice, editable, busy = null, locked = false, onUpload, onRemove, onRetry }: LotPhotosProps) {
+export function LotPhotos({ limit = 3, photos, loadFailed, notice, editable, busy = null, locked = false, onUpload, onRemove, onRetry }: LotPhotosProps) {
   const input = useRef<HTMLInputElement>(null)
   const visible = editable ? photos : photos?.filter((photo) => photo.status === 'ready') ?? null
-  const full = (photos?.length ?? 0) >= MAX_PHOTOS
+  const full = (photos?.length ?? 0) >= limit
   const disabled = locked || busy !== null
 
   return (
     <Card as="section" tone="sunken" className="lot-photos" aria-labelledby="lot-photos-title" aria-busy={busy !== null}>
       <div className="lot-photos__header">
         <h2 id="lot-photos-title">{editable ? 'Fotos (opcional)' : 'Fotos'}</h2>
-        {photos && <span className="lot-photos__count">{photos.length} de {MAX_PHOTOS}</span>}
+        {photos && <span className="lot-photos__count">{photos.length} de {limit}</span>}
       </div>
       <p>
         {editable
-          ? 'Hasta tres fotos JPEG, PNG o WebP de máximo 5 MiB. Se validan antes de mostrarse y quedan fijas al publicar. Puedes publicar sin fotos.'
+          ? `Hasta ${limit} fotos JPEG, PNG o WebP de máximo 5 MiB. Se validan antes de mostrarse y quedan fijas al publicar. Puedes publicar sin fotos.`
           : 'Las fotos quedaron fijas al publicar.'}
       </p>
       {notice && <Alert tone={notice.tone} role={notice.tone === 'info' ? 'status' : 'alert'}>{notice.message}</Alert>}

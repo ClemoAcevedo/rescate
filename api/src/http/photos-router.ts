@@ -13,6 +13,7 @@ import { handleError, sendError } from "./errors.js"
 import type { Log } from "../application/logging.js"
 
 export interface PhotosRouterOptions {
+  maxPhotosPerLot?: number
   useCases: PhotoUseCases
   authenticate: Authenticate
   protectCommand: (request: Request) => Promise<void>
@@ -73,7 +74,7 @@ function readLimited(request: Request, maxBytes: number): Promise<Uint8Array> {
 
 const id = (value: unknown): string => typeof value === "string" ? value : ""
 
-export function createPhotosRouter({ useCases, authenticate, protectCommand, log = event => console.error(event) }: PhotosRouterOptions): Router {
+export function createPhotosRouter({ useCases, authenticate, protectCommand, maxPhotosPerLot = PHOTO_LIMITS.maxPhotosPerLot, log = event => console.error(event) }: PhotosRouterOptions): Router {
   const router = Router()
   const fail = (error: unknown, response: Response) => {
     if (error instanceof UploadTooLargeError) {
@@ -116,7 +117,7 @@ export function createPhotosRouter({ useCases, authenticate, protectCommand, log
       const lotId = id(request.params.lotId)
       const photos = await useCases.list(actor, lotId)
       const body: HttpSchemas["LotPhotoList"] = { items: photos.map((photo) => photoBody(lotId, photo)) }
-      response.json(body)
+      response.json({ ...body, limit: maxPhotosPerLot })
     } catch (error) {
       fail(error, response)
     }

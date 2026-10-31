@@ -122,7 +122,7 @@ try {
   await page.locator('form.lot-form').waitFor()
   assert.equal(await page.locator('[name="establishmentId"]').inputValue(), estate.public_id)
   assert.equal(await page.locator('[name="timeZone"]').inputValue(), 'America/Santiago')
-  await page.getByText('Guarda el borrador para agregar hasta tres fotos').waitFor()
+  await page.getByText('Guarda el borrador para agregar fotos según el cupo disponible').waitFor()
   assert.equal(await page.locator('input[type="file"]').count(), 0)
   ok('con membresía: enlace, establecimiento único preseleccionado, zona America/Santiago por defecto y fotos tras guardar')
 
@@ -308,7 +308,7 @@ try {
   await grantMembership(photoEmail, estate.id)
   await page.reload()
   await page.locator('form.lot-form').waitFor()
-  await page.getByText('Guarda el borrador para agregar hasta tres fotos').waitFor()
+  await page.getByText('Guarda el borrador para agregar fotos según el cupo disponible').waitFor()
   assert.equal(await page.locator('input[name="photo"]').count(), 0)
   await fillLot({ ...validLot, conditions: 'Traer una bolsa reutilizable.' })
   const photoLotResponse = await waitForApiResponse(/\/api\/establishments\/[^/]+\/lots$/, 'POST', () => page.getByRole('button', { name: 'Guardar borrador' }).click())

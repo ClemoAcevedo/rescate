@@ -1186,7 +1186,7 @@ paths:
     post:
       operationId: "publishLotDraft"
       summary: "Publicar explícitamente el borrador revisado"
-      description: "Solo operador autorizado. En una unidad atómica valida pertenencia, estado draft, versión esperada, campos y ventana (fin posterior a inicio y al instante de publicación); asigna publishedAt, status=published e incrementa versión. Cero fotos es válido. Si hay fotos activas, todas deben estar listas: una en carga, en validación o rechazada produce 422 hasta que termine o se quite (D-05); se comprueba bajo el mismo bloqueo, sin llamadas externas. Publicado no se edita: cantidad, contenido, lugar y plazo quedan fijos; corregir exige retirar y crear otro (retiro fuera de S02). 409 por versión obsoleta o lote ya publicado, incluido reintento. Tras respuesta perdida consultar GET; no se promete reproducción idempotente del 200."
+      description: "Solo operador autorizado. En una unidad atómica valida pertenencia, estado draft, versión esperada, campos y ventana (fin posterior a inicio y al instante de publicación); asigna publishedAt, status=published e incrementa versión. Cero fotos es válido. Si hay fotos activas, todas deben estar listas: una en carga, en validación o rechazada produce 422 hasta que termine o se quite (D-05); se comprueba bajo el mismo bloqueo, sin llamadas externas. Publicado no se edita: cantidad, contenido, lugar y plazo quedan fijos; corregir el contenido exige retirar y crear otro; gestionar stock o pausa usa /lots/{lotId}/management. 409 por versión obsoleta o lote ya publicado, incluido reintento. Tras respuesta perdida consultar GET; no se promete reproducción idempotente del 200."
       tags:
         - "Lots"
       security:
@@ -1302,7 +1302,7 @@ paths:
     post:
       operationId: "uploadLotPhoto"
       summary: "Cargar una foto a un borrador"
-      description: "Solo operador del establecimiento y lote en borrador. Antes de leer el cuerpo se autoriza y se reserva una carga de 5 minutos en la primera posición libre (hasta 3 fotos). Máximo 2 cargas simultáneas por operador (429 con Retry-After). El cuerpo es el archivo binario, hasta 5 MiB, fuera del límite JSON de 16 KiB. El MIME declarado no basta: los bytes deben tener firma JPEG, PNG o WebP (422 si no). 202 deja la foto pendiente; el worker la decodifica, rechaza SVG, animaciones o más de 20 megapíxeles, quita EXIF y genera imagen y miniatura WebP. Consultar GET /lots/{lotId}/photos para ver el resultado. 409 si el lote está publicado, ya tiene tres fotos o la carga venció. No reintentar automáticamente: una respuesta perdida puede haber dejado la foto cargada."
+      description: "Solo operador del establecimiento y lote en borrador. Antes de leer el cuerpo se autoriza y se reserva una carga de 5 minutos en la primera posición libre (según PHOTO_MAX_PER_LOT (3 por defecto, hasta 50)). Máximo 2 cargas simultáneas por operador (429 con Retry-After). El cuerpo es el archivo binario, hasta 5 MiB, fuera del límite JSON de 16 KiB. El MIME declarado no basta: los bytes deben tener firma JPEG, PNG o WebP (422 si no). 202 deja la foto pendiente; el worker la decodifica, rechaza SVG, animaciones o más de 20 megapíxeles, quita EXIF y genera imagen y miniatura WebP. Consultar GET /lots/{lotId}/photos para ver el resultado. 409 si el lote está publicado, alcanzó su cupo de fotos o la carga venció. No reintentar automáticamente: una respuesta perdida puede haber dejado la foto cargada."
       tags: ["Photos"]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -1398,6 +1398,68 @@ paths:
             image/webp:
               schema: { type: string, contentMediaType: image/webp }
         "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/management":
+    parameters:
+      - { $ref: "#/components/parameters/LotId" }
+    get:
+      operationId: getLotManagement
+      summary: Consultar inventario, pausa e historial de operaciones del lote
+      description: Solo operadores miembros actuales. Devuelve los contadores almacenados y las últimas veinte operaciones, de más reciente a más antigua.
+      tags: [Lots]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: Estado actual e historial del lote autorizado.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LotManagementResponse" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      operationId: manageLot
+      summary: Descontar stock externo, pausar, reanudar o retirar un lote
+      description: "Requiere versión vigente, motivo y UUID de intención. Descontar mueve solo libres a no asignables, conservando la cantidad declarada y los compromisos. Pausar impide nuevas reservas, ingresos a la espera y ofertas; conserva reservas, ofertas vigentes y posición FIFO. Reanudar asienta la cola sin ampliar plazos. Retirar cancela reservas pendientes, invalida códigos, termina la cola y conserva entregas e historial. La misma clave y parámetros reproducen el resultado original; otros parámetros responden 409. Una respuesta reproducida puede ser histórica: consultar GET para conocer el estado actual."
+      tags: [Lots]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Origin" }
+        - { $ref: "#/components/parameters/CsrfHeader" }
+        - { $ref: "#/components/parameters/CsrfCookie" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LotManagementRequest" }
+      responses:
+        "200":
+          description: Operación confirmada o resultado original de su reintento.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LotManagementResponse" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/Unavailable" }
@@ -1683,6 +1745,44 @@ components:
               code: "SERVICE_UNAVAILABLE"
               message: "El servicio no está disponible temporalmente."
   schemas:
+    LotManagementRequest:
+      type: object
+      additionalProperties: false
+      required: [action, version, idempotencyKey, reason]
+      properties:
+        action: { type: string, enum: [reduce_stock, pause, resume, withdraw] }
+        version: { type: integer, minimum: 1 }
+        idempotencyKey: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: Obligatoria solo para reduce_stock; se prohíbe en las demás acciones. }
+    LotOperation:
+      type: object
+      additionalProperties: false
+      required: [id, action, quantity, reason, createdAt, version]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        action: { type: string, enum: [reduce_stock, pause, resume, withdraw] }
+        quantity: { type: [integer, "null"], minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+        version: { type: integer, minimum: 1 }
+    LotManagementResponse:
+      type: object
+      additionalProperties: false
+      required: [status, version, paused, freeQuantity, offeredQuantity, reservedQuantity, deliveredQuantity, unassignableQuantity, history]
+      properties:
+        status: { $ref: "#/components/schemas/LotStatus" }
+        version: { type: integer, minimum: 1 }
+        paused: { type: boolean }
+        freeQuantity: { type: integer, minimum: 0 }
+        offeredQuantity: { type: integer, minimum: 0 }
+        reservedQuantity: { type: integer, minimum: 0 }
+        deliveredQuantity: { type: integer, minimum: 0 }
+        unassignableQuantity: { type: integer, minimum: 0 }
+        history:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/LotOperation" }
     PublicLot:
       type: object
       additionalProperties: false
@@ -1701,7 +1801,7 @@ components:
         pickupStartsAt: { $ref: "#/components/schemas/Instant" }
         pickupEndsAt: { $ref: "#/components/schemas/Instant" }
         photoUrl: { type: [string, "null"], pattern: "^/lots/[^/]+/photos/[^/]+/(thumbnail|display)$", description: "Ruta relativa a la base de la API de la primera foto lista: miniatura en la búsqueda e imagen de presentación en el detalle. null muestra reemplazo local." }
-        photos: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/PublicLotPhoto" }, description: "Fotos listas en orden de posición; vacío muestra reemplazo local. photoUrl corresponde a la primera." }
+        photos: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/PublicLotPhoto" }, description: "Fotos listas en orden de posición; vacío muestra reemplazo local. photoUrl corresponde a la primera." }
         distanceKm: { type: [number, "null"], minimum: 0, description: "Distancia geográfica aproximada al punto enviado." }
     PublicLotPhoto:
       type: object
@@ -1720,6 +1820,7 @@ components:
       required: [id, status, version, description, category, quantity, reservedQuantity, pickupStartsAt, pickupEndsAt, timeZone, createdAt, publishedAt, photoUrl]
       description: "Resumen de un lote para el operador de su establecimiento."
       properties:
+        paused: { type: boolean, description: Suspensión reversible de nuevas asignaciones. }
         id: { $ref: "#/components/schemas/PublicId" }
         status: { $ref: "#/components/schemas/LotStatus" }
         version: { $ref: "#/components/schemas/Version" }
@@ -2168,7 +2269,7 @@ components:
       description: "Foto de un lote para su operador. Sin claves de objeto, tamaño original ni autor interno."
       properties:
         id: { $ref: "#/components/schemas/PublicId" }
-        position: { type: integer, minimum: 1, maximum: 3 }
+        position: { type: integer, minimum: 1, maximum: 50 }
         status:
           type: string
           enum: [uploading, pending, ready, rejected]
@@ -2187,7 +2288,8 @@ components:
       additionalProperties: false
       required: [items]
       properties:
-        items: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/LotPhoto" } }
+        limit: { type: integer, minimum: 1, maximum: 50, description: Cupo de fotos configurado para este servicio. }
+        items: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/LotPhoto" } }
       description: "Identificador público opaco. No es la PK bigint ni su conversión a string; no se presupone UUID, prefijo ni formato concreto. Los ejemplos no fijan representación. No sustituye autorización."
       minLength: 1
     EmailInput:
@@ -2465,6 +2567,7 @@ components:
         - "createdAt"
         - "publishedAt"
       properties:
+        paused: { type: boolean, description: Suspensión reversible de nuevas asignaciones. }
         id:
           $ref: "#/components/schemas/PublicId"
         establishmentId:

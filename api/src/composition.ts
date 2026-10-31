@@ -1,5 +1,8 @@
 // Composition: configuración y ensamblado; las políticas viven en Application/HTTP.
 import type { Express } from "express"
+import { createLotManagement } from './application/lots/management.js'
+import { createLotManagementRepository } from './infrastructure/postgres/lot-management-repository.js'
+import { createLotManagementRouter } from './http/lot-management-router.js'
 import { createLotUseCases } from "./application/lots/use-cases.js"
 import { createDiscoveryUseCases } from "./application/discovery/use-cases.js"
 import { createIdentityUseCases } from "./application/identity/use-cases.js"
@@ -49,6 +52,11 @@ import { errorCode } from "./application/logging.js"
 import type { Log } from "./application/logging.js"
 
 export interface Api { app: Express; close(): Promise<void> }
+export function readPhotoLimit(environment: NodeJS.ProcessEnv): number {
+  const raw = environment.PHOTO_MAX_PER_LOT?.trim() || '3'
+  if (!/^[1-9]\d?$/.test(raw) || Number(raw) > 50) throw new Error('PHOTO_MAX_PER_LOT admite enteros entre 1 y 50')
+  return Number(raw)
+}
 export function readDatabaseUrl(environment: NodeJS.ProcessEnv): string {
   const databaseUrl = environment.DATABASE_URL?.trim()
   if (!databaseUrl) throw new Error("Falta DATABASE_URL. Revisa api/.env.example y docs/desarrollo-local.md")
@@ -125,9 +133,12 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
     authenticate: authentication.authenticate, protectCommand: authentication.protectCommand, log })
   // La API autoriza, recibe y sirve; decodificar y transformar corresponde al worker.
   const photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects: readPhotoStorage(environment),
-    images: null, now: () => new Date(), log })
-  const photosRouter = createPhotosRouter({ useCases: photos, authenticate: authentication.authenticate,
+    images: null, now: () => new Date(), maxPhotosPerLot: readPhotoLimit(environment), log })
+  const photosRouter = createPhotosRouter({ useCases: photos, maxPhotosPerLot: readPhotoLimit(environment), authenticate: authentication.authenticate,
     protectCommand: authentication.protectCommand, log })
+  const managementRouter = createLotManagementRouter(createLotManagement(createLotManagementRepository(pool)),
+    authentication.authenticate, authentication.protectCommand, log)
+  lotsRouter.use(managementRouter)
   const codes = createPickupCodes(readPickupCodeKey(environment))
   const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date()),
     authentication.authenticate, authentication.protectCommand, log)

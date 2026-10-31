@@ -51,3 +51,6 @@ ImageMagick por requerir binarios del sistema.
 `db:test:photos:compose` prueba D-05, autorización, límites, reinicio, limpieza y el
 recorrido HTTP con PostgreSQL real; `npm test` prueba la transformación con sharp y
 el transporte contra OpenAPI.
+
+El cupo de fotos se concreta como configuración de la API y se comunica a la web,
+según [ADR 0017](0017-gestion-de-publicaciones.md).

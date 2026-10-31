@@ -73,7 +73,10 @@
     "test:web:queue-worker": "node --env-file-if-exists=.env scripts/test-web-queue-worker.mjs",
     "db:measure:scale:compose": "npm run build && node scripts/measure-scale-compose.mjs",
     "db:measure:e3:compose": "npm run build && TRIALS=3 MIX=e3 WARMUP_SECONDS=120 MEASURED_SECONDS=600 node scripts/measure-scale-compose.mjs",
-    "ops:status": "npm run build && node --env-file-if-exists=.env scripts/ops-status.mjs"
+    "ops:status": "npm run build && node --env-file-if-exists=.env scripts/ops-status.mjs",
+    "db:test:lot-management": "npm run build && node --import tsx scripts/test-lot-management.mjs",
+    "db:test:lot-management:compose": "node scripts/test-lot-management-compose.mjs",
+    "test:web:lot-management": "node scripts/test-web-lot-management.mjs"
   },
   "keywords": [],
   "author": "",

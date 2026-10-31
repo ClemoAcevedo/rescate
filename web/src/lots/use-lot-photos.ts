@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ConnectionError, LotRequestError, UnexpectedResponseError,
-  listLotPhotos, removeLotPhoto, uploadLotPhoto, type LotPhoto,
+  listLotPhotoPage, removeLotPhoto, uploadLotPhoto, type LotPhoto,
 } from '../services/lots-service'
 
-export const MAX_PHOTOS = 3
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024
 export const ACCEPTED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 /** Mientras haya fotos en carga o validación se consulta la lista; 20/min queda dentro del límite por usuario. */
@@ -33,7 +32,7 @@ function uploadNotice(error: unknown): PhotoNotice {
     case 'PAYLOAD_TOO_LARGE': return { tone: 'danger', message: 'La imagen supera el máximo de 5 MiB.' }
     case 'UNSUPPORTED_MEDIA_TYPE': return { tone: 'danger', message: 'Usa una imagen JPEG, PNG o WebP.' }
     case 'VALIDATION_ERROR': return { tone: 'danger', message: 'El archivo no es una imagen JPEG, PNG o WebP válida.' }
-    case 'CONFLICT': return { tone: 'warning', message: 'No se pudo agregar la foto: el lote ya tiene tres fotos, fue publicado o la carga venció. Se actualizó la lista.' }
+    case 'CONFLICT': return { tone: 'warning', message: 'No se pudo agregar la foto: el lote alcanzó su cupo de fotos, fue publicado o la carga venció. Se actualizó la lista.' }
     case 'RATE_LIMITED': return {
       tone: 'warning',
       message: `Ya tienes dos cargas en curso o demasiadas solicitudes. Espera${error.retryAfter ? ` ${error.retryAfter} s` : ' un momento'} antes de cargar otra foto.`,
@@ -60,6 +59,7 @@ function removeNotice(error: unknown): PhotoNotice {
  * Sin `lotId` (lote aún no guardado o no cargado) no consulta nada.
  */
 export function useLotPhotos(lotId: string | undefined, csrfToken: string, { poll }: { poll: boolean }) {
+  const [limit, setLimit] = useState(3)
   const [photos, setPhotos] = useState<LotPhoto[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [notice, setNotice] = useState<PhotoNotice | null>(null)
@@ -70,8 +70,8 @@ export function useLotPhotos(lotId: string | undefined, csrfToken: string, { pol
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!lotId) return
     try {
-      const items = await listLotPhotos(lotId, signal)
-      if (!signal?.aborted && mounted.current) { setPhotos(items); setLoadFailed(false) }
+      const page = await listLotPhotoPage(lotId, signal)
+      if (!signal?.aborted && mounted.current) { setPhotos(page.items); setLimit(page.limit ?? 3); setLoadFailed(false) }
     } catch {
       if (!signal?.aborted && mounted.current) setLoadFailed(true)
     }
@@ -126,5 +126,5 @@ export function useLotPhotos(lotId: string | undefined, csrfToken: string, { pol
 
   // «Foto recibida, se está validando» deja de tener sentido cuando ya no hay fotos en proceso.
   const visibleNotice = notice?.tone === 'info' && !processing ? null : notice
-  return { photos, loadFailed, notice: visibleNotice, busy, refresh, upload, remove }
+  return { photos, limit, loadFailed, notice: visibleNotice, busy, refresh, upload, remove }
 }
