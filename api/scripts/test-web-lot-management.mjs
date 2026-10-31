@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 const base=(process.env.WEB_URL??'https://localhost:5174').replace(/\/$/,'')
 assert.ok(process.env.DATABASE_URL && /^rescate_web_test_/.test(new URL(process.env.DATABASE_URL).pathname.slice(1)))
 const db=new pg.Client({connectionString:process.env.DATABASE_URL});await db.connect()

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // K035: panel del establecimiento contra Vite HTTPS → proxy → API → PostgreSQL. Requiere
 // servicios iniciados; DATABASE_URL habilita memberships ficticias y cierra un lote sin registrarlo.

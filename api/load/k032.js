@@ -251,5 +251,5 @@ export function handleSummary(data) {
   lines.push(!data.metrics.iterations ? 'Sin iteraciones: la carga no se ejecutó.'
     : failed.length ? `Umbrales no cumplidos: ${failed.join('; ')}` : 'Umbrales cumplidos.')
   // setup_data trae las cookies de sesión y los CSRF de setup(): no se guardan con las métricas.
-  return { stdout: `${lines.join('\n')}\n`, '/results/k6-summary.json': JSON.stringify({ ...data, setup_data: undefined }, null, 2) }
+  return { stdout: `${lines.join('\n')}\n`, [`${__ENV.RESULTS_DIR ?? '/results'}/k6-summary.json`]: JSON.stringify({ ...data, setup_data: undefined }, null, 2) }
 }

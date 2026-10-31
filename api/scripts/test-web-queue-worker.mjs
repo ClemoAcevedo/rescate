@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import pg from 'pg'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // K031: cola, vencimiento y avisos en tres navegadores contra Vite HTTPS → proxy → API →
 // PostgreSQL. Lanza su propio worker con vencimientos, lo mata con kill -9 tras reclamar

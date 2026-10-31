@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // Respuestas HTTP controladas: requiere Vite sin VITE_AUTH_MOCK_SCENARIO.
 const baseUrl = (process.env.WEB_URL ?? 'http://localhost:5173').replace(/\/$/, '')

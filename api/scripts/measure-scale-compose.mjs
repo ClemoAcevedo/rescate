@@ -13,6 +13,7 @@ import { promisify } from 'node:util'
 import pg from 'pg'
 import { seedScale } from './seed-scale.mjs'
 import { explainScale, summarize } from './explain-scale.mjs'
+import { remoteConfig, inspectGenerator, runRemoteK6 } from './support/remote-k6.mjs'
 
 const K6_IMAGE = 'grafana/k6:1.3.0'
 const ORIGIN = 'https://localhost:5173'
@@ -22,6 +23,7 @@ const GOALS = { busqueda: 1000, reserva: 1500 }
 const OWNER_LABEL = 'rescate.k039.measure'
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const api = fileURLToPath(new URL('../', import.meta.url))
+const git = (...args) => execFileSync('git', ['-c', `safe.directory=${root.replace(/\/$/, '')}`, ...args], { cwd: root, encoding: 'utf8' }).trim()
 const docker = (...args) => execFileSync('docker', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 const compose = (...args) => docker('compose', ...args)
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -34,6 +36,7 @@ const mix = process.env.MIX ?? 'e2'
 const warmup = Number(process.env.WARMUP_SECONDS ?? 30)
 const measured = Number(process.env.MEASURED_SECONDS ?? 120)
 const ops = OPS[mix]
+let remote = null
 
 async function waitFor(check, timeoutMs, message) {
   for (const deadline = Date.now() + timeoutMs; Date.now() < deadline; await sleep(100)) {
@@ -248,8 +251,8 @@ async function runTrial(n, context) {
     const tail = name => { try { return logs(name).slice(-5).join(' | ') } catch { return 'sin registro' } }
     let apiAddress
     trial.health = { before: await timed('apiColdStartMs', async () => {
-      run(names.api, 'api', ['-p', '127.0.0.1::3000'])
-      apiAddress = await waitFor(async () => docker('port', names.api, '3000').trim().split('\n')[0], 10000, 'Docker no publicó el puerto de la API')
+      run(names.api, 'api', ['-p', remote ? `0.0.0.0:${remote.port}:3000` : '127.0.0.1::3000'])
+      apiAddress = await waitFor(async () => docker('port', names.api, '3000').trim().split('\n')[0].replace('0.0.0.0:', '127.0.0.1:'), 10000, 'Docker no publicó el puerto de la API')
       return waitFor(async () => {
         const body = await health(apiAddress)
         return body.http === 200 && body.database === 'ok' ? body : null
@@ -268,12 +271,14 @@ async function runTrial(n, context) {
     const baseline = (await db.query(deltas)).rows[0]
     sampler = sampleResources({ db: dbContainer, api: names.api, worker: names.worker, k6: names.k6 }, db)
     console.log(`  k6 (${K6_IMAGE}, ${mix}): ${warmup} s de preparación y ${measured} s medidos`)
-    const k6 = spawn('docker', ['run', '--rm', '--name', names.k6, '--label', `${OWNER_LABEL}=${process.pid}`, '--network', network,
+    const k6 = remote ? null : spawn('docker', ['run', '--rm', '--name', names.k6, '--label', `${OWNER_LABEL}=${process.pid}`, '--network', network,
       '--user', `${process.getuid()}:${process.getgid()}`,
       '-v', `${api}load:/scripts:ro`, '-v', `${dir}:/results`, '-e', 'SEED=/results/seed.json', '-e', `API_URL=http://${names.api}:3000`,
       '-e', `ORIGIN=${ORIGIN}`, '-e', `MIX=${mix}`, '-e', `WARMUP_SECONDS=${warmup}`, '-e', `MEASURED_SECONDS=${measured}`,
       K6_IMAGE, 'run', '--quiet', '/scripts/k032.js'], { stdio: 'inherit' })
-    trial.k6Code = await timed('k6Ms', () => new Promise(resolve => k6.once('exit', resolve)))
+    trial.k6Code = await timed('k6Ms', () => remote ? runRemoteK6(remote, { seedFile: `${dir}/seed.json`,
+      scriptFile: `${api}load/k032.js`, dir, origin: ORIGIN, mix, warmup, measured })
+      : new Promise((resolve, reject) => { k6.once('exit', resolve); k6.once('error', reject) }))
     Object.assign(trial, sampler.stop())
     sampler = null
     if (existsSync(`${dir}/k6-summary.json`)) trial.summary = JSON.parse(readFileSync(`${dir}/k6-summary.json`, 'utf8'))
@@ -322,10 +327,10 @@ async function runTrial(n, context) {
       postgres: versions.postgres.split(' on ')[0], postgis: versions.postgis, databaseSize: versions.size, sizes: trial.sizes,
       containers: { db: { name: dbContainer, ...limits(dbContainer), platform: environment.dbPlatform },
         api: { image: 'Compose api (imagen del árbol actual)', ...limits(names.api) }, worker: { image: 'Compose worker', ...limits(names.worker) },
-        k6: { image: K6_IMAGE, cpus: 'sin límite', memoryMb: 'sin límite' } },
+        ...(remote ? {} : { k6: { image: K6_IMAGE, cpus: 'sin límite', memoryMb: 'sin límite' } }) },
       pools: { api: 8, worker: 2 },
-      network: `k6 → API por la red ${network} de Compose (http://<contenedor api>:3000), sin puertos publicados; /health se consulta desde el host por un puerto publicado en 127.0.0.1`,
-      loadGenerator: 'k6 en el mismo equipo y la misma VM de Docker que API, worker y PostgreSQL: interferencia declarada; no sustituye la prueba con otro equipo (anexo H p. 18)',
+      network: remote ? `k6 en ${environment.generator.hostname} → ${remote.apiUrl}; /health desde el servidor` : `k6 → API por la red ${network} de Compose (http://<contenedor api>:3000), sin puertos publicados; /health se consulta desde el host por un puerto publicado en 127.0.0.1`,
+      loadGenerator: remote ? `${environment.generator.hostname}, ${environment.generator.system}, ${environment.generator.k6}; equipo separado por SSH` : 'k6 en el mismo equipo y la misma VM de Docker que API, worker y PostgreSQL: interferencia declarada; no sustituye la prueba con otro equipo (anexo H p. 18)',
       timings: trial.timings, health: trial.health, usage: trial.usage, lockWaits: trial.lockWaits, apiStatuses: trial.apiStatuses }
     writeFileSync(`${dir}/resources.json`, JSON.stringify(trial.resources, null, 2))
   } catch (error) {
@@ -351,7 +356,7 @@ function report(run, context, results) {
   const first = results.find(trial => trial.resources)?.resources ?? environment
   const protocol = results.length >= 3 && warmup >= 120 && measured >= 600
   const { minimums } = environment
-  const below = [!minimums.cpus && '2 núcleos', !minimums.memory && '4 GB de memoria', minimums.ssd !== true && 'SSD verificado'].filter(Boolean)
+  const below = [!minimums.cpus && '2 núcleos', !minimums.memory && '4 GB de memoria', minimums.ssd !== true && 'SSD verificado', minimums.emulatedDb && 'PostGIS nativo'].filter(Boolean)
   const yes = ok => (ok ? 'cumple' : 'no cumple')
   const lines = [`# Informe de carga ${run}`, '',
     `Mezcla ${mix} a 20 solicitudes/s, ${results.length} de ${trials} ensayo(s) ejecutados con ${warmup} s de preparación y ${measured} s medidos. `
@@ -364,7 +369,7 @@ function report(run, context, results) {
       ['Equipo', `${environment.host.system}, ${environment.host.cpu} × ${environment.host.cpus}, ${environment.host.memoryGb} GiB`],
       ['VM de Docker', `${environment.dockerVm.system} ${environment.dockerVm.server}, ${environment.dockerVm.architecture}, ${environment.dockerVm.cpus} CPU, ${fmt(environment.dockerVm.memoryGb)} GiB`],
       ['Mínimos del anexo (p. 18)', `CPU de la VM ≥ 2: ${yes(minimums.cpus)}; memoria total de la VM ≥ 4 GiB: ${yes(minimums.memory)} `
-        + `(${fmt(environment.dockerVm.memoryBytes / 2 ** 30, 2)} GiB, compartida con k6 y los demás contenedores); `
+        + `(${fmt(environment.dockerVm.memoryBytes / 2 ** 30, 2)} GiB${remote ? ', k6 en otro equipo' : ', compartida con k6 y los demás contenedores'}); `
         + `SSD: ${minimums.ssd === null ? 'no verificado' : minimums.ssd ? 'disco del host de estado sólido' : 'no cumple'}`],
       ['Servicios', environment.services],
       ['PostgreSQL', `${first.postgres ?? '-'}, contenedor ${environment.dbPlatform}${minimums.emulatedDb
@@ -373,7 +378,7 @@ function report(run, context, results) {
       ['Límites de contenedor', first.containers ? Object.entries(first.containers).map(([role, value]) => `${role}: CPU ${value.cpus}, memoria ${value.memoryMb}`).join('; ') : '-'],
       ['Node', `${environment.node} en el host (semilla y planes); API y worker en su imagen`],
       ['Pools', 'API 8 conexiones, worker 2'],
-      ['k6', `${K6_IMAGE}; ${first.network ?? '-'}`],
+      ['k6', `${environment.generator?.k6 ?? K6_IMAGE}; ${first.network ?? '-'}`],
       ['Generador', first.loadGenerator ?? '-'],
     ]), '',
     '## Metas del anexo H (p. 19)', '',
@@ -390,7 +395,7 @@ function report(run, context, results) {
       ['Tareas vencidas P95 ≤ 30 s', 'No se mide aquí: `db:test:integrity:compose` vence 100 ofertas sembradas con el worker real'],
     ]), '',
     `Protocolo (tres ensayos de 120 + 600 s; mezcla e2 en E2 y e3 desde E3): ${protocol ? `cumple la forma con ${mix}` : 'no cumple la forma; esta corrida es parcial'}. `
-    + 'Con un solo equipo el resultado no sustituye la prueba con un generador separado (anexo H p. 18).']
+    + (remote ? 'Generador separado: comprobar además que ambos equipos comparten la red de prueba (anexo H p. 18).' : 'Con un solo equipo el resultado no sustituye la prueba con un generador separado (anexo H p. 18).')]
   for (const trial of results) {
     const metric = name => values(trial.summary, name)
     lines.push('', `## Ensayo ${trial.n}: ${trial.ok ? 'cumple' : 'no cumple'}`, '', `Base \`${trial.database}\`${trial.ok ? ' (borrada)' : ' (conservada para revisar)'}.`)
@@ -465,9 +470,11 @@ function sweep() {
   return stale.length
 }
 try {
+  remote = remoteConfig()
   if (!Number.isInteger(trials) || trials < 1) throw new Error('TRIALS requiere un entero positivo')
   if (!ops) throw new Error('MIX admite e2 o e3')
   if (![warmup, measured].every(value => Number.isInteger(value) && value > 0)) throw new Error('WARMUP_SECONDS y MEASURED_SECONDS requieren enteros positivos')
+  const generator = remote ? await inspectGenerator(remote) : null
   context.user = compose('exec', '-T', 'db', 'printenv', 'POSTGRES_USER').trim()
   context.password = compose('exec', '-T', 'db', 'printenv', 'POSTGRES_PASSWORD').trim()
   context.address = compose('port', 'db', '5432').trim()
@@ -480,7 +487,7 @@ try {
   compose('build', '--quiet', 'api', 'worker')
   const buildMs = Date.now() - started
   const info = JSON.parse(docker('info', '--format', '{{json .}}'))
-  const changes = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean)
+  const changes = git('status', '--porcelain').split('\n').filter(Boolean)
   const dbPlatform = compose('exec', '-T', 'db', 'uname', '-m').trim()
   const arch = name => ({ arm64: 'aarch64', amd64: 'x86_64' }[name] ?? name)
   // Mínimos del servidor de prueba (anexo H p. 18). La memoria se exige en GiB: la VM la comparte con k6.
@@ -488,13 +495,13 @@ try {
     ssd: os.platform() === 'darwin' ? /Solid State:\s+Yes/.test(spawnSync('diskutil', ['info', '/'], { encoding: 'utf8' }).stdout ?? '') : null,
     emulatedDb: arch(dbPlatform) !== arch(info.Architecture) }
   context.environment = {
-    commit: execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), dirty: changes.length > 0, changes,
+    commit: git('rev-parse', '--short', 'HEAD'), dirty: changes.length > 0, changes,
     host: { system: `${os.type()} ${os.release()}`, cpu: os.cpus()[0].model, cpus: os.cpus().length,
       memoryGb: Math.round(os.totalmem() / 1024 ** 3) },
     dockerVm: { system: info.OperatingSystem, server: info.ServerVersion, architecture: info.Architecture, cpus: info.NCPU,
       memoryGb: Math.round(info.MemTotal / 1024 ** 3 * 10) / 10, memoryBytes: info.MemTotal },
-    dbPlatform, minimums, node: `${process.version} ${process.arch}`, k6: K6_IMAGE, buildMs,
-    services: 'db, api y worker de Compose; web no se levanta: k6 llama a la API directamente y el servicio web de Compose es el servidor de desarrollo de Vite',
+    generator, dbPlatform, minimums, node: `${process.version} ${process.arch}`, k6: K6_IMAGE, buildMs,
+    services: remote ? 'db, api y worker de Compose; k6 por SSH en otro equipo' : 'db, api y worker de Compose; web no se levanta: k6 llama a la API directamente y el servicio web de Compose es el servidor de desarrollo de Vite',
   }
   const run = `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}_${mix}`
   context.results = `${api}.k032-results/${run}`
