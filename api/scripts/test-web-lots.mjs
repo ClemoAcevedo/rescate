@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import pg from 'pg'
 import sharp from 'sharp'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // K011/K017: recorrido real web → proxy → API → PostgreSQL (y worker de fotos para K017). Requiere Vite HTTPS, API y una base
 // de prueba ya migrada; DATABASE_URL solo se usa para habilitar la membresía ficticia.
@@ -105,7 +105,9 @@ const validLot = {
 try {
   await page.goto(`${baseUrl}/operador/lotes/nuevo`)
   await page.getByRole('link', { name: 'Iniciar sesión' }).last().waitFor()
-  assert.equal(await page.locator('form.lot-form').count(), 0)
+  // La gestión de disponibilidad conserva su propio formulario tras publicar (#177).
+  assert.equal(await page.locator('form.lot-form [name=description]').count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'Guardar cambios', exact: true }).count(), 0)
   ok('visitante: sin formulario y con enlace a iniciar sesión')
 
   await signIn(email, '/operador/lotes/nuevo')
@@ -221,7 +223,9 @@ try {
   await page.getByRole('heading', { name: 'Lote publicado' }).waitFor()
   assert.equal(commands.length - before, 1)
   assert.deepEqual(commands.at(-1).body, { version: 3 })
-  assert.equal(await page.locator('form.lot-form').count(), 0)
+  // La gestión de disponibilidad conserva su propio formulario tras publicar (#177).
+  assert.equal(await page.locator('form.lot-form [name=description]').count(), 0)
+  assert.equal(await page.getByRole('button', { name: 'Guardar cambios', exact: true }).count(), 0)
   await page.reload()
   await page.getByRole('heading', { name: 'Lote publicado' }).waitFor()
   await page.getByText('Traer una bolsa.').waitFor()

@@ -366,8 +366,7 @@ md.push(`## Unión de líneas (${runs.map(run => run.label).join(' + ')})`, '',
     ' propósito; esas líneas solo cuentan si otra parte de la corrida las ejecutó.',
   '- prototypes (prototipo K005 aislado, ver docs/arquitectura/arquitectura.md) se informa aparte y no entra al' +
     ' total; su prueba (npm run test:photos) no se ejecuta en estas corridas.',
-  '- web/ no se mide: no tiene pruebas unitarias y los recorridos Playwright verifican flujos sin instrumentar' +
-    ' el JavaScript del navegador.',
+  '- web/ se mide por separado con Chromium y source maps: api/coverage/web/summary.md. No se suman sus métricas con las de Node.',
   '- Los contenedores api y worker de Compose no se miden: las integraciones levantan la API y el worker como' +
     ' procesos del host contra la base de Compose.',
   '- La instrumentación hace más lentos la API y el worker: estas corridas no sirven para medir tiempos.',

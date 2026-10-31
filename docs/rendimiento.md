@@ -50,6 +50,34 @@ quedan en `api/.k032-results/<corrida>/`, fuera de git:
 
 Las cifras de cada medición van en la descripción del PR, no en este documento.
 
+### Generar carga desde otro equipo (#170)
+
+El runner también puede ejecutar el mismo script k6 por SSH en otro computador,
+manteniendo en el servidor la creación de bases, API, worker, planes, recursos e
+invariantes. El generador necesita k6 1.3.0, SSH con clave y acceso HTTP al servidor
+por la red de prueba. Se verifica su hostname y versión antes de crear la semilla.
+
+En el **servidor** con Docker y las dependencias de `api/` instaladas:
+
+```bash
+K6_SSH_TARGET=usuario@generador \
+K6_REMOTE_API_URL=http://192.168.1.20:3001 \
+K6_API_PORT=3001 npm --prefix api run db:measure:e3:compose
+```
+
+La IP del ejemplo se reemplaza por la del servidor, accesible desde el generador.
+Ese modo publica la API aislada en el puerto indicado; el modo local sigue usando
+un puerto efímero de loopback. Usar datos ficticios en la red de prueba. Las sesiones
+de la semilla viajan por SSH, en un directorio temporal privado, sin enviar claves
+del servidor ni `DATABASE_URL`. El resumen de k6 vuelve al servidor y los temporales
+remotos se borran. `RESULTS_DIR` cambia solo el destino del resumen en el script k6.
+
+El informe identifica generador, versión, origen remoto y servidor; conserva una tabla
+por ensayo y los mismos umbrales. Separar máquinas requiere además comprobar la red,
+SSD, memoria disponible y PostGIS nativo del servidor. Una simulación de usuarios
+en un solo computador aporta medidas locales, pero no cierra la ejecución separada
+de #170.
+
 ## Semilla
 
 [`seed-scale.mjs`](../api/scripts/seed-scale.mjs) sigue la historia de prueba del anexo H:

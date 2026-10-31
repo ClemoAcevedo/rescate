@@ -310,6 +310,9 @@ lo cambia.
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
+- **Calidad para E3:** SAST con Semgrep y SCA de ambos lockfiles en CI; cobertura de
+  API por capa y frontend por módulo, estrategia Testing Trophy y mock HTTP del chat
+  validado contra OpenAPI ([pruebas y cobertura](docs/desarrollo-local.md#estrategia-de-pruebas-testing-trophy)).
 - **Rendimiento:** semilla de escala del anexo H con 100 000 mensajes, planes reales con
   EXPLAIN y k6 con las mezclas de E2 y E3 (búsqueda, chat, bandeja, reserva, cancelación y
   envío) en ensayos con API y worker en Compose, rechazos esperados separados de errores e

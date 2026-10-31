@@ -81,6 +81,10 @@ test('código: ocho símbolos aleatorios, cifrado autenticado y huella por clave
   assert.throws(() => other.reveal(issued[0]!.ciphertext))
   const tampered = Buffer.from(issued[0]!.ciphertext); tampered[tampered.length - 1]! ^= 1
   assert.throws(() => codes.reveal(tampered))
+  const shortenedTag = Buffer.concat([Buffer.from(issued[0]!.ciphertext).subarray(0, 25), Buffer.from(issued[0]!.ciphertext).subarray(29)])
+  assert.throws(() => codes.reveal(shortenedTag), /formato desconocido/)
+  const wrongTag = Buffer.from(issued[0]!.ciphertext); wrongTag[13]! ^= 1
+  assert.throws(() => codes.reveal(wrongTag))
   // Mismo código, otro cifrado: el texto cifrado no revela repeticiones.
   assert.notDeepEqual(createPickupCodes(key).issue().ciphertext, issued[0]!.ciphertext)
 })

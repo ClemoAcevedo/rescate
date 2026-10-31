@@ -74,9 +74,72 @@ jobs:
       - name: Generated HTTP types
         run: npm run api:types:check
       - name: Tests
-        run: npm test
+        run: npm run test:coverage
       - name: Build
         run: npm run build
+      - name: Unit coverage by API layer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api-unit
+          path: api/coverage/
+          if-no-files-found: error
+          retention-days: 14
+
+  sast:
+    name: Security / Semgrep SAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: semgrep/semgrep:1.183.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan application JavaScript and TypeScript
+        run: >-
+          semgrep scan --config p/javascript --config p/typescript
+          --metrics=off --disable-version-check --error
+          --json-output=semgrep.json --sarif-output=semgrep.sarif
+          api/src web/src
+      - name: Publish SAST results, including findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-sast
+          path: |
+            semgrep.json
+            semgrep.sarif
+          if-no-files-found: error
+          retention-days: 14
+
+  sca:
+    name: Security / npm SCA (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+          cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      - name: Install the locked dependency tree
+        working-directory: ${{ matrix.package }}
+        run: npm ci --no-audit
+      - name: Audit production and development dependencies
+        working-directory: ${{ matrix.package }}
+        run: npm audit --audit-level=high --json > audit.json
+      - name: Publish SCA results, including findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-sca-${{ matrix.package }}
+          path: ${{ matrix.package }}/audit.json
+          if-no-files-found: error
+          retention-days: 14
 
   compose:
     name: Docker Compose / smoke
@@ -174,10 +237,21 @@ jobs:
         run: |
           docker run --rm --init --network host --ipc=host \
             --env DATABASE_URL \
+            --env WEB_COVERAGE_DIR=/workspace/api/coverage/web/raw \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             mcr.microsoft.com/playwright:v1.63.0-noble \
-            bash -lc "npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose"
+            bash -lc "node api/scripts/test-web-coverage-collector.mjs && npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose && node api/scripts/web-coverage-report.mjs"
+      - name: Frontend coverage by module
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-web
+          path: api/coverage/web/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish frontend summary
+        run: cat api/coverage/web/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Service logs
         if: always()
         run: docker compose logs --no-color
