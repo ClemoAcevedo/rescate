@@ -249,6 +249,10 @@ K003
 
 ## Estado actual
 
+- **Feedback E2:** gestión de stock externo, pausa/reactivación y retiro voluntario con
+  historial, versión e idempotencia, conservando entregas; cupo de fotos configurable
+  comunicado por la API a la web ([lotes](docs/lotes.md#disponibilidad-después-de-publicar)).
+
 Este es el único resumen de estado del repositorio; se actualiza en el mismo PR que
 lo cambia.
 

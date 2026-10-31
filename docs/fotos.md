@@ -1,6 +1,6 @@
 # Fotos de lotes (RF02)
 
-Un operador puede agregar hasta tres fotos a un borrador. La API recibe el archivo,
+Un operador puede agregar fotos opcionales a un borrador, hasta el cupo configurado en la API. La API recibe el archivo,
 el worker lo valida y genera una imagen y una miniatura sin metadatos, y solo las
 fotos listas se publican y se muestran. Las fotos son opcionales: un lote sin fotos
 se publica igual. El contrato HTTP está en [OpenAPI](api/openapi.yaml) (etiqueta
@@ -22,7 +22,7 @@ stateDiagram-v2
 
 1. **Autorización antes de los bytes.** `POST /lots/{lotId}/photos` exige sesión,
    Origin y CSRF. Bajo el bloqueo del lote, Application comprueba membership, que
-   sea borrador, que haya posición libre (máximo 3) y que el operador no tenga ya dos
+   sea borrador, que haya posición libre (según el cupo configurado) y que el operador no tenga ya dos
    cargas vigentes en cualquier lote. Reserva la carga por 5 minutos y confirma; solo
    después HTTP lee el cuerpo.
 2. **Recepción.** El cuerpo es el archivo binario (`image/jpeg`, `image/png` o
@@ -44,7 +44,7 @@ stateDiagram-v2
 
 | Límite | Valor |
 | --- | --- |
-| Fotos por lote | 3, en posiciones 1–3 |
+| Fotos por lote | `PHOTO_MAX_PER_LOT`: 3 por defecto, configurable entre 1 y 50 |
 | Archivo de entrada | JPEG, PNG o WebP estáticos; 5 MiB; 20 MP decodificados |
 | Imagen de presentación | WebP, lado mayor ≤ 1600 px, ≤ 500 KiB |
 | Miniatura | WebP, lado mayor ≤ 400 px, ≤ 100 KiB |
@@ -52,7 +52,7 @@ stateDiagram-v2
 | Cargas simultáneas | 2 por operador (429 con `Retry-After`) |
 | Validación | Un archivo por worker; reclamo de 2 minutos; 3 intentos |
 
-Los límites vienen de E1 (anexos I p. 25). KB y MB se interpretan como KiB y MiB, igual
+Los límites de archivo vienen de E1 (anexos I p. 25). El cupo de fotos conserva tres como valor inicial y permite ampliarlo según el feedback de E2. KB y MB se interpretan como KiB y MiB, igual
 que el límite JSON de 16 KiB.
 
 ## Lectura
@@ -79,12 +79,12 @@ Un lote nuevo pide guardar el borrador antes, porque la carga exige un lote exis
 
 - **Carga:** un archivo por vez. La web avisa antes de enviar si el tipo no es JPEG, PNG
   o WebP o si supera 5 MiB; la decisión es de la API. El archivo viaja como cuerpo
-  binario con su Content-Type. «Agregar foto» se oculta con tres fotos activas.
+  binario con su Content-Type. «Agregar foto» se oculta al alcanzar el cupo que devuelve `GET /lots/{lotId}/photos` en `limit`.
 - **Validación:** mientras haya fotos en carga o validación, la web consulta
   `GET /lots/{lotId}/photos` cada 3 s (20 por minuto, dentro del límite por usuario) y
   deja de hacerlo al terminar o al salir de la página.
 - **Errores:** 413, 415 y 422 explican el archivo; 409 actualiza la lista (lote
-  publicado, tres fotos o carga vencida); 429 indica cuántos segundos esperar según
+  publicado, cupo completo o carga vencida); 429 indica cuántos segundos esperar según
   `Retry-After`; 503 explica que la carga no está disponible y que se puede publicar
   sin fotos. Una respuesta perdida no se reintenta: se consulta la lista.
 - **Publicar (D-05):** el botón se deshabilita mientras haya fotos no listas. Si la API
@@ -141,6 +141,7 @@ Ley 19.628):
 
 | Variable | API | Worker | Uso |
 | --- | --- | --- | --- |
+| `PHOTO_MAX_PER_LOT` | ✓ | — | Entero 1–50; valor inicial 3. La web usa el cupo que devuelve la API, sin compilación propia. |
 | `PHOTO_STORAGE` | ✓ | ✓ | `s3` (bucket privado) o `local` (solo desarrollo). Vacía: cargar responde 503 y el worker no procesa fotos (sigue generando avisos). |
 | `PHOTO_LOCAL_DIR` | ✓ | ✓ | Directorio compartido con `local`; Compose usa el volumen `photo_data`. |
 | `PHOTO_S3_ENDPOINT`, `PHOTO_S3_REGION`, `PHOTO_S3_BUCKET` | ✓ | ✓ | Bucket S3 compatible. Endpoint HTTPS sin credenciales. |
@@ -163,11 +164,29 @@ portabilidad e integración con Node:
 | **Backblaze B2** | Elegido: 10 GB gratuitos, registro sin tarjeta, bucket privado y protocolo S3. |
 | Supabase Storage | 1 GB gratuito, proyecto que se pausa tras una semana sin uso y claves S3 con acceso a todos los buckets. |
 | Cloudflare R2 | Exige alta con medio de pago y no implementa todas las operaciones S3 usadas. |
+| Railway Buckets | Alternativa privada compatible con S3 e integrada al proyecto; su API no ofrece versionado de objetos. El adaptador actual de borrado usa versiones de B2. |
 | Disco local | Depende del host y su volumen, sin réplica ni respaldo. Solo para desarrollo. |
 
 El escenario de E1 (10 000 lotes × 3 fotos × 600 KB ≈ 18 GB, anexos I p. 26) es un
 supuesto de dimensionamiento, no consumo medido: excede los 10 GB gratuitos. Ajustar
 retención o recursos se decide con el equipo antes del piloto completo.
+
+### Por qué B2 frente a Railway Buckets
+
+Railway también ofrece [buckets privados compatibles con S3](https://docs.railway.com/storage-buckets),
+lo que simplifica credenciales e infraestructura dentro del mismo proyecto. La decisión
+actual conserva el bucket B2 cuya carga privada, lectura y eliminación ya se probaron
+con K005. No se atribuye a Railway falta de almacenamiento de objetos ni se afirma que
+B2 sea siempre más barato.
+
+La compatibilidad no significa que baste cambiar el endpoint: Railway no implementa
+versionado y sus buckets actuales usan normalmente URLs con el bucket en el host.
+Nuestro adaptador fija rutas con el bucket en el path y lista y elimina versiones para
+borrar físicamente en B2. En B2, [borrar sin `versionId` deja un marcador](https://www.backblaze.com/apidocs/s3-delete-object).
+Migrar requiere adaptar y probar direccionamiento y borrado para el proveedor destino.
+El coste se decide con consumo medido y las tarifas del proveedor, no solo con la cuota
+inicial gratuita. Retener B2 conserva la integración comprobada sin bloquear otra
+implementación del port `ObjectStore`.
 
 ### Bucket B2
 

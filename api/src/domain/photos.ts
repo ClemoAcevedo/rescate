@@ -116,11 +116,11 @@ export function isActivePhoto(photo: { status: PhotoStatus; uploadExpiresAt: Dat
 
 /**
  * Solo un borrador acepta fotos nuevas o quitar fotos: publicado, su contenido
- * queda fijo (RF02). Devuelve la primera posición libre entre 1 y 3.
+ * queda fijo (RF02). Devuelve la primera posición libre dentro del cupo configurado.
  */
-export function nextPhotoPosition(lotStatus: string, activePositions: readonly number[]): number {
+export function nextPhotoPosition(lotStatus: string, activePositions: readonly number[], limit: number = PHOTO_LIMITS.maxPhotosPerLot): number {
   if (lotStatus !== "draft") throw new PhotoRuleError("photo_not_draft")
-  for (let position = 1; position <= PHOTO_LIMITS.maxPhotosPerLot; position++) {
+  for (let position = 1; position <= limit; position++) {
     if (!activePositions.includes(position)) return position
   }
   throw new PhotoRuleError("photo_limit_reached")

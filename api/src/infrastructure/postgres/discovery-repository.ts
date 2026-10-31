@@ -41,7 +41,7 @@ async function readLot(db: Pool | PoolClient, lotId: string, now: Date | null): 
   if (!uuid.test(lotId)) return null
   const { rows } = await db.query<LotRow>(
     `SELECT ${publicColumns} FROM public.lots l
-     WHERE l.public_id = $1 AND ($2::timestamptz IS NULL AND l.status IN ('published', 'expired')
+     WHERE l.public_id = $1 AND l.paused_at IS NULL AND ($2::timestamptz IS NULL AND l.status IN ('published', 'expired')
        OR l.status = 'published' AND l.pickup_ends_at > $2)`,
     [lotId, now, null, null],
   )
@@ -53,7 +53,7 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
     async search(filters, now) {
       const { rows } = await pool.query<LotRow>(
         `SELECT ${publicColumns} FROM public.lots l
-         WHERE l.status = 'published' AND l.pickup_ends_at > $1
+         WHERE l.status = 'published' AND l.paused_at IS NULL AND l.pickup_ends_at > $1
            AND ($2::text IS NULL OR lower(l.category) = lower($2))
            AND ($5::float8 IS NULL OR ST_DWithin(${location}, ${origin}, $5 * 1000.0))
            AND ($6::timestamptz IS NULL OR l.pickup_starts_at <= $6)

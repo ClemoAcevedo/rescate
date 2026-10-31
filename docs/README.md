@@ -59,3 +59,5 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
   respuesta al feedback de E1, riesgos, BPMN por rol y plan de trabajo hasta S11.
 - [Evidencia](evidencia/): registros de ejecución de K003, K005, K006, K009 y K010,
   conservados como estaban. La evidencia nueva va en la descripción del PR y en CI.
+
+- [ADR 0017: gestión de publicaciones y cupo de fotos](adr/0017-gestion-de-publicaciones.md).

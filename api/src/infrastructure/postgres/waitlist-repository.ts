@@ -78,7 +78,7 @@ export function createWaitlistRepository(pool: Pool): WaitlistRepository {
         const locked = await lockLot(client, lotId)
         // Vencido ya registrado (K028) responde igual que cerrado sin registrar.
         const published = locked && await client.query(
-          "SELECT 1 FROM public.lots WHERE id = $1 AND status IN ('published', 'expired')", [locked.lotId])
+          "SELECT 1 FROM public.lots WHERE id = $1 AND paused_at IS NULL AND status IN ('published', 'expired')", [locked.lotId])
         if (!locked || published?.rowCount !== 1) return operate({ existing: null, lot: null }, unavailable)
         // Una oferta vencida aún retiene packs: se registra antes de medir lo libre.
         await settleQueue(client, locked.lotId, locked.at)

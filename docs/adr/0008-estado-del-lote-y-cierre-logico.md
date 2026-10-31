@@ -17,10 +17,11 @@ Las búsquedas públicas siguen filtrando `status = 'published'`, así que un lo
 cerrado desaparece del listado sin código adicional. El operador lo sigue viendo en
 «Mis lotes» con su estado.
 
-Esta migración solo crea el modelo. La transición `published → expired` llega con
-K028 y `published → withdrawn` con la tarjeta que agregue retirar o cerrar un lote
-(K044 para el cierre por incidencia), ambas con el bloqueo común de
-[ADR 0006](0006-inventario-del-lote.md); ahí se mueve el inventario pendiente a `X`.
+El worker implementa `published → expired` y la gestión del operador implementa
+`published → withdrawn`, ambas con el bloqueo común de
+[ADR 0006](0006-inventario-del-lote.md) y el movimiento del inventario pendiente a X.
+La pausa es reversible y conserva el estado publicado; ver
+[ADR 0017](0017-gestion-de-publicaciones.md). K044 (#49) incorpora el circuito de cierre por incidencia.
 
 ## Alternativas descartadas
 

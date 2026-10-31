@@ -24,6 +24,7 @@ export interface LotDescription {
 }
 
 export interface Lot {
+  paused?: boolean
   publicId: string
   /** Clave interna para autorización, nunca se expone por HTTP. */
   establishmentId: string

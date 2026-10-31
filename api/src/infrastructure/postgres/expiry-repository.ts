@@ -70,7 +70,7 @@ export function createLotExpiryRepository(pool: Pool): LotExpiryRepository {
           async closeLot(at) {
             // F → X: free_quantity aquí es el valor previo; tras el UPDATE queda en 0.
             await client.query(
-              `UPDATE public.lots SET status = 'expired', closed_at = $2,
+              `UPDATE public.lots SET status = 'expired', closed_at = $2, paused_at = NULL,
                  expired_quantity = expired_quantity + free_quantity
                WHERE id = $1 AND status = 'published'`, [locked.lotId, at])
           },

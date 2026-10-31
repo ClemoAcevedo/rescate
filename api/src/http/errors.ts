@@ -98,7 +98,7 @@ export function handleError(error: unknown, response: Response, log: Log): void 
     if (error.reason === "unrecognized_image") sendError(response, 422, "VALIDATION_ERROR", "El archivo no es una imagen JPEG, PNG o WebP.",
       [{ path: "", message: "Los bytes no corresponden a un formato permitido." }])
     else sendError(response, 409, "CONFLICT", error.reason === "photo_limit_reached"
-      ? "El lote ya tiene tres fotos." : "El estado del lote no permite cambiar sus fotos.")
+      ? "El lote alcanzó el cupo de fotos configurado." : "El estado del lote no permite cambiar sus fotos.")
   } else if (error instanceof PeriodRuleError) {
     sendError(response, 422, "VALIDATION_ERROR", "Revisa el período indicado.", [{ path: "/from", message: error.violation === "period_inverted"
       ? "La fecha inicial no puede ser posterior a la final." : `El período no puede superar ${MAX_PERIOD_DAYS} días.` }])
