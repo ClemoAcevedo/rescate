@@ -163,7 +163,7 @@ try {
   assert.equal(recovered.freeQuantity,1);assert.equal(recovered.history.length,1)
   ok('fallo tras escribir revierte stock, versión, historial e intención; la misma clave se recupera')
   // Una oferta que vence durante la pausa libera F sin adelantar a la siguiente persona.
-  const pausedQueue=await makeLot(1), queuePath=`/lots/${pausedQueue}/management`
+  const pausedQueue=await makeLot(1)
   const held=await buyer.call('POST',`/public/lots/${pausedQueue}/reservations`,{quantity:1,idempotencyKey:randomUUID()})
   const first=await waiting.call('POST',`/public/lots/${pausedQueue}/waitlist`,{quantity:1,idempotencyKey:randomUUID()})
   const second=await stranger.call('POST',`/public/lots/${pausedQueue}/waitlist`,{quantity:1,idempotencyKey:randomUUID()})

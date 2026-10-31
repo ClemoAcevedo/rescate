@@ -120,6 +120,7 @@ export function isActivePhoto(photo: { status: PhotoStatus; uploadExpiresAt: Dat
  */
 export function nextPhotoPosition(lotStatus: string, activePositions: readonly number[], limit: number = PHOTO_LIMITS.maxPhotosPerLot): number {
   if (lotStatus !== "draft") throw new PhotoRuleError("photo_not_draft")
+  if (activePositions.length >= limit) throw new PhotoRuleError("photo_limit_reached")
   for (let position = 1; position <= limit; position++) {
     if (!activePositions.includes(position)) return position
   }

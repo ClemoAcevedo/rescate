@@ -12,7 +12,7 @@ avisos persisten aunque no esté conectada y se recuperan al volver. El contrato
 | `offer_issued` | Se emite una oferta a la cabeza de la [cola](cola-de-espera.md) | Titular de la solicitud | `/espera/:id` |
 | `offer_expired` | Se registra el vencimiento de esa oferta | Titular de la solicitud | `/espera/:id` |
 | `reservation_confirmed` | Se acepta la oferta y nace la reserva | Titular | `/reservas/:id` |
-| `reservation_cancelled` | El titular cancela su [reserva](reservas.md) | Titular | `/reservas/:id` |
+| `reservation_cancelled` | El titular cancela su [reserva](reservas.md) o el operador retira la publicación | Titular | `/reservas/:id` |
 | `message_from_holder` | El titular escribe en el [chat](chat.md) de la reserva | Cada operador del local | `/operador/panel` |
 | `message_from_establishment` | Un operador escribe en el [chat](chat.md) de la reserva | Titular | `/reservas/:id` |
 

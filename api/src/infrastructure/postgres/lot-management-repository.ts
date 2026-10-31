@@ -33,7 +33,11 @@ export function createLotManagementRepository(pool: Pool): LotManagementReposito
       return rows[0] ?? null
     },
     isMember: (userId, establishmentId) => member(pool, userId, establishmentId),
-    read: lotId => readView(pool, lotId),
+    read: lotId => withTransaction(pool, async client => {
+      // Estado e historial pertenecen a la misma foto aunque otro operador confirme entretanto.
+      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
+      return readView(client, lotId)
+    }),
     async withCommand(userId, lotId, key, operate) {
       return withTransaction(pool, async client => {
         await lockIntent(client, 'lot_management', userId, key)
