@@ -148,6 +148,44 @@ try {
   const expired=await management.get({userId:operator.id},expiredLot)
   assert.equal(expired.status,'expired');assert.equal(expired.paused,false);assert.equal(expired.unassignableQuantity,1)
   ok('un lote pausado también vence; reactivar no extiende el plazo')
+  // Un fallo posterior a escribir también revierte el historial y la intención.
+  const rollbackLot=await makeLot(2), repository=createLotManagementRepository(pool)
+  const failing=createLotManagement({ ...repository,
+    withCommand: (user,lot,key,operate)=>repository.withCommand(user,lot,key,(state,writer)=>operate(state,{
+      ...writer, apply:async(...args)=>{await writer.apply(...args);throw new Error('fallo posterior al historial')},
+    })),
+  })
+  const rollbackIntent=input('reduce_stock',1,{quantity:1})
+  await assert.rejects(failing.command({userId:operator.id},rollbackLot,rollbackIntent),/fallo posterior/)
+  const untouched=await management.get({userId:operator.id},rollbackLot)
+  assert.equal(untouched.freeQuantity,2);assert.equal(untouched.version,1);assert.equal(untouched.history.length,0)
+  const recovered=await management.command({userId:operator.id},rollbackLot,rollbackIntent)
+  assert.equal(recovered.freeQuantity,1);assert.equal(recovered.history.length,1)
+  ok('fallo tras escribir revierte stock, versión, historial e intención; la misma clave se recupera')
+  // Una oferta que vence durante la pausa libera F sin adelantar a la siguiente persona.
+  const pausedQueue=await makeLot(1), queuePath=`/lots/${pausedQueue}/management`
+  const held=await buyer.call('POST',`/public/lots/${pausedQueue}/reservations`,{quantity:1,idempotencyKey:randomUUID()})
+  const first=await waiting.call('POST',`/public/lots/${pausedQueue}/waitlist`,{quantity:1,idempotencyKey:randomUUID()})
+  const second=await stranger.call('POST',`/public/lots/${pausedQueue}/waitlist`,{quantity:1,idempotencyKey:randomUUID()})
+  await buyer.call('POST',`/reservations/${held.body.id}/cancel`,{})
+  await management.command({userId:operator.id},pausedQueue,input('pause',1))
+  await db.query(`UPDATE waitlist_entries SET offered_at=now()-interval '11 minutes',offer_expires_at=now()-interval '1 minute'
+    WHERE public_id=$1`,[first.body.id])
+  await expiries.expireLot(pausedQueue)
+  const inPause=await management.get({userId:operator.id},pausedQueue)
+  assert.equal(inPause.freeQuantity,1);assert.equal(inPause.offeredQuantity,0);assert.equal(inPause.unassignableQuantity,0)
+  assert.equal((await stranger.call('GET',`/waitlist/${second.body.id}`)).body.status,'waiting')
+  await management.command({userId:operator.id},pausedQueue,input('resume',2))
+  assert.equal((await stranger.call('GET',`/waitlist/${second.body.id}`)).body.status,'offered')
+  const third=await operator.call('POST',`/public/lots/${pausedQueue}/waitlist`,{quantity:1,idempotencyKey:randomUUID()})
+  assert.equal(third.status,201)
+  await management.command({userId:operator.id},pausedQueue,input('withdraw',3))
+  for(const entryId of [second.body.id,third.body.id]) {
+    const ended=(await db.query('SELECT status,ended_at FROM waitlist_entries WHERE public_id=$1',[entryId])).rows[0]
+    assert.equal(ended.status,'expired');assert.ok(ended.ended_at)
+  }
+  assert.equal((await management.get({userId:operator.id},pausedQueue)).unassignableQuantity,1)
+  ok('oferta vencida durante pausa conserva la cola; retiro termina tanto ofertas como espera')
   // Configuración >3 aplicada tanto por API como por el esquema SQL.
   const draft=await makeLot(1)
   await db.query("UPDATE lots SET status='draft',published_at=NULL WHERE public_id=$1",[draft])

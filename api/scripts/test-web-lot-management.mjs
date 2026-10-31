@@ -23,7 +23,7 @@ try {
     pickup_starts_at,pickup_ends_at,status,published_at) VALUES ($1,'Dos berlines','Panadería',2,'Santiago',-33.45,-70.66,
     'America/Santiago',now()-interval '1 hour',now()+interval '2 hours','published',now()) RETURNING public_id::text AS id`,[est.id])).rows[0]
   await page.goto(base+'/login?from='+encodeURIComponent('/operador/lotes/'+lot.id))
-  await page.getByLabel('Correo').fill(email);await page.getByLabel('Contraseña',{exact:true}).fill(password)
+  await page.locator('input[name="email"]').fill(email);await page.locator('input[name="password"]').fill(password)
   await page.getByRole('button',{name:'Iniciar sesión',exact:true}).click()
   const panel=page.getByRole('region',{name:'Gestionar disponibilidad'})
   await panel.getByText('Libres:',{exact:false}).waitFor()
@@ -41,7 +41,7 @@ try {
   await operate('pause','Pausa para revisar el mostrador')
   await panel.getByText('Publicación pausada',{exact:true}).waitFor()
   await operate('resume','Stock revisado')
-  assert.equal(await panel.getByText('Publicación pausada',{exact:true}).count(),0)
+  await panel.getByText('Publicación pausada',{exact:true}).waitFor({state:'hidden'})
   // Simular respuesta perdida después de que el servidor confirmó el descuento.
   let firstKey=null;let lost=false
   await page.route('**/lots/*/management',async route=>{
