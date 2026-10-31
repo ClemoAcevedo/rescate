@@ -330,7 +330,7 @@ async function runTrial(n, context) {
         ...(remote ? {} : { k6: { image: K6_IMAGE, cpus: 'sin límite', memoryMb: 'sin límite' } }) },
       pools: { api: 8, worker: 2 },
       network: remote ? `k6 en ${environment.generator.hostname} → ${remote.apiUrl}; /health desde el servidor` : `k6 → API por la red ${network} de Compose (http://<contenedor api>:3000), sin puertos publicados; /health se consulta desde el host por un puerto publicado en 127.0.0.1`,
-      loadGenerator: remote ? `${environment.generator.hostname}, ${environment.generator.system}, ${environment.generator.k6}; equipo separado por SSH` : 'k6 en el mismo equipo y la misma VM de Docker que API, worker y PostgreSQL: interferencia declarada; no sustituye la prueba con otro equipo (anexo H p. 18)',
+      loadGenerator: remote ? `${environment.generator.hostname}, ${environment.generator.system}, ${environment.generator.k6}; destino SSH con hostname distinto (separación física por verificar)` : 'k6 en el mismo equipo y la misma VM de Docker que API, worker y PostgreSQL: interferencia declarada; no sustituye la prueba con otro equipo (anexo H p. 18)',
       timings: trial.timings, health: trial.health, usage: trial.usage, lockWaits: trial.lockWaits, apiStatuses: trial.apiStatuses }
     writeFileSync(`${dir}/resources.json`, JSON.stringify(trial.resources, null, 2))
   } catch (error) {
@@ -395,7 +395,7 @@ function report(run, context, results) {
       ['Tareas vencidas P95 ≤ 30 s', 'No se mide aquí: `db:test:integrity:compose` vence 100 ofertas sembradas con el worker real'],
     ]), '',
     `Protocolo (tres ensayos de 120 + 600 s; mezcla e2 en E2 y e3 desde E3): ${protocol ? `cumple la forma con ${mix}` : 'no cumple la forma; esta corrida es parcial'}. `
-    + (remote ? 'Generador separado: comprobar además que ambos equipos comparten la red de prueba (anexo H p. 18).' : 'Con un solo equipo el resultado no sustituye la prueba con un generador separado (anexo H p. 18).')]
+    + (remote ? 'Transporte SSH: verificar por separado la separación física y que ambos equipos comparten la red de prueba (anexo H p. 18).' : 'Con un solo equipo el resultado no sustituye la prueba con un generador separado (anexo H p. 18).')]
   for (const trial of results) {
     const metric = name => values(trial.summary, name)
     lines.push('', `## Ensayo ${trial.n}: ${trial.ok ? 'cumple' : 'no cumple'}`, '', `Base \`${trial.database}\`${trial.ok ? ' (borrada)' : ' (conservada para revisar)'}.`)
@@ -501,7 +501,7 @@ try {
     dockerVm: { system: info.OperatingSystem, server: info.ServerVersion, architecture: info.Architecture, cpus: info.NCPU,
       memoryGb: Math.round(info.MemTotal / 1024 ** 3 * 10) / 10, memoryBytes: info.MemTotal },
     generator, dbPlatform, minimums, node: `${process.version} ${process.arch}`, k6: K6_IMAGE, buildMs,
-    services: remote ? 'db, api y worker de Compose; k6 por SSH en otro equipo' : 'db, api y worker de Compose; web no se levanta: k6 llama a la API directamente y el servicio web de Compose es el servidor de desarrollo de Vite',
+    services: remote ? 'db, api y worker de Compose; k6 por SSH en un destino externo al runner' : 'db, api y worker de Compose; web no se levanta: k6 llama a la API directamente y el servicio web de Compose es el servidor de desarrollo de Vite',
   }
   const run = `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}_${mix}`
   context.results = `${api}.k032-results/${run}`

@@ -22,7 +22,7 @@ export async function inspectGenerator(config) {
   const command = ['hostname', 'uname -sm', 'k6 version'].join(' && ')
   const { stdout } = await exec('ssh', [...SSH_OPTIONS, config.target, command])
   const [hostname, system, k6] = stdout.trim().split('\n')
-  if (!hostname || hostname === os.hostname() || !/^k6 v1\.3\.0(?:[ (]|$)/.test(k6 ?? '')) throw new Error('Se requiere k6 en otro equipo; comprobar hostname y k6 1.3.0')
+  if (!hostname || hostname === os.hostname() || !/^k6 v1\.3\.0(?:[+ (]|$)/.test(k6 ?? '')) throw new Error('Se requiere k6 en otro equipo; comprobar hostname y k6 1.3.0')
   return { hostname, system, k6, transport: 'SSH', apiUrl: config.apiUrl }
 }
 
