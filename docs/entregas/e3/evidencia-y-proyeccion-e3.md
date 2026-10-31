@@ -2,7 +2,7 @@
 
 Tarjeta [K041 (#42)](https://github.com/ClemoAcevedo/rescate/issues/42). Responsable: Vicente Reñasco. Revisor: Jorge Molina.
 
-Corte: datos de GitHub y de producción al 31-10-2026, 15:55 hora de Chile (18:55 UTC). Entre las 16:32 y las 16:38 se revisaron otra vez y no había cambios. La presentación de E3 va en K042. La pauta también pide una planilla de estimaciones y plan de trabajo; el borrador local de esa planilla tiene un corte anterior (15:38) y hay que regenerarlo antes de usarlo.
+Corte: datos de GitHub al 31-10-2026, 15:55 hora de Chile (18:55 UTC); producción se consultó por última vez a las 16:33. La presentación de E3 va en K042. La pauta también pide una planilla de estimaciones y plan de trabajo, que no es parte de este informe.
 
 ## 1. Resumen
 
@@ -149,7 +149,7 @@ Entre S01 y S06 cerramos 139,75 de las 142,75 h planificadas (98 %). Las 22,5 h 
 | Mejor y peor ritmo de dos semanas | 26,6 h por semana (media de S03 y S04) y 19,0 h por semana (media de S05 y S06), entre los pares S01-S02, S03-S04 y S05-S06 | Tabla de avance |
 | Ritmo que pide el plan de S08 a S10 | 25,2 h por semana (75,5 h en tres semanas de referencia) | Tarjetas abiertas |
 
-Las 30 h son lo que se planificó, no una disponibilidad que hayamos vuelto a confirmar. Las 6 h por persona constan en la hoja Carga del plan y no se han revalidado. Como antecedente, al inicio del semestre el equipo estimó que el ramo considera 10 h semanales, menos 2 h 20 min de clase, lo que deja 7 h 40 min por persona fuera de clase, y que había que reservar parte de eso para estudio e imprevistos. Fue una estimación inicial y ajustable, no un compromiso actual de cada uno. Lo que efectivamente cerramos son 23,3 h estimadas por semana.
+Las 30 h son lo que se planificó, no una disponibilidad que hayamos vuelto a confirmar. Las 6 h por persona constan en la hoja Carga del plan y no se han revalidado. Lo que efectivamente cerramos son 23,3 h estimadas por semana.
 
 S07 queda fuera de la velocidad porque no ha terminado y su cierre en lote no tiene toda la evidencia.
 
