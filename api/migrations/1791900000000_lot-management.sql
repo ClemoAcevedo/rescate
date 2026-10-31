@@ -27,7 +27,7 @@ ALTER TABLE public.lot_photos DROP CONSTRAINT lot_photos_position_check,
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM public.lots WHERE paused_at IS NOT NULL)
      OR EXISTS (SELECT 1 FROM public.lot_photos WHERE position > 3) THEN
-    RAISE EXCEPTION 'Reanudar lotes y retirar fotos posteriores a la tercera antes del rollback';
+    RAISE EXCEPTION 'Rollback requiere lotes sin pausa y fotografías representables en posiciones 1 a 3; revisar respaldo compatible antes de continuar';
   END IF;
 END $$;
 ALTER TABLE public.lot_photos DROP CONSTRAINT lot_photos_position_check,

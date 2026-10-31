@@ -38,7 +38,7 @@ function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
       <div className="my-lot__media"><LotPhoto src={lot.photoUrl} description={`Fotografía del pack: ${title}`} /></div>
       <div className="my-lot__body">
         <div className="my-lot__labels">
-          {lot.paused ? <Badge tone="warning">Pausado</Badge> : lot.status === 'published' && ended ? <Badge>Retiro finalizado</Badge> : <Badge tone={badge.tone}>{badge.label}</Badge>}
+          {lot.status === 'published' && ended ? <Badge>Retiro finalizado</Badge> : lot.paused ? <Badge tone="warning">Pausado</Badge> : <Badge tone={badge.tone}>{badge.label}</Badge>}
           <span className="my-lot__category">{lot.category}</span>
         </div>
         <h2><Link to={editorPath}>{title}</Link></h2>
