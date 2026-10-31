@@ -261,7 +261,9 @@ lo cambia.
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
   avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030),
-  que también muestra los avisos de mensajes del chat (K037);
+  que también muestra los avisos de mensajes del chat (K037); conversación entre titular y
+  establecimiento con polling visible cada 5 s, recuperación por secuencia y reintentos
+  del mismo envío (K038);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
   período (K035).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
@@ -293,12 +295,20 @@ lo cambia.
 - **Pruebas de concurrencia:** reservas y retiros con PostgreSQL real, bloqueos
   observados y repetición con el worker de fotos activo y detenido (K025); flujo de
   cola, vencimientos y avisos con el worker matado tras reclamar y reiniciado, por API
-  y en tres navegadores (K031).
+  y en tres navegadores (K031); casos críticos del anexo H a su escala: último pack con 20
+  personas en 100 lotes, 20 reintentos de una clave en reservas y chat, oferta en el
+  límite con el worker detenido, operador ajeno y 100 ofertas vencidas con el worker real
+  ([integridad](docs/rendimiento.md#integridad), K039).
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
-- **Rendimiento:** semilla de escala del anexo H, planes reales con EXPLAIN y p50/p95 de
-  búsqueda, reserva y cancelación con k6 ([rendimiento](docs/rendimiento.md), K032).
+- **Rendimiento:** semilla de escala del anexo H con 100 000 mensajes, planes reales con
+  EXPLAIN y k6 con las mezclas de E2 y E3 (búsqueda, chat, bandeja, reserva, cancelación y
+  envío) en ensayos con API y worker en Compose, rechazos esperados separados de errores e
+  invariantes tras la carga ([rendimiento](docs/rendimiento.md), K032, K039).
+- **Cobertura:** unitaria y de integración de la API con `node:test`, contando los
+  archivos que ninguna prueba carga; `web/` no tiene pruebas unitarias
+  ([entorno local](docs/desarrollo-local.md#cobertura-de-la-api), K039).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
 

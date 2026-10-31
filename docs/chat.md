@@ -43,10 +43,31 @@ tardío siga respondiendo lo mismo. Borrar otra vez no cambia nada.
 | GET | `/reservations/:reservationId/messages?after=N` | 200, hasta 50 mensajes con secuencia mayor que `N`, `hasMore` y `open` |
 | POST | `/reservations/:reservationId/messages` | 201, `{ id, sequence, createdAt }` del mensaje nuevo o del original |
 
-El envío exige sesión, `Origin` y CSRF. La pantalla con consulta cada 5 s es K038 (#41).
+El envío exige sesión, `Origin` y CSRF.
+
+## Conversación web
+
+`/reservas/:id/chat` se abre desde el detalle del titular, los compromisos del panel
+operador y los avisos de mensajes. Consulta cada 5 s únicamente con la pestaña visible
+y conexión; al volver o reconectar consulta de inmediato desde la última secuencia
+recibida. Agota páginas de 50 antes de esperar el siguiente ciclo y conserva el historial
+si falla la red. El resultado de un envío no adelanta ese cursor.
+
+El envío aparece pendiente hasta recibir confirmación. Un fallo conserva texto y clave
+en la vista para reintentar la misma intención sin duplicarla. Las intenciones locales
+se conservan mientras la conversación permanece montada. «Enviado al servidor» confirma
+persistencia, sin afirmar entrega ni lectura. El historial identifica titular y
+establecimiento, sin revelar al operador. El cierre deshabilita el editor y los reintentos;
+la API vuelve a comprobarlo bajo bloqueo al enviar.
 
 ## Cómo probar
 
 `npm --prefix api run db:test:chat:compose` crea una base aislada, la migra y recorre por la API
 real la conversación, los reintentos, el acceso ajeno, el límite, los envíos simultáneos, la
 carrera con cancelar, los cierres por vencimiento, retiro del lote y entrega, y la retención.
+
+Con Vite iniciado, `npm --prefix api run test:web:chat` comprueba con HTTP controlado
+dos contextos de navegador, respuesta perdida, reintento con la misma clave,
+recuperación de varias páginas al reconectar, intervalo de 5 s, pausa con vista oculta
+y editor bloqueado tras el cierre. Forma parte de
+`test:web:compose`; la persistencia real se comprueba con `db:test:chat:compose`.

@@ -1,0 +1,7 @@
+.chat-page { max-width: var(--content-max); margin-inline: auto; }
+.chat, .chat form { display: grid; gap: var(--sp-4); }
+.chat__messages { list-style: none; padding: 0; display: grid; gap: var(--sp-3); }
+.chat__messages li, .chat__outgoing { padding: var(--sp-4); border: var(--border-width) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-card); overflow-wrap: anywhere; }
+.chat__messages .chat__mine { background: var(--surface-brand-soft); }
+.chat__messages p, .chat__outgoing p { white-space: pre-wrap; }
+.chat time { font-size: var(--fs-meta); color: var(--text-muted); }

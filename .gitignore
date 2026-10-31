@@ -4,6 +4,7 @@ coverage/
 .vercel/
 .k005-storage/
 .k032-results/
+.k039-results/
 
 .env
 .env.*

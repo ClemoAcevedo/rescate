@@ -1,6 +1,6 @@
 // K032: semilla de escala del anexo H de E1 (p. 18) sobre una base aislada y ya migrada.
-// 10 establecimientos, 1000 cuentas, 10 000 lotes con 200 vigentes y 50 000 compromisos con
-// estados terminales. Los mensajes de chat se agregan cuando exista su tabla (K037).
+// 10 establecimientos, 1000 cuentas, 10 000 lotes con 200 vigentes, 50 000 compromisos con
+// estados terminales y 100 000 mensajes de chat con sus avisos (K039).
 // Reproducible: los datos salen de SQL con setseed; solo cambian los UUID y los códigos.
 import assert from 'node:assert/strict'
 import { createHash, randomBytes } from 'node:crypto'
@@ -8,8 +8,13 @@ import pg from 'pg'
 import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 
 // Lotes vigentes por grupo: con cola (sin stock), para cancelar (A) y para reservar (B).
+// Las primeras `chats` sesiones de carga tienen el chat visible (anexo H p. 18): cada una
+// conversa en su propia reserva, en un lote del grupo B que k6 no alcanza a reservar.
 export const SCALE = { establishments: 10, users: 1000, lots: 10000, current: 200, queued: 20, cancelTargets: 90,
-  reserveTargets: 90, commitments: 50000, loadUsers: 50, cancelsPerUser: 15, waitlistHistory: 10000, events: 20000 }
+  reserveTargets: 90, commitments: 50000, loadUsers: 50, cancelsPerUser: 20, waitlistHistory: 10000, events: 20000,
+  chats: 20, chatMessages: 60, messages: 100000 }
+// k6 reserva desde el inicio del grupo B; los chats ocupan su segunda mitad.
+const reservableLots = SCALE.reserveTargets / 2
 // Cuentas 1–10 operan un establecimiento; 11–60 son las sesiones de carga; 61 es la sonda de EXPLAIN.
 const firstLoadUser = SCALE.establishments + 1
 const probeUser = firstLoadUser + SCALE.loadUsers
@@ -106,6 +111,57 @@ const current = [
     WHERE l.g <= ${SCALE.queued} ORDER BY l.g, k`],
 ]
 
+// Texto de 1 a 1000 caracteres, sin espacios en los bordes como lo guarda la API.
+const messageText = sql`rtrim(left(repeat('Mensaje K032 para coordinar el retiro del pack. ', 21), 1 + (random() * 999)::int))`
+// Cierre de la conversación, igual que la retención del worker (chat-repository.ts).
+const closesAt = sql`LEAST(c.ended_at, l.pickup_ends_at, l.closed_at)`
+
+const chat = [
+  // Conversaciones abiertas de la carga y de la sonda ($1): alternan titular y operador del local.
+  ['mensajes vigentes', sql`INSERT INTO chat_messages(commitment_id, author_user_id, sequence, idempotency_key, body, created_at)
+    SELECT c.id, CASE WHEN k % 2 = 1 THEN c.user_id ELSE m.user_id END, k, gen_random_uuid(), ${messageText},
+      c.created_at + k * interval '15 seconds'
+    FROM commitments c JOIN lots l ON l.id = c.lot_id JOIN memberships m ON m.establishment_id = l.establishment_id
+    CROSS JOIN generate_series(1, ${SCALE.chatMessages}) k
+    WHERE c.public_id = ANY($1::uuid[]) ORDER BY c.id, k`],
+  // El resto ($1) cae al azar en uno de cada cinco compromisos históricos, dentro de la vida de
+  // la conversación. Sin texto si cerró hace 30 días o más: la retención del worker al arrancar
+  // no tiene nada que borrar.
+  ['mensajes históricos', sql`WITH conversations AS MATERIALIZED (
+      SELECT c.id, c.user_id, m.user_id AS operator_id, c.created_at, ${closesAt} AS closes_at,
+        row_number() OVER (ORDER BY c.id) - 1 AS n
+      FROM commitments c JOIN lots l ON l.id = c.lot_id JOIN memberships m ON m.establishment_id = l.establishment_id
+      WHERE c.status <> 'confirmed' AND c.id % 5 = 0),
+    picks AS MATERIALIZED (SELECT i, floor(random() * (SELECT count(*) FROM conversations))::int AS n
+      FROM generate_series(1, $1::int) i),
+    drafts AS MATERIALIZED (SELECT v.id, v.user_id, v.operator_id, v.closes_at, p.i, random() < 0.5 AS from_holder,
+        v.created_at + random() * (v.closes_at - v.created_at) AS at, ${messageText} AS body
+      FROM picks p JOIN conversations v ON v.n = p.n)
+    INSERT INTO chat_messages(commitment_id, author_user_id, sequence, idempotency_key, body, created_at)
+    SELECT id, CASE WHEN from_holder THEN user_id ELSE operator_id END,
+      row_number() OVER (PARTITION BY id ORDER BY at, i), gen_random_uuid(),
+      CASE WHEN closes_at > now() - interval '30 days' THEN body END, at
+    FROM drafts ORDER BY id, at, i`],
+  // Cada mensaje avisa a la otra parte con su evento procesado, como chat-repository.ts. Los
+  // avisos de conversaciones cerradas quedan leídos.
+  ['avisos de mensajes', sql`WITH e AS (INSERT INTO outbox_events(event_type, subject_id, recipient_user_id, payload,
+        created_at, status, available_at, processed_at)
+      SELECT r.kind, m.id, r.recipient, jsonb_build_object('lot', jsonb_build_object('id', l.public_id,
+          'description', l.description), 'quantity', c.quantity, 'waitlistEntryId', NULL, 'reservationId', c.public_id,
+          'offerExpiresAt', NULL), m.created_at, 'processed', m.created_at, m.created_at
+      FROM chat_messages m JOIN commitments c ON c.id = m.commitment_id JOIN lots l ON l.id = c.lot_id
+      CROSS JOIN LATERAL (SELECT 'message_from_holder' AS kind, ms.user_id AS recipient FROM memberships ms
+          WHERE m.author_user_id = c.user_id AND ms.establishment_id = l.establishment_id AND ms.user_id <> m.author_user_id
+        UNION ALL SELECT 'message_from_establishment', c.user_id WHERE m.author_user_id <> c.user_id) r
+      ORDER BY m.id
+      RETURNING id, subject_id, recipient_user_id, event_type, payload, created_at)
+    INSERT INTO notifications(event_id, user_id, kind, payload, created_at, read_at)
+    SELECT e.id, e.recipient_user_id, e.event_type, e.payload, e.created_at,
+      CASE WHEN ${closesAt} <= now() THEN e.created_at END
+    FROM e JOIN chat_messages m ON m.id = e.subject_id JOIN commitments c ON c.id = m.commitment_id
+    JOIN lots l ON l.id = c.lot_id ORDER BY e.id`],
+]
+
 /** Reservas confirmadas con código cifrado, como las deja K022. `rows` es [usuario, lote]. */
 async function confirm(db, codes, rows) {
   const ids = []
@@ -127,8 +183,8 @@ async function sessionFor(db, userId) {
 }
 
 /**
- * Siembra la base y devuelve lo que necesitan k6 y la sonda: sesiones, lotes por grupo y
- * reservas confirmadas para cancelar. `pickupCodeKey` debe ser la misma de la API.
+ * Siembra la base y devuelve lo que necesitan k6 y la sonda: sesiones, lotes por grupo,
+ * reservas confirmadas para cancelar y conversaciones abiertas. `pickupCodeKey` debe ser la misma de la API.
  */
 export async function seedScale(connectionString, pickupCodeKey, log = () => {}) {
   assert.ok(/^rescate_k032_/.test(new URL(connectionString).pathname.slice(1)), 'Se requiere base aislada rescate_k032_*')
@@ -158,6 +214,13 @@ export async function seedScale(connectionString, pickupCodeKey, log = () => {})
         (_, k) => [user(firstLoadUser + u), cancelLots[(u + k * 7) % cancelLots.length].id])))
     }
     const probeCancels = await confirm(db, codes, [[user(probeUser), cancelLots[0].id], [user(probeUser), cancelLots[1].id]])
+    // Conversaciones abiertas de las cuentas con chat y de la sonda, que siguen abiertas al menos 2 h tras sembrar.
+    const chatLots = reserveLots.slice(reservableLots, reservableLots + SCALE.chats + 1)
+    const chats = await confirm(db, codes, chatLots.slice(0, SCALE.chats).map((lot, u) => [user(firstLoadUser + u), lot.id]))
+    const [probeChat] = await confirm(db, codes, [[user(probeUser), chatLots[SCALE.chats].id]])
+    const chatsOpenUntil = (await db.query(`WITH w AS (UPDATE lots SET pickup_ends_at = GREATEST(pickup_ends_at,
+        now() + interval '2 hours') WHERE id = ANY($1::bigint[]) RETURNING pickup_ends_at) SELECT min(pickup_ends_at) at FROM w`,
+      [chatLots.map(lot => lot.id)])).rows[0].at
     const reserved = sql`UPDATE lots l SET reserved_quantity = t.r FROM (SELECT lot_id, sum(quantity)::int r FROM commitments
       WHERE status = 'confirmed' GROUP BY lot_id) t WHERE t.lot_id = l.id`
     log(`reservas vigentes: ${(await db.query(reserved)).rowCount} lotes`)
@@ -167,6 +230,9 @@ export async function seedScale(connectionString, pickupCodeKey, log = () => {})
       log(`${label}: ${(await db.query(text, label === 'compromisos históricos' ? [remaining] : [])).rowCount}`)
     }
     for (const [label, text] of current) log(`${label}: ${(await db.query(text)).rowCount}`)
+    const params = { 'mensajes vigentes': [[...chats, probeChat]],
+      'mensajes históricos': [SCALE.messages - (SCALE.chats + 1) * SCALE.chatMessages] }
+    for (const [label, text] of chat) log(`${label}: ${(await db.query(text, params[label] ?? [])).rowCount}`)
 
     const sessions = []
     for (let u = 0; u < SCALE.loadUsers; u++) sessions.push(await sessionFor(db, user(firstLoadUser + u)))
@@ -177,14 +243,19 @@ export async function seedScale(connectionString, pickupCodeKey, log = () => {})
         (SELECT count(*) FROM lots WHERE status = 'published' AND pickup_ends_at > now())::int current,
         (SELECT count(*) FROM commitments)::int commitments, (SELECT count(*) FROM deliveries)::int deliveries,
         (SELECT count(*) FROM waitlist_entries)::int waitlist, (SELECT count(*) FROM notifications)::int notifications,
+        (SELECT count(*) FROM chat_messages)::int messages, (SELECT count(*) FROM chat_messages WHERE body IS NULL)::int erased,
         (SELECT count(*) FROM lots WHERE quantity <> free_quantity + offered_quantity + reserved_quantity
           + delivered_quantity + expired_quantity OR free_quantity < 0)::int unbalanced`)).rows[0]
     assert.equal(counts.unbalanced, 0, 'La semilla dejó inventario descuadrado')
     assert.equal(counts.commitments, SCALE.commitments)
+    assert.equal(counts.messages, SCALE.messages)
+    assert.equal(counts.notifications, SCALE.events + SCALE.messages, 'Cada mensaje sembrado avisa a una sola persona')
     await db.query('ANALYZE')
     await db.query('COMMIT')
-    return { counts, sessions, cancels, reserveLots: await publicIds(reserveLots), queuedLots: await publicIds(queued),
-      probe: { session: probe, cancels: probeCancels } }
+    // chats[u] es la conversación de sessions[u]; reserveLots solo trae los lotes que k6 puede reservar.
+    return { counts, sessions, cancels, chats, chatsOpenUntil: chatsOpenUntil.toISOString(),
+      reserveLots: await publicIds(reserveLots.slice(0, reservableLots)), queuedLots: await publicIds(queued),
+      probe: { session: probe, cancels: probeCancels, chat: probeChat } }
   } catch (error) {
     await db.query('ROLLBACK').catch(() => {})
     throw error

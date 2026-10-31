@@ -24,7 +24,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Chat de la reserva | [Chat](chat.md) |
 | Fotos | [Fotos de lotes](fotos.md) |
 | Base de datos | [Migraciones](migraciones.md) |
-| Rendimiento y carga | [Rendimiento](rendimiento.md) |
+| Rendimiento, carga e integridad | [Rendimiento](rendimiento.md) |
 | Accesibilidad y comprensión | [Revisión y protocolo](accesibilidad.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 

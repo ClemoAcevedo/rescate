@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { ChatPage } from '../pages/ChatPage'
 import { AppLayout } from '../components/AppLayout'
 import { ConnectionPage } from '../pages/ConnectionPage'
 import { LoginPage } from '../pages/LoginPage'
@@ -37,6 +38,7 @@ function App() {
         <Route path="espera/:id" element={<WaitlistDetailPage />} />
         <Route path="avisos" element={<NotificationsPage />} />
         <Route path="reservas" element={<ReservationsPage />} />
+        <Route path="reservas/:id/chat" element={<ChatPage />} />
         <Route path="reservas/:id" element={<ReservationDetailPage />} />
         <Route path="registro" element={<RegisterPage />} />
         <Route path="login" element={<LoginPage />} />
