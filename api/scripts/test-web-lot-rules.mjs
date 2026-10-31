@@ -5,7 +5,7 @@ import { chromium } from './support/browser.mjs'
 
 const browser = await chromium.launch()
 try {
-  const page = await browser.newPage({ timezoneId: 'Asia/Tokyo' })
+  const page = await browser.newPage({ timezoneId: 'Asia/Tokyo', ignoreHTTPSErrors: true })
   const base = (process.env.WEB_URL ?? 'http://localhost:5173').replace(/\/$/, '')
   await page.route('**/__unit-lots', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Reglas de lotes</title>' }))
   await page.goto(`${base}/__unit-lots`)
