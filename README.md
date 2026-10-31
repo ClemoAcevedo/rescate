@@ -275,7 +275,11 @@ lo cambia.
   [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
   de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para
   medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
-  ajenas a la implementación.
+  ajenas a la implementación. `recorridos:e3` levanta una instancia local con datos
+  propios por participante para esas sesiones (K040).
+- **Demo E3:** cuentas y establecimiento ficticios en producción, preparación de lotes
+  por la API pública con `demo:e3` y guion de reserva, espera, chat y retiro
+  ([demo](docs/demo-e3.md), K040).
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
