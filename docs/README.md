@@ -58,6 +58,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 - [Presentación E2](entregas/e2/presentacion-e2.pdf) y
   [estimaciones E2](entregas/e2/estimaciones-e2.xlsx): modelos, arquitectura,
   respuesta al feedback de E1, riesgos, BPMN por rol y plan de trabajo hasta S11.
+- [Evidencia de proceso y proyección E3](entregas/e3/evidencia-y-proyeccion-e3.md):
+  cómo trabajamos, defectos, pendientes, capacidad y proyección al freeze de E4 (K041).
 - [Evidencia](evidencia/): registros de ejecución de K003, K005, K006, K009 y K010,
   conservados como estaban. La evidencia nueva va en la descripción del PR y en CI.
 
