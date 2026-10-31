@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // K039: chat visible del anexo H (p. 19): P95 ≤ 7 s desde la confirmación de guardado hasta mostrar
 // el mensaje en otro navegador con la vista activa, sobre al menos 100 mensajes. Titular y operador

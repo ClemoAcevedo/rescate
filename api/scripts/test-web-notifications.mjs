@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // K030: bandeja de avisos contra Vite HTTPS → proxy → API → PostgreSQL, con el worker real
 // generando los avisos del outbox. Requiere servicios iniciados (test:web:compose los levanta).

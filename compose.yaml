@@ -31,6 +31,7 @@ services:
       # como etapa aparte (npm run db:migrate), no al arrancar el servicio.
       DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
       # K014: fotos en un volumen local compartido con el worker; producción usa B2.
+      PHOTO_MAX_PER_LOT: ${PHOTO_MAX_PER_LOT:-3}
       PHOTO_STORAGE: local
       PHOTO_LOCAL_DIR: /app/photo-storage
     volumes:
@@ -72,6 +73,7 @@ services:
     environment:
       # Valida fotos, limpia temporales y genera avisos; reintenta mientras faltan las migraciones.
       DATABASE_URL: postgresql://${POSTGRES_USER:-rescate_dev}:${POSTGRES_PASSWORD:-rescate_dev_only}@db:5432/${POSTGRES_DB:-rescate}
+      PHOTO_MAX_PER_LOT: ${PHOTO_MAX_PER_LOT:-3}
       PHOTO_STORAGE: local
       PHOTO_LOCAL_DIR: /app/photo-storage
     volumes:

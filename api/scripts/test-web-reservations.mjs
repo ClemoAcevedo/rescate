@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // Contrato HTTP controlado en navegador; PostgreSQL/idempotencia real se prueban
 // además en test:web:discovery y db:test:reservations dentro de Compose.

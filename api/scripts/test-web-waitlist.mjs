@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 const base = process.env.WEB_URL ?? 'http://localhost:5173'
 const browser = await chromium.launch()

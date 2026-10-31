@@ -23,6 +23,7 @@ function toBody(lot: Lot): HttpSchemas["LotResponse"] {
   return {
     id: lot.publicId,
     establishmentId: lot.establishmentPublicId,
+    paused: lot.paused ?? false,
     status: lot.status,
     version: lot.version,
     description: lot.description.description,
@@ -42,6 +43,7 @@ function toBody(lot: Lot): HttpSchemas["LotResponse"] {
 
 function toSummaryBody(lot: LotSummary): HttpSchemas["OperatorLotSummary"] {
   return {
+    paused: lot.paused ?? false,
     id: lot.publicId, status: lot.status, version: lot.version, description: lot.description,
     category: lot.category, quantity: lot.quantity, reservedQuantity: lot.reservedQuantity,
     pickupStartsAt: lot.pickupStartsAt.toISOString(), pickupEndsAt: lot.pickupEndsAt.toISOString(),

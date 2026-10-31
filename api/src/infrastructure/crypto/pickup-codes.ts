@@ -21,7 +21,7 @@ export function createPickupCodes(key: Uint8Array): PickupCodes {
       // randomInt es uniforme sobre 32 símbolos: 40 bits aleatorios por código.
       const code = Array.from({ length: PICKUP_CODE_LENGTH }, () => PICKUP_CODE_ALPHABET[randomInt(32)]).join("")
       const iv = randomBytes(IV_BYTES)
-      const cipher = createCipheriv("aes-256-gcm", encryption, iv).setAAD(AAD)
+      const cipher = createCipheriv("aes-256-gcm", encryption, iv, { authTagLength: TAG_BYTES }).setAAD(AAD)
       const body = Buffer.concat([cipher.update(code, "utf8"), cipher.final()])
       return {
         code,
@@ -34,7 +34,7 @@ export function createPickupCodes(key: Uint8Array): PickupCodes {
       if (bytes[0] !== FORMAT || bytes.length !== 1 + IV_BYTES + TAG_BYTES + PICKUP_CODE_LENGTH) {
         throw new Error("Código cifrado con formato desconocido")
       }
-      const decipher = createDecipheriv("aes-256-gcm", encryption, bytes.subarray(1, 1 + IV_BYTES)).setAAD(AAD)
+      const decipher = createDecipheriv("aes-256-gcm", encryption, bytes.subarray(1, 1 + IV_BYTES), { authTagLength: TAG_BYTES }).setAAD(AAD)
       decipher.setAuthTag(bytes.subarray(1 + IV_BYTES, 1 + IV_BYTES + TAG_BYTES))
       return Buffer.concat([decipher.update(bytes.subarray(1 + IV_BYTES + TAG_BYTES)), decipher.final()]).toString("utf8")
     },

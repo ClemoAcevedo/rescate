@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from '../components/Icon'
 import { LotFormFields } from '../components/lots/LotForm'
+import { LotManagement } from '../components/lots/LotManagement'
 import { LotPhotos } from '../components/lots/LotPhotos'
 import { LotSummary } from '../components/lots/LotSummary'
 import { Alert } from '../components/ui/Alert'
@@ -215,9 +216,10 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
         <p>La cantidad, el contenido, el lugar y el plazo quedaron fijos al publicar.</p>
         {result && <ResultAlert result={result} {...reloadButton} />}
         <LotSummary lot={lot} establishmentName={establishmentName(lot.establishmentId)} />
-        <LotPhotos photos={photos.photos} loadFailed={photos.loadFailed} notice={photos.notice} editable={false} onRetry={() => { void photos.refresh() }} />
+        <LotPhotos limit={photos.limit} photos={photos.photos} loadFailed={photos.loadFailed} notice={photos.notice} editable={false} onRetry={() => { void photos.refresh() }} />
+        <LotManagement lotId={lot.id} version={lot.version} csrfToken={csrfToken} pickupEndsAt={lot.pickupEndsAt} onChanged={() => { void reload() }} />
         <div className="lot-actions lot-actions--footer">
-          {lot.status === 'published' && Date.parse(lot.pickupEndsAt) > openedAt && (
+          {lot.status === 'published' && !lot.paused && Date.parse(lot.pickupEndsAt) > openedAt && (
             <Link className="ui-button ui-button--primary" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Ver como rescatista</Link>
           )}
           <Link className="ui-button ui-button--secondary" to={`/operador/lotes/${encodeURIComponent(lot.id)}/retiros`}>Validar retiros</Link>
@@ -257,6 +259,7 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
         />
         {lot
           ? <LotPhotos
+            limit={photos.limit}
             photos={photos.photos}
             loadFailed={photos.loadFailed}
             notice={photos.notice}
@@ -269,7 +272,7 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
           />
           : <Card as="section" tone="sunken" className="lot-photos" aria-labelledby="lot-photos-title">
             <h2 id="lot-photos-title">Fotos (opcional)</h2>
-            <p>Guarda el borrador para agregar hasta tres fotos. Puedes publicar sin fotos.</p>
+            <p>Guarda el borrador para agregar fotos según el cupo disponible. Puedes publicar sin fotos.</p>
           </Card>}
         <div className="lot-actions">
           <Button type="submit" variant={lot ? 'secondary' : 'primary'} loading={pending === 'save'} disabled={locked || (lot !== null && !dirty)}>

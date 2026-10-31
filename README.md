@@ -249,6 +249,10 @@ K003
 
 ## Estado actual
 
+- **Feedback E2:** gestión de stock externo, pausa/reactivación y retiro voluntario con
+  historial, versión e idempotencia, conservando entregas; cupo de fotos configurable
+  comunicado por la API a la web ([lotes](docs/lotes.md#disponibilidad-después-de-publicar)).
+
 Este es el único resumen de estado del repositorio; se actualiza en el mismo PR que
 lo cambia.
 
@@ -271,7 +275,11 @@ lo cambia.
   [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
   de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para
   medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
-  ajenas a la implementación.
+  ajenas a la implementación. `recorridos:e3` levanta una instancia local con datos
+  propios por participante para esas sesiones (K040).
+- **Demo E3:** cuentas y establecimiento ficticios en producción, preparación de lotes
+  por la API pública con `demo:e3` y guion de reserva, espera, chat y retiro
+  ([demo](docs/demo-e3.md), K040).
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
@@ -302,6 +310,9 @@ lo cambia.
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
+- **Calidad para E3:** SAST con Semgrep y SCA de ambos lockfiles en CI; cobertura de
+  API por capa y frontend por módulo, estrategia Testing Trophy y mock HTTP del chat
+  validado contra OpenAPI ([pruebas y cobertura](docs/desarrollo-local.md#estrategia-de-pruebas-testing-trophy)).
 - **Rendimiento:** semilla de escala del anexo H con 100 000 mensajes, planes reales con
   EXPLAIN y k6 con las mezclas de E2 y E3 (búsqueda, chat, bandeja, reserva, cancelación y
   envío) en ensayos con API y worker en Compose, rechazos esperados separados de errores e

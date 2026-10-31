@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 const baseUrl = (process.env.WEB_URL ?? 'https://localhost:5174').replace(/\/$/, '')
 const email = `k009-${Date.now()}@example.com`

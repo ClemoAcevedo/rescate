@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
-const browser = await chromium.launch()
-const base = process.env.WEB_URL ?? 'http://localhost:5173'
+import { chromium } from './support/browser.mjs'
+import { startMockWeb } from './support/mock-web.mjs'
+let browser
 const messages = []
 const keys = new Map()
 const queries = []
@@ -10,35 +10,39 @@ let open = true
 let lose = true
 let releaseFirst
 const firstSend = new Promise(resolve => { releaseFirst = resolve })
+const mock = await startMockWeb(async ({ method, url, headers, body }) => {
+  const author = headers.cookie?.includes('mock_actor=operator') ? 'operator' : 'holder'
+  if (url.pathname === '/auth/session') return { body: { csrfToken: 'csrf', session: { user: { id: author, email: `${author}@example.test` }, operableEstablishments: [], expiresAt: '2030-01-01T00:00:00Z' } } }
+  if (url.pathname === '/notifications') return { body: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } }
+  assert.equal(url.pathname, '/reservations/res_chat/messages')
+  if (method === 'GET') {
+    const after = Number(url.searchParams.get('after'))
+    queries.push({ author, after })
+    return { body: { items: messages.filter(m => m.sequence > after).slice(0, 50).map(m => ({ ...m, mine: m.author === author })), hasMore: messages.filter(m => m.sequence > after).length > 50, open } }
+  }
+  assert.equal(method, 'POST')
+  assert.equal(headers['x-csrf-token'], 'csrf')
+  let message = keys.get(`${author}:${body.idempotencyKey}`)
+  if (!message) {
+    message = { id: `msg_${messages.length}`, sequence: messages.length + 1, text: body.text, author, createdAt: new Date().toISOString() }
+    messages.push(message); keys.set(`${author}:${body.idempotencyKey}`, message)
+  }
+  const result = { status: 201, body: { id: message.id, sequence: message.sequence, createdAt: message.createdAt } }
+  if (lose) { lose = false; return { ...result, wait: firstSend, disconnect: true } }
+  return result
+})
+const base = mock.url
 try {
+  browser = await chromium.launch()
   const pages = []
   for (const author of ['holder', 'operator']) {
     // El runner HTTPS usa un certificado local autofirmado, igual que los demás recorridos.
     const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 800 } })
+    await context.addCookies([{ name: 'mock_actor', value: author, url: base }])
     const page = await context.newPage()
     page.setDefaultTimeout(10000)
     await page.clock.install()
     page.on('pageerror', error => errors.push(error.message))
-    await page.route('**/api/**', async route => {
-      const url = new URL(route.request().url())
-      if (url.pathname.endsWith('/auth/session')) return route.fulfill({ json: { csrfToken: 'csrf', session: { user: { id: author, email: `${author}@example.test` }, operableEstablishments: [], expiresAt: '2030-01-01T00:00:00Z' } } })
-      if (url.pathname.endsWith('/notifications')) return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
-      assert.equal(url.pathname, '/api/reservations/res_chat/messages')
-      if (route.request().method() === 'GET') {
-        const after = Number(url.searchParams.get('after'))
-        queries.push({ author, after })
-        return route.fulfill({ json: { items: messages.filter(m => m.sequence > after).slice(0, 50).map(m => ({ ...m, mine: m.author === author })), hasMore: messages.filter(m => m.sequence > after).length > 50, open } })
-      }
-      assert.equal(route.request().headers()['x-csrf-token'], 'csrf')
-      const body = route.request().postDataJSON()
-      let message = keys.get(body.idempotencyKey)
-      if (!message) {
-        message = { id: `msg_${messages.length}`, sequence: messages.length + 1, text: body.text, author, createdAt: new Date().toISOString() }
-        messages.push(message); keys.set(body.idempotencyKey, message)
-      }
-      if (lose) { await firstSend; lose = false; return route.abort() }
-      return route.fulfill({ status: 201, json: { id: message.id, sequence: message.sequence, createdAt: message.createdAt } })
-    })
     await page.goto(`${base}/reservas/res_chat/chat`)
     await page.getByRole('textbox', { name: 'Mensaje (obligatorio)', exact: true }).waitFor()
     pages.push(page)
@@ -100,5 +104,10 @@ try {
   await holder.setViewportSize({ width: 1366, height: 768 })
   assert.equal(await holder.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true)
   assert.deepEqual(errors, [])
-  console.log('Chat: dos contextos, respuesta perdida, reintento sin duplicados, reconexión y cierre OK (HTTP controlado).')
-} finally { await browser.close() }
+  assert.deepEqual(mock.failures, [])
+  assert.ok(mock.requests.some(r => r.method === 'POST'))
+  console.log('Chat: dos contextos, respuesta perdida, reintento sin duplicados, reconexión y cierre OK (servidor mock HTTP validado contra OpenAPI).')
+} finally {
+  releaseFirst()
+  try { await browser?.close() } finally { await mock.close() }
+}

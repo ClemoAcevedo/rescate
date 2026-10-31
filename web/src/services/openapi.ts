@@ -1,6 +1,15 @@
 /* Generado desde docs/api/openapi.yaml. No editar; npm run api:types. */
 
 /**
+ * expired y withdrawn son cierres lógicos: el lote deja de ofrecerse, pero se conserva con su historial.
+ */
+export type LotStatus = "draft" | "published" | "expired" | "withdrawn"
+export type PublicId = string
+/**
+ * Instante RFC 3339 con Z u offset explícito; respuestas en UTC (Z). No aceptar hora local sin offset.
+ */
+export type Instant = string
+/**
  * Correo identificador, sin afirmar verificación. Registro y login recortan espacios exteriores y comparan sin distinguir mayúsculas/minúsculas; se conservan puntos y sufijos +. La respuesta devuelve el correo normalizado en minúsculas. En entrada el formato se comprueba DESPUÉS de normalizar.
  */
 export type EmailInput = string
@@ -8,7 +17,6 @@ export type EmailInput = string
  * Contraseña de entrada; mínimo de 12 caracteres. Nunca se devuelve ni se registra en logs.
  */
 export type Password = string
-export type PublicId = string
 /**
  * Correo normalizado en minúsculas, sin espacios exteriores; no afirma verificación ni elimina puntos o sufijos +.
  */
@@ -50,10 +58,6 @@ export type Longitude = number
  */
 export type TimeZone = string
 /**
- * Instante RFC 3339 con Z u offset explícito; respuestas en UTC (Z). No aceptar hora local sin offset.
- */
-export type Instant = string
-/**
  * Versión optimista administrada por servidor. Nace en 1 y aumenta en 1 con cada PATCH aceptado y publicación. En comandos significa versión esperada.
  */
 export type Version = number
@@ -61,6 +65,10 @@ export type Version = number
  * Representación para operador autorizado en S02. No incluye reservas, contadores futuros, claves de objetos ni columnas internas. Sin updatedAt inventado. Las fotos son opcionales y se consultan en GET /lots/{lotId}/photos.
  */
 export type LotResponse = {
+  /**
+   * Suspensión reversible de nuevas asignaciones.
+   */
+  paused?: boolean
   id: PublicId
   establishmentId: PublicId
   description: LotDescription
@@ -81,10 +89,6 @@ export type LotResponse = {
    */
   publishedAt: string | null
 }
-/**
- * expired y withdrawn son cierres lógicos: el lote deja de ofrecerse, pero se conserva con su historial.
- */
-export type LotStatus = "draft" | "published" | "expired" | "withdrawn"
 /**
  * Estado vigente al responder. confirmed: vigente; cancelled: cancelada por su titular; expired: el lote cerró sin retiro, aunque el trabajador aún no lo haya registrado; delivered: retiro acreditado. Los tres últimos son terminales.
  */
@@ -136,6 +140,9 @@ export type ActivityKind =
   | "waitlist_expired"
 
 export interface HttpSchemas {
+  LotManagementRequest: LotManagementRequest
+  LotManagementResponse: LotManagementResponse
+  LotOperation: LotOperation
   LoginRequest: LoginRequest
   LoginResponse: LoginResponse
   RegisterRequest: RegisterRequest
@@ -181,6 +188,38 @@ export interface HttpSchemas {
   SentMessage: SentMessage
   ChatMessage: ChatMessage
   ChatMessagePage: ChatMessagePage
+}
+export interface LotManagementRequest {
+  action: "reduce_stock" | "pause" | "resume" | "withdraw"
+  version: number
+  idempotencyKey: string
+  reason: string
+  /**
+   * Obligatoria solo para reduce_stock; se prohíbe en las demás acciones.
+   */
+  quantity?: number
+}
+export interface LotManagementResponse {
+  status: LotStatus
+  version: number
+  paused: boolean
+  freeQuantity: number
+  offeredQuantity: number
+  reservedQuantity: number
+  deliveredQuantity: number
+  unassignableQuantity: number
+  /**
+   * @maxItems 20
+   */
+  history: LotOperation[]
+}
+export interface LotOperation {
+  id: PublicId
+  action: "reduce_stock" | "pause" | "resume" | "withdraw"
+  quantity: number | null
+  reason: string
+  createdAt: Instant
+  version: number
 }
 export interface LoginRequest {
   email: EmailInput
@@ -302,7 +341,7 @@ export interface PublicLot {
   /**
    * Fotos listas en orden de posición; vacío muestra reemplazo local. photoUrl corresponde a la primera.
    *
-   * @maxItems 3
+   * @maxItems 50
    */
   photos: PublicLotPhoto[]
   /**
@@ -335,6 +374,10 @@ export interface PublicLotPage {
  * Resumen de un lote para el operador de su establecimiento.
  */
 export interface OperatorLotSummary {
+  /**
+   * Suspensión reversible de nuevas asignaciones.
+   */
+  paused?: boolean
   id: PublicId
   status: LotStatus
   version: Version
@@ -550,7 +593,11 @@ export interface LotPhoto {
  */
 export interface LotPhotoList {
   /**
-   * @maxItems 3
+   * Cupo de fotos configurado para este servicio.
+   */
+  limit?: number
+  /**
+   * @maxItems 50
    */
   items: LotPhoto[]
 }

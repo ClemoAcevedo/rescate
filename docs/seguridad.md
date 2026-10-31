@@ -77,6 +77,44 @@ cabeceras ni su cuerpo, y un identificador generado ([operación](operacion.md))
 
 ## Pruebas
 
+### Análisis en CI
+
+El [workflow](../.github/workflows/ci.yml) ejecuta estos controles en PR y en pushes a
+las ramas de integración:
+
+| Control | Herramienta y alcance | Resultado y criterio |
+| --- | --- | --- |
+| SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src` y `web/src` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
+| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON por paquete en `security-sca-api` y `security-sca-web`; falla con severidad alta o crítica, o si el servicio de auditoría no responde. Las moderadas quedan visibles para revisión (#180). |
+
+Los artefactos se conservan catorce días, incluso cuando hay hallazgos. Para repetir
+SCA: `npm --prefix api audit --audit-level=high` y el equivalente con `web`. Para SAST:
+`semgrep scan --config p/javascript --config p/typescript --metrics=off --error api/src web/src`.
+
+Semgrep detecta patrones y flujo de datos que cubren sus reglas; no acredita por sí
+solo la autorización de negocio ni encuentra todos los defectos. Sus paquetes de reglas
+se obtienen del registro al ejecutar; la versión del motor está fijada y los resultados
+guardan las reglas ejecutadas. SCA depende de los avisos conocidos del registro npm;
+una auditoría sin hallazgos no demuestra ausencia de vulnerabilidades.
+
+El cifrado de códigos de retiro exige un tag GCM de 16 bytes tanto al cifrar como al
+descifrar. El formato persistido ya separa IV, tag y cuerpo y exige su tamaño exacto;
+la opción explícita mantiene esa regla en la API criptográfica y conserva compatibilidad.
+
+Para la discusión de seguridad de E3:
+
+- **DAST** examina una aplicación en ejecución. Las pruebas HTTP de aislamiento y
+  sesión aportan casos concretos; no hay un escáner DAST general en este pipeline.
+- **Secretos** se configuran fuera del repositorio y no se registran en logs. Los
+  ejemplos locales son ficticios; las pruebas revisan exclusión de secretos.
+- **Contenedores** encapsulan runtime y dependencias; configurar una imagen no
+  equivale a analizarla. Compose se usa para pruebas; Railway ejecuta API y worker.
+- **IaC** versiona configuración de infraestructura: Compose, Railway y Vercel
+  hacen revisables puertos, variables y despliegues.
+- **SBOM** inventaría componentes y versiones; SCA cruza componentes con avisos de
+  vulnerabilidad. npm puede exportar CycloneDX con `npm sbom --sbom-format=cyclonedx`;
+  este CI publica auditorías y no genera una SBOM.
+
 | Comando | Qué comprueba |
 | --- | --- |
 | `npm --prefix api test` | Regla de cinco fallos, limitadores por IP y de mensajes, suspensión al revisar y confirmar con repositorio en memoria, y registros sin detalle de PostgreSQL ni cuerpos. |

@@ -19,8 +19,8 @@ export const lotReconciledSql = `l.reserved_quantity = COALESCE((SELECT sum(c.qu
 
 /** Devuelve cuántas solicitudes se cerraron por vencimiento. `at` es el reloj de la base tras el bloqueo. */
 export async function settleQueue(client: PoolClient, lotId: string, at: Date): Promise<number> {
-  const found = await client.query<{ status: string; pickup_ends_at: Date }>(
-    'SELECT status::text, pickup_ends_at FROM public.lots WHERE id = $1', [lotId])
+  const found = await client.query<{ status: string; pickup_ends_at: Date; paused_at: Date | null }>(
+    'SELECT status::text, pickup_ends_at, paused_at FROM public.lots WHERE id = $1', [lotId])
   const lot = found.rows[0]
   if (!lot) return 0
   const assignable = isAssignable({ status: lot.status, pickupEndsAt: lot.pickup_ends_at }, at)
@@ -53,6 +53,8 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date): 
        WHERE lot_id = $1 AND status = 'waiting'`, [lotId, lot.pickup_ends_at, at])
     return closed + (waiting.rowCount ?? 0)
   }
+
+  if (lot.paused_at !== null) return closed
 
   const state = await client.query<{ free: number; reconciled: boolean }>(
     `SELECT l.free_quantity AS free, ${lotReconciledSql} AS reconciled FROM public.lots l WHERE l.id = $1`, [lotId])

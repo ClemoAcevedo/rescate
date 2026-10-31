@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium } from 'playwright'
+import { chromium } from './support/browser.mjs'
 
 // Recorrido de teclado con HTTP controlado; no sustituye sesiones con personas.
 const base = process.env.WEB_URL ?? 'http://localhost:5173'

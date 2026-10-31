@@ -17,6 +17,7 @@ import type { Pool, PoolClient } from "./pool.js"
 /** Claves internas bigint: se transportan como texto, nunca como Number. */
 interface LotRow {
   public_id: string
+  paused: boolean
   establishment_id: string
   establishment_public_id: string
   description: string
@@ -39,10 +40,11 @@ interface LotRow {
 const LOT_COLUMNS = `public_id::text, establishment_id::text,
   (SELECT public_id::text FROM public.establishments WHERE id = lots.establishment_id) AS establishment_public_id, description, category, quantity,
   conditions, address, latitude, longitude, time_zone, pickup_starts_at, pickup_ends_at,
-  status, version, created_at, updated_at, published_at`
+  status, version, created_at, updated_at, published_at, paused_at IS NOT NULL AS paused`
 
 function toLot(row: LotRow): Lot {
   return {
+    paused: row.paused,
     publicId: row.public_id,
     establishmentId: row.establishment_id,
     establishmentPublicId: row.establishment_public_id,
@@ -68,6 +70,7 @@ function toLot(row: LotRow): Lot {
 
 interface SummaryRow {
   public_id: string
+  paused: boolean
   status: string
   version: number
   description: string
@@ -84,6 +87,7 @@ interface SummaryRow {
 
 function toSummary(row: SummaryRow): LotSummary {
   return {
+    paused: row.paused,
     publicId: row.public_id, status: row.status as LotStatus, version: row.version,
     description: row.description, category: row.category, quantity: row.quantity,
     reservedQuantity: row.reserved_quantity, pickupStartsAt: row.pickup_starts_at,
@@ -149,7 +153,7 @@ export function createLotRepository(pool: Pool): LotRepository {
     async listByEstablishment(establishmentId, filter) {
       const { rows } = await pool.query<SummaryRow>(
         `SELECT l.public_id::text, l.status, l.version, l.description, l.category, l.quantity,
-           l.reserved_quantity,
+           l.reserved_quantity, l.paused_at IS NOT NULL AS paused,
            l.pickup_starts_at, l.pickup_ends_at, l.time_zone, l.created_at, l.published_at,
            (SELECT p.public_id::text FROM public.lot_photos p
              WHERE p.lot_id = l.id AND p.status = 'ready' ORDER BY p.position LIMIT 1) AS photo_id

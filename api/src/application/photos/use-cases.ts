@@ -43,6 +43,7 @@ export interface PhotoDependencies {
   objects: ObjectStore | null
   images: ImageProcessor | null
   now: Clock
+  maxPhotosPerLot?: number
   log?: Log
 }
 
@@ -53,7 +54,7 @@ export const EXPIRED_UPLOAD_GRACE_MS = 60 * 1000
 
 const rejected = (rejectionReason: PhotoRejection): ProcessingResult => ({ status: "rejected", rejectionReason })
 
-export function createPhotoUseCases({ repository, objects, images, now, log = () => {} }: PhotoDependencies): PhotoUseCases {
+export function createPhotoUseCases({ repository, objects, images, now, maxPhotosPerLot = PHOTO_LIMITS.maxPhotosPerLot, log = () => {} }: PhotoDependencies): PhotoUseCases {
   const requireObjects = (): ObjectStore => {
     if (objects === null) throw photoStorageUnavailable()
     return objects
@@ -107,7 +108,7 @@ export function createPhotoUseCases({ repository, objects, images, now, log = ()
         if (!(await writer.isMemberOfEstablishment(actor.userId, lot.establishmentId))) throw notAuthorized()
         requireDraftForPhotoChange(lot.status)
         const active = await writer.listActivePhotos(at)
-        const position = nextPhotoPosition(lot.status, active.map((photo) => photo.position))
+        const position = nextPhotoPosition(lot.status, active.map((photo) => photo.position), maxPhotosPerLot)
         const uploads = await writer.activeUploadsOf(actor.userId, at)
         if (uploads.length >= PHOTO_LIMITS.maxConcurrentUploads) {
           const first = Math.min(...uploads.map((expiresAt) => expiresAt.getTime()))

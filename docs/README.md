@@ -26,6 +26,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Base de datos | [Migraciones](migraciones.md) |
 | Rendimiento, carga e integridad | [Rendimiento](rendimiento.md) |
 | Accesibilidad y comprensión | [Revisión y protocolo](accesibilidad.md) |
+| Demo de entrega y recorridos con personas | [Demo E3](demo-e3.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 
 ## Decisiones (ADR)
@@ -57,5 +58,9 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 - [Presentación E2](entregas/e2/presentacion-e2.pdf) y
   [estimaciones E2](entregas/e2/estimaciones-e2.xlsx): modelos, arquitectura,
   respuesta al feedback de E1, riesgos, BPMN por rol y plan de trabajo hasta S11.
+- [Evidencia de proceso y proyección E3](entregas/e3/evidencia-y-proyeccion-e3.md):
+  cómo trabajamos, defectos, pendientes, capacidad y proyección al freeze de E4 (K041).
 - [Evidencia](evidencia/): registros de ejecución de K003, K005, K006, K009 y K010,
   conservados como estaban. La evidencia nueva va en la descripción del PR y en CI.
+
+- [ADR 0017: gestión de publicaciones y cupo de fotos](adr/0017-gestion-de-publicaciones.md).
