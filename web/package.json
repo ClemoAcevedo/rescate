@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:tooling": "node --test scripts/test-tooling.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -28,5 +29,8 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.69.0",
     "vite": "^8.3.0"
+  },
+  "overrides": {
+    "minimatch": "11.0.3"
   }
 }

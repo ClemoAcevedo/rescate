@@ -3,7 +3,7 @@
 // estados terminales y 100 000 mensajes de chat con sus avisos (K039).
 // Reproducible: los datos salen de SQL con setseed; solo cambian los UUID y los códigos.
 import assert from 'node:assert/strict'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import pg from 'pg'
 import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 
@@ -164,15 +164,20 @@ const chat = [
 
 /** Reservas confirmadas con código cifrado, como las deja K022. `rows` es [usuario, lote]. */
 async function confirm(db, codes, rows) {
-  const ids = []
-  for (const [userId, lotId] of rows) {
+  // Una ida y vuelta por reserva vuelve la siembra remota varios minutos más lenta.
+  // Los UUID se generan antes del INSERT para conservar el orden cuenta/conversación
+  // sin depender del orden de RETURNING en una inserción de múltiples filas.
+  const publicIds = rows.map(() => randomUUID())
+  const params = []
+  const tuples = rows.map(([userId, lotId], index) => {
     const code = codes.issue()
-    ids.push((await db.query(`INSERT INTO commitments(user_id, lot_id, quantity, status, created_at, idempotency_key,
-        pickup_code_ciphertext, pickup_code_fingerprint)
-      VALUES ($1, $2, 1, 'confirmed', now() - interval '20 minutes', gen_random_uuid(), $3, $4)
-      RETURNING public_id::text`, [userId, lotId, Buffer.from(code.ciphertext), Buffer.from(code.fingerprint)])).rows[0].public_id)
-  }
-  return ids
+    const offset = params.length
+    params.push(publicIds[index], userId, lotId, Buffer.from(code.ciphertext), Buffer.from(code.fingerprint))
+    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, 1, 'confirmed', now() - interval '20 minutes', gen_random_uuid(), $${offset + 4}, $${offset + 5})`
+  })
+  if (tuples.length) await db.query(`INSERT INTO commitments(public_id, user_id, lot_id, quantity, status, created_at,
+    idempotency_key, pickup_code_ciphertext, pickup_code_fingerprint) VALUES ${tuples.join(',')}`, params)
+  return publicIds
 }
 
 async function sessionFor(db, userId) {

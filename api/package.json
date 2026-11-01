@@ -80,7 +80,8 @@
     "db:test:lot-management:compose": "node scripts/test-lot-management-compose.mjs",
     "test:web:lot-management": "node scripts/test-web-lot-management.mjs",
     "test:web:coverage": "node scripts/test-web-coverage.mjs",
-    "test:web:lot-rules": "node scripts/test-web-lot-rules.mjs"
+    "test:web:lot-rules": "node scripts/test-web-lot-rules.mjs",
+    "db:measure:e3:railway": "npm run build && node scripts/measure-scale-railway.mjs"
   },
   "keywords": [],
   "author": "",
@@ -110,5 +111,10 @@
   },
   "engines": {
     "node": ">=22.13.0"
+  },
+  "overrides": {
+    "node-pg-migrate": {
+      "glob": "14.0.3"
+    }
   }
 }

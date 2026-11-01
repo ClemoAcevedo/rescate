@@ -280,6 +280,42 @@ y cierre al terminar. El estado del escenario vive solo en memoria y no implemen
 sesiones seguras, SQL, bloqueos ni las políticas reales. Esas responsabilidades se
 verifican en las integraciones de chat y seguridad; los mocks no sustituyen esa evidencia.
 
+## Reportes de calidad con SonarQube
+
+El [workflow SonarQube](../.github/workflows/sonarqube-manual.yml) adapta la plantilla
+de clases: crea SonarQube Community Build en el runner, analiza `api/src` y `web/src`
+y publica `sonarqube-reports`. Se ejecuta manualmente desde Actions y también en
+pushes que cambian su YAML, configuración, fuentes, pruebas o dependencias, para
+actualizar el reporte antes de integrar. Es un análisis completo independiente: cada ejecución usa un
+proyecto nuevo, con H2 temporal, sin histórico ni análisis diferencial de PR.
+
+El artefacto incluye issues paginados, hotspots para revisión humana, métricas,
+Quality Gate, tarea procesada, commit y diagnóstico del servidor. Una métrica
+ausente se conserva ausente: este workflow no importa cobertura. La cobertura real
+de API y frontend tiene sus propios reportes descritos arriba. Los tipos generados
+y las declaraciones quedan fuera del análisis de fuentes mantenidas por el equipo.
+Si SonarQube informa cobertura cero, corresponde a la falta de un LCOV importado en
+esta corrida; no sustituye los reportes de cobertura de CI.
+
+`BrowserRouter` realiza navegación síncrona. `web/src/router.d.ts` precisa ese retorno
+siguiendo la [recomendación de React Router](https://reactrouter.com/api/hooks/useNavigate#return-type-augmentation) para evitar alertas de promesas flotantes;
+si se cambia a `RouterProvider`, se debe ajustar la declaración al modo asíncrono.
+El filtro decimal recorre la entrada una sola vez y conserva estados intermedios de
+escritura; su prueba incluye una entrada larga inválida. Las precondiciones de los
+fixtures de tests se validan en hooks del runner. Estas correcciones corresponden a #187.
+
+El gate predeterminado se evalúa después de guardar los reportes: un resultado
+distinto de `OK` hace fallar el job con evidencia disponible. No significa ausencia
+de todos los issues; las condiciones de código nuevo dependen de la línea base del
+servidor temporal. No se modifican reglas ni umbrales para obtener un resultado verde.
+Al terminar se eliminan contenedor, volúmenes y credenciales temporales; los reportes
+se conservan catorce días. El dashboard local deja de existir.
+
+La plantilla y su especificación provienen de los archivos de clases
+`specs-trivy-sonarqube`; el [repositorio docente](https://github.com/UC-IIC-3143-Software-Development/full_stack_testing)
+contiene los ejemplos complementarios. La evidencia de ejecución y sus resultados
+van en la PR y en los artifacts de Actions.
+
 ## Revisión automática de PR
 
 [Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y
