@@ -54,7 +54,13 @@ export function acceptInteger(value: string): string | null {
 /** Coordenada en escritura: signo inicial opcional, dígitos y un separador; la coma se toma como punto. */
 export function acceptDecimal(value: string): string | null {
   const normalized = value.trim().replace(',', '.')
-  return /^-?\d*\.?\d*$/.test(normalized) ? normalized : null
+  let separator = false
+  for (let index = normalized.startsWith('-') ? 1 : 0; index < normalized.length; index++) {
+    const character = normalized[index]
+    if (character === '.' && !separator) { separator = true; continue }
+    if (character < '0' || character > '9') return null
+  }
+  return normalized
 }
 
 /**

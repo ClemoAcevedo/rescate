@@ -5,6 +5,10 @@ on:
   push:
     paths:
       - '.github/workflows/trivy-manual.yml'
+      - 'api/package.json'
+      - 'api/package-lock.json'
+      - 'web/package.json'
+      - 'web/package-lock.json'
 
 permissions:
   contents: read
