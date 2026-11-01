@@ -58,7 +58,7 @@ async function resourceMetrics(config, start, end) {
   const result = {}
   for (const [role, serviceId] of Object.entries(config.ids)) {
     result[role] = (await railway(`query($environmentId:String!,$serviceId:String!,$start:DateTime!,$end:DateTime!) {
-      metrics(environmentId:$environmentId,serviceId:$serviceId,startDate:$start,endDate:$end,sampleRateSeconds:15,
+      metrics(environmentId:$environmentId,serviceId:$serviceId,startDate:$start,endDate:$end,sampleRateSeconds:60,
         measurements:[CPU_USAGE,CPU_LIMIT,MEMORY_USAGE_GB,MEMORY_LIMIT_GB]) { measurement values { ts value } }
       serviceInstanceLimits(environmentId:$environmentId,serviceId:$serviceId)
     }`, { environmentId: config.environmentId, serviceId, start, end }))
@@ -168,7 +168,7 @@ async function main() {
         } })
         trial.deployments = {}
         for (const role of ['api', 'worker']) trial.deployments[role] = await timed(`${role}DeployMs`, () => deploy(config, role, context.commit))
-        trial.healthBefore = await ready(apiUrl)
+        trial.healthBefore = await timed('healthBeforeMs', () => ready(apiUrl))
         db = new pg.Client({ connectionString, statement_timeout: 10000, connectionTimeoutMillis: 15000 })
         await db.connect()
         const baseline = (await db.query(deltas)).rows[0]
@@ -185,7 +185,8 @@ async function main() {
         trial.loadEnd = new Date().toISOString()
         trial.summary = JSON.parse(readFileSync(`${dir}/k6-summary.json`, 'utf8'))
         if (trial.k6Code !== 0) trial.failures.push(`k6 terminó con código ${trial.k6Code}`)
-        trial.healthAfter = await healthy(apiUrl)
+        trial.healthAfter = await timed('healthAfterMs', () => healthy(apiUrl))
+        step = 'outbox e invariantes'
         for (const deadline = Date.now() + 60000; ; await pause(1000)) {
           if ((await db.query("SELECT count(*)::int n FROM outbox_events WHERE status='pending'")).rows[0].n === 0) break
           if (Date.now() > deadline) { trial.failures.push('Outbox sin vaciar tras 60 s'); break }
@@ -197,6 +198,7 @@ async function main() {
         const versions = (await db.query('SELECT version() postgres, postgis_full_version() postgis, pg_size_pretty(pg_database_size(current_database())) size')).rows[0]
         trial.databaseSize = versions.size
         // Las métricas del proveedor llegan con demora; conservar muestras crudas y límites por servicio.
+        step = 'recursos Railway'
         await pause(15000)
         const resources = await resourceMetrics(config, trial.loadStart, trial.loadEnd)
         save(`${dir}/resources.json`, { ...versions, resources, deployments: trial.deployments, timings: trial.timings,
