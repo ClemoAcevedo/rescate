@@ -78,6 +78,65 @@ SSD, memoria disponible y PostGIS nativo del servidor. Una simulación de usuari
 en un solo computador aporta medidas locales, pero no cierra la ejecución separada
 de #170.
 
+### Railway como servidor remoto
+
+El [ADR 0018](adr/0018-carga-remota-en-railway.md) define el escenario cloud:
+generador local y API, worker y PostGIS remotos, conectados por Internet. El
+ejecutor exige un entorno dedicado cuyo nombre sea `carga-e3` o empiece por
+`carga-e3-`, un volumen distinto del de producción y un dominio HTTPS del servicio
+de carga. Comprueba también que la URL pública de PostgreSQL corresponda al
+proxy TCP de ese servicio.
+
+Preparación en Railway, con la cuenta administradora:
+
+1. Duplicar la configuración de producción con los despliegues iniciales
+   desactivados (`environmentCreate`, `skipInitialDeploys: true`). Crear un volumen
+   vacío de PostgreSQL y reemplazar sus credenciales antes de desplegarlo. Usar
+   `postgis/postgis:16-3.5`, `PGDATA=/var/lib/postgresql/data/pgdata` y el volumen en
+   `/var/lib/postgresql/data`. Asignar espacio para tres bases de unos cientos de MB.
+2. Habilitar temporalmente un proxy TCP de PostgreSQL para la siembra y las
+   verificaciones. Configurar su `DATABASE_URL` con el hostname privado. API y
+   worker usan esa red privada durante la carga.
+3. Configurar API con `node dist/index.js`, worker con `node dist/worker.js`, sin
+   predeploy y sin suspensión por inactividad. La migración la ejecuta el runner
+   sobre cada base nueva. Publicar un dominio HTTPS de la API con puerto 3000.
+4. Instalar Docker, Railway CLI autenticado y las dependencias de `api/`. Crear
+   fuera del repositorio un JSON privado con permisos `600`:
+
+```json
+{
+  "projectId": "ID_PROYECTO",
+  "environmentId": "ID_CARGA",
+  "productionEnvironmentId": "ID_PRODUCTION",
+  "ids": { "api": "ID_API", "worker": "ID_WORKER", "db": "ID_POSTGRES" },
+  "publicDatabaseUrl": "postgresql://USUARIO:CLAVE@PROXY:PUERTO/postgres"
+}
+```
+
+```bash
+RAILWAY_LOAD_CONFIG=/ruta/privada/carga.json npm --prefix api run db:measure:e3:railway
+```
+
+Por omisión ejecuta tres ensayos de 120 + 600 s. Para comprobar la conexión antes
+de medir, usar `TRIALS=1 WARMUP_SECONDS=5 MEASURED_SECONDS=20`; ese resultado queda
+marcado como parcial. API y worker se suben desde el árbol local; el informe
+registra el commit y si había cambios sin confirmar. El runner reemplaza todas
+sus variables con una URL de prueba, claves nuevas y el origen HTTPS autorizado;
+los servicios de carga quedan sin acceso al almacenamiento de fotos de producción.
+
+Los resultados quedan en `api/.k032-results/railway_*/`. `informe.md` presenta las
+metas por ensayo; `resources.json` guarda versiones, tiempos, deploys y muestras
+crudas de CPU/RAM y límites del proveedor. `invariants.json` contrasta los deltas
+SQL con los éxitos y las escrituras inciertas de k6. La evaluación comparte código
+con Compose y falla ante umbrales, invariantes, descartes o ejecución incompleta.
+La siembra agrupa reservas en un INSERT por grupo, conservando la correspondencia
+entre cuenta, reserva y conversación.
+
+Las bases y servicios se conservan para inspección. Retirar el entorno de carga al
+terminar, incluido su proxy TCP y volumen. Publicar solo informes, métricas,
+planes e invariantes: `seed.json`, la configuración y `error-private.txt` son
+privados y pueden contener credenciales.
+
 ## Semilla
 
 [`seed-scale.mjs`](../api/scripts/seed-scale.mjs) sigue la historia de prueba del anexo H:
@@ -217,7 +276,7 @@ consulta tarda decenas de milisegundos. Por eso el panel no agrega índices.
 
 ## Limitaciones
 
-- Generador, API, worker y PostgreSQL corren en un mismo equipo. El anexo exige declarar
+- En el modo Compose local, generador, API, worker y PostgreSQL corren en un mismo equipo. El anexo exige declarar
   esa interferencia: el resultado no sustituye la prueba con otro equipo (p. 18). Esa
   prueba, con un servidor que cumpla los mínimos del anexo, es #170.
 - Restaurar copia y conciliar después es K053 (#56).
