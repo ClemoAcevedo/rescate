@@ -89,7 +89,7 @@ las ramas de integración:
 
 El [workflow Trivy](../.github/workflows/trivy-manual.yml), adaptado de la plantilla
 de clases `specs-trivy-sonarqube`, complementa SCA con Trivy 0.70.0 sobre los
-lockfiles detectables del repositorio. Se ejecuta manualmente en Actions y en
+lockfiles detectables del repositorio, incluidas dependencias de desarrollo. Se ejecuta manualmente en Actions y en
 pushes que modifican ese YAML. Publica `trivy-report.json` en el artifact
 `trivy-report` antes de evaluar severidades, incluidas vulnerabilidades sin
 corrección. Los hallazgos HIGH o CRITICAL hacen fallar el job; los errores del

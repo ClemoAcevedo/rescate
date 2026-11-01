@@ -22,6 +22,8 @@ jobs:
 
       - name: Analizar dependencias
         uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: 'true'
         with:
           version: v0.70.0
           scan-type: fs
