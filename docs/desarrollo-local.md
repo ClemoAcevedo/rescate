@@ -280,6 +280,33 @@ y cierre al terminar. El estado del escenario vive solo en memoria y no implemen
 sesiones seguras, SQL, bloqueos ni las políticas reales. Esas responsabilidades se
 verifican en las integraciones de chat y seguridad; los mocks no sustituyen esa evidencia.
 
+## Reportes de calidad con SonarQube
+
+El [workflow SonarQube](../.github/workflows/sonarqube-manual.yml) adapta la plantilla
+de clases: crea SonarQube Community Build en el runner, analiza `api/src` y `web/src`
+y publica `sonarqube-reports`. Se ejecuta manualmente desde Actions y también en
+pushes que cambian su YAML o `sonar-project.properties`, para validar la configuración
+antes de integrarla. Es un análisis completo independiente: cada ejecución usa un
+proyecto nuevo, con H2 temporal, sin histórico ni análisis diferencial de PR.
+
+El artefacto incluye issues paginados, hotspots para revisión humana, métricas,
+Quality Gate, tarea procesada, commit y diagnóstico del servidor. Una métrica
+ausente se conserva ausente: este workflow no importa cobertura. La cobertura real
+de API y frontend tiene sus propios reportes descritos arriba. Los tipos generados
+y las declaraciones quedan fuera del análisis de fuentes mantenidas por el equipo.
+
+El gate predeterminado se evalúa después de guardar los reportes: un resultado
+distinto de `OK` hace fallar el job con evidencia disponible. No significa ausencia
+de todos los issues; las condiciones de código nuevo dependen de la línea base del
+servidor temporal. No se modifican reglas ni umbrales para obtener un resultado verde.
+Al terminar se eliminan contenedor, volúmenes y credenciales temporales; los reportes
+se conservan catorce días. El dashboard local deja de existir.
+
+La plantilla y su especificación provienen de los archivos de clases
+`specs-trivy-sonarqube`; el [repositorio docente](https://github.com/UC-IIC-3143-Software-Development/full_stack_testing)
+contiene los ejemplos complementarios. La evidencia de ejecución y sus resultados
+van en la PR y en los artifacts de Actions.
+
 ## Revisión automática de PR
 
 [Gemini PR Review](../.github/workflows/gemini-review.yml) revisa PR abiertos y

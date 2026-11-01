@@ -87,6 +87,21 @@ las ramas de integración:
 | SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src` y `web/src` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
 | SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON por paquete en `security-sca-api` y `security-sca-web`; falla con severidad alta o crítica, o si el servicio de auditoría no responde. Las moderadas quedan visibles para revisión (#180). |
 
+El [workflow Trivy](../.github/workflows/trivy-manual.yml), adaptado de la plantilla
+de clases `specs-trivy-sonarqube`, complementa SCA con Trivy 0.70.0 sobre los
+lockfiles detectables del repositorio. Se ejecuta manualmente en Actions y en
+pushes que modifican ese YAML. Publica `trivy-report.json` en el artifact
+`trivy-report` antes de evaluar severidades, incluidas vulnerabilidades sin
+corrección. Los hallazgos HIGH o CRITICAL hacen fallar el job; los errores del
+scanner o un JSON inválido también fallan. Los conteos son ocurrencias por
+dependencia y archivo, no CVE únicos. El análisis es de filesystem y dependencias;
+las imágenes Docker requieren su propio escaneo.
+
+El [análisis SonarQube](desarrollo-local.md#reportes-de-calidad-con-sonarqube)
+publica calidad, mantenibilidad y hotspots. La
+[revisión con IA](desarrollo-local.md#revisión-automática-de-pr) conserva un informe
+por commit del PR. Son controles complementarios al SAST y SCA del CI habitual.
+
 Los artefactos se conservan catorce días, incluso cuando hay hallazgos. Para repetir
 SCA: `npm --prefix api audit --audit-level=high` y el equivalente con `web`. Para SAST:
 `semgrep scan --config p/javascript --config p/typescript --metrics=off --error api/src web/src`.
