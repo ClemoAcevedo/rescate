@@ -1,0 +1,76 @@
+name: Trivy - Dependencias y vulnerabilidades
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/trivy-manual.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Analizar dependencias
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: 'true'
+        with:
+          version: v0.70.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: json
+          output: trivy-report.json
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+
+      - name: Publicar reporte
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Resumir resultados y evaluar vulnerabilidades
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+
+          with open("trivy-report.json") as report:
+              data = json.load(report)
+
+          vulnerabilities = [
+              vulnerability
+              for result in (data.get("Results") or [])
+              for vulnerability in (result.get("Vulnerabilities") or [])
+          ]
+          counts = collections.Counter(
+              vulnerability.get("Severity", "UNKNOWN")
+              for vulnerability in vulnerabilities
+          )
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("## Vulnerabilidades en dependencias\n\n")
+              summary.write("| Severidad | Hallazgos |\n|---|---:|\n")
+              for severity in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"):
+                  summary.write(f"| {severity} | {counts[severity]} |\n")
+              summary.write("\nReporte completo: artifact `trivy-report`.\n")
+
+          if counts["HIGH"] or counts["CRITICAL"]:
+              raise SystemExit("Se encontraron vulnerabilidades HIGH o CRITICAL.")
+          PY

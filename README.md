@@ -313,6 +313,9 @@ lo cambia.
 - **Calidad para E3:** SAST con Semgrep y SCA de ambos lockfiles en CI; cobertura de
   API por capa y frontend por módulo, estrategia Testing Trophy y mock HTTP del chat
   validado contra OpenAPI ([pruebas y cobertura](docs/desarrollo-local.md#estrategia-de-pruebas-testing-trophy)).
+  Los workflows de Trivy y SonarQube publican reportes descargables de dependencias,
+  defectos, mantenibilidad, duplicación y hotspots; la revisión con IA conserva su
+  informe por PR ([análisis de calidad](docs/desarrollo-local.md#reportes-de-calidad-con-sonarqube)).
 - **Rendimiento:** semilla de escala del anexo H con 100 000 mensajes, planes reales con
   EXPLAIN y k6 con las mezclas de E2 y E3 (búsqueda, chat, bandeja, reserva, cancelación y
   envío) en ensayos con API y worker en Compose, rechazos esperados separados de errores e
