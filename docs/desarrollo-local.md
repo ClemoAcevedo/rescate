@@ -285,8 +285,8 @@ verifican en las integraciones de chat y seguridad; los mocks no sustituyen esa 
 El [workflow SonarQube](../.github/workflows/sonarqube-manual.yml) adapta la plantilla
 de clases: crea SonarQube Community Build en el runner, analiza `api/src` y `web/src`
 y publica `sonarqube-reports`. Se ejecuta manualmente desde Actions y también en
-pushes que cambian su YAML o `sonar-project.properties`, para validar la configuración
-antes de integrarla. Es un análisis completo independiente: cada ejecución usa un
+pushes que cambian su YAML, configuración, fuentes, pruebas o dependencias, para
+actualizar el reporte antes de integrar. Es un análisis completo independiente: cada ejecución usa un
 proyecto nuevo, con H2 temporal, sin histórico ni análisis diferencial de PR.
 
 El artefacto incluye issues paginados, hotspots para revisión humana, métricas,
@@ -295,8 +295,14 @@ ausente se conserva ausente: este workflow no importa cobertura. La cobertura re
 de API y frontend tiene sus propios reportes descritos arriba. Los tipos generados
 y las declaraciones quedan fuera del análisis de fuentes mantenidas por el equipo.
 Si SonarQube informa cobertura cero, corresponde a la falta de un LCOV importado en
-esta corrida; no sustituye los reportes de cobertura de CI. La revisión de alertas
-de navegación, expresión regular y fixture se sigue en #187.
+esta corrida; no sustituye los reportes de cobertura de CI.
+
+`BrowserRouter` realiza navegación síncrona. `web/src/router.d.ts` precisa ese retorno
+siguiendo la [recomendación de React Router](https://reactrouter.com/api/hooks/useNavigate#return-type-augmentation) para evitar alertas de promesas flotantes;
+si se cambia a `RouterProvider`, se debe ajustar la declaración al modo asíncrono.
+El filtro decimal recorre la entrada una sola vez y conserva estados intermedios de
+escritura; su prueba incluye una entrada larga inválida. Las precondiciones de los
+fixtures de tests se validan en hooks del runner. Estas correcciones corresponden a #187.
 
 El gate predeterminado se evalúa después de guardar los reportes: un resultado
 distinto de `OK` hace fallar el job con evidencia disponible. No significa ausencia

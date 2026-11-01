@@ -3,14 +3,17 @@ import { spawnSync } from "node:child_process"
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { test } from "node:test"
+import { before, test } from "node:test"
 import { parse } from "yaml"
 
 // Ejecutar el parser del workflow: el formato plano de Actions provocó el fallo real.
-const workflow = parse(readFileSync(new URL("../../.github/workflows/deploy.yml", import.meta.url), "utf8"))
-const run = workflow.jobs.web.steps.find((step: { id?: string }) => step.id === "deploy").run as string
-const parser = run.match(/node --input-type=module <<'NODE'\n([\s\S]*?)\nNODE/)?.[1]
-assert.ok(parser, "El workflow debe conservar un parser JSON verificable")
+let parser: string | undefined
+before(() => {
+  const workflow = parse(readFileSync(new URL("../../.github/workflows/deploy.yml", import.meta.url), "utf8"))
+  const run = workflow.jobs.web.steps.find((step: { id?: string }) => step.id === "deploy").run as string
+  parser = run.match(/node --input-type=module <<'NODE'\n([\s\S]*?)\nNODE/)?.[1]
+  assert.ok(parser, "El workflow debe conservar un parser JSON verificable")
+})
 
 function readOutput(payload: unknown) {
   const directory = mkdtempSync(join(tmpdir(), "rescate-vercel-output-"))

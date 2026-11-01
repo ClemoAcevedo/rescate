@@ -8,6 +8,13 @@ on:
     paths:
       - '.github/workflows/sonarqube-manual.yml'
       - 'sonar-project.properties'
+      - 'api/src/**'
+      - 'api/test/**'
+      - 'web/src/**'
+      - 'api/package.json'
+      - 'api/package-lock.json'
+      - 'web/package.json'
+      - 'web/package-lock.json'
 
 permissions:
   contents: read

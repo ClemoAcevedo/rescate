@@ -85,12 +85,19 @@ las ramas de integración:
 | Control | Herramienta y alcance | Resultado y criterio |
 | --- | --- | --- |
 | SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src` y `web/src` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
-| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON por paquete en `security-sca-api` y `security-sca-web`; falla con severidad alta o crítica, o si el servicio de auditoría no responde. Las moderadas quedan visibles para revisión (#180). |
+| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON por paquete en `security-sca-api` y `security-sca-web`; falla con severidad alta o crítica, o si el servicio de auditoría no responde. Las moderadas también quedan visibles para revisión. |
+
+Los overrides de npm fijan `glob` 14.0.3 dentro de `node-pg-migrate` y `minimatch`
+11.0.3 en las herramientas de web. Esas versiones corrigen los avisos de cancelación
+y amplificación de patrones de #180. Los padres todavía declaran rangos anteriores;
+la compatibilidad se comprueba con descubrimiento de migraciones, rollback real,
+selección de archivos de ESLint, lint, build y recorridos de navegador. Los overrides
+se pueden retirar cuando los padres incorporen las versiones corregidas.
 
 El [workflow Trivy](../.github/workflows/trivy-manual.yml), adaptado de la plantilla
 de clases `specs-trivy-sonarqube`, complementa SCA con Trivy 0.70.0 sobre los
 lockfiles detectables del repositorio, incluidas dependencias de desarrollo. Se ejecuta manualmente en Actions y en
-pushes que modifican ese YAML. Publica `trivy-report.json` en el artifact
+pushes que modifican ese YAML, manifiestos o lockfiles. Publica `trivy-report.json` en el artifact
 `trivy-report` antes de evaluar severidades, incluidas vulnerabilidades sin
 corrección. Los hallazgos HIGH o CRITICAL hacen fallar el job; los errores del
 scanner o un JSON inválido también fallan. Los conteos son ocurrencias por
