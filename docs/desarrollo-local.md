@@ -294,6 +294,9 @@ Quality Gate, tarea procesada, commit y diagnóstico del servidor. Una métrica
 ausente se conserva ausente: este workflow no importa cobertura. La cobertura real
 de API y frontend tiene sus propios reportes descritos arriba. Los tipos generados
 y las declaraciones quedan fuera del análisis de fuentes mantenidas por el equipo.
+Si SonarQube informa cobertura cero, corresponde a la falta de un LCOV importado en
+esta corrida; no sustituye los reportes de cobertura de CI. La revisión de alertas
+de navegación, expresión regular y fixture se sigue en #187.
 
 El gate predeterminado se evalúa después de guardar los reportes: un resultado
 distinto de `OK` hace fallar el job con evidencia disponible. No significa ausencia
