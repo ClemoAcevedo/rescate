@@ -22,6 +22,12 @@ sin dependencias nuevas. [Decisiones y verificación](../../../../docs/frontend-
 - `Card`: contenedor div/section/article, tono default/sunken. No es clicable;
   para navegar, colocar un enlace real dentro.
 - `Badge`: metadato neutral/success/warning/info/danger, siempre con texto.
+- `Skeleton`: forma estática decorativa, con ancho opcional y clases del layout final.
+- `LoadingState`: agrupa formas sin controles y anuncia la carga una vez; el
+  consumidor declara `aria-busy` en la región de datos. Componer el layout en la
+  página, reservando imágenes, texto y controles. Al refrescar, conservar datos y
+  espacios. Seguir el [ADR 0019](../../../../docs/adr/0019-fechas-y-cargas-estables.md)
+  y ampliar `test:web:ux` cuando cambie la estructura.
 - `Alert`: los mismos tonos; elegir `role="status"` para resultados asíncronos o
   `role="alert"` para errores urgentes. Un aviso estático no necesita live region.
 

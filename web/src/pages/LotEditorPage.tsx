@@ -1,3 +1,4 @@
+import { LotEditorSkeleton } from '../components/lots/LotEditorSkeleton'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -15,7 +16,7 @@ import {
   type LotField, type LotFieldErrors, type LotFormValues,
 } from '../lots/lot-form'
 import { lotStatusBadges } from '../lots/lot-status'
-import { DEFAULT_TIME_ZONE } from '../lots/lot-time'
+import { DEFAULT_TIME_ZONE } from '../format/date-time'
 import { isSettled, useLotPhotos } from '../lots/use-lot-photos'
 import type { OperableEstablishment } from '../services/identity-service'
 import {
@@ -195,14 +196,13 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
   const reloadButton = { onReload: () => { void reload() }, reloading: pending === 'reload' }
 
   if (lotId && !lot) {
+    if (!loadError) return <LotEditorSkeleton />
     return (
       <Card as="section" className="content-card lot-card" aria-labelledby="lot-title" aria-busy={pending === 'reload'}>
         <p className="eyebrow">Operación</p>
         <h1 id="lot-title">Lote</h1>
-        {loadError
-          ? <><Alert className="form-result" tone={loadError.tone} role="alert">{loadError.message}</Alert>
-            <Link className="text-link" to="/operador/lotes/nuevo">Crear un lote nuevo</Link></>
-          : <Alert className="form-result" role="status">Cargando lote…</Alert>}
+        <Alert className="form-result" tone={loadError.tone} role="alert">{loadError.message}</Alert>
+        <Link className="text-link" to="/operador/lotes/nuevo">Crear un lote nuevo</Link>
       </Card>
     )
   }
@@ -217,7 +217,7 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
         {result && <ResultAlert result={result} {...reloadButton} />}
         <LotSummary lot={lot} establishmentName={establishmentName(lot.establishmentId)} />
         <LotPhotos limit={photos.limit} photos={photos.photos} loadFailed={photos.loadFailed} notice={photos.notice} editable={false} onRetry={() => { void photos.refresh() }} />
-        <LotManagement lotId={lot.id} version={lot.version} csrfToken={csrfToken} pickupEndsAt={lot.pickupEndsAt} onChanged={() => { void reload() }} />
+        <LotManagement lotId={lot.id} version={lot.version} csrfToken={csrfToken} pickupEndsAt={lot.pickupEndsAt} timeZone={lot.timeZone} onChanged={() => { void reload() }} />
         <div className="lot-actions lot-actions--footer">
           {lot.status === 'published' && !lot.paused && Date.parse(lot.pickupEndsAt) > openedAt && (
             <Link className="ui-button ui-button--primary" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Ver como rescatista</Link>
@@ -311,7 +311,11 @@ export function LotEditorPage() {
   const { status, session, csrfToken } = useAuth()
   const loginPath = `/login?from=${encodeURIComponent(pathname)}`
 
-  if (status === 'checking' || status === 'error' || (!session && status === 'signing-out')) {
+  if (status === 'checking' || (!session && status === 'signing-out')) {
+    return <main className="page-content page-content--stack"><Link className="back-link" to="/operador/lotes"><Icon name="arrowLeft" />Mis lotes</Link><LotEditorSkeleton label="Comprobando la sesión…" /></main>
+  }
+
+  if (status === 'error') {
     return (
       <main className="page-content">
         <Card as="section" className="content-card lot-card" aria-labelledby="lot-title">

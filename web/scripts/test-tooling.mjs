@@ -14,3 +14,21 @@ test('ESLint sigue incluyendo TypeScript y TSX y excluyendo dependencias y build
     assert.equal(await eslint.isPathIgnored(file), true, file)
   }
 })
+
+test('lint impide formateadores locales fuera del módulo común', async () => {
+  const eslint = new ESLint({ cwd: fileURLToPath(new URL('../', import.meta.url)) })
+  for (const expression of [
+    "new Date().toLocaleString('es-CL')",
+    "new Date().toLocaleDateString('es-CL')",
+    "new Date().toLocaleTimeString('es-CL')",
+    "new Intl.DateTimeFormat('es-CL').format(Date.now())",
+    "Intl.DateTimeFormat('es-CL').format(Date.now())",
+  ]) {
+    const [result] = await eslint.lintText(expression, { filePath: 'src/pages/DateFixture.tsx' })
+    assert.ok(result.messages.some(item => item.ruleId === 'no-restricted-syntax'), expression)
+  }
+  for (const file of ['src/format/date-time.ts', 'src/lots/lot-time.ts']) {
+    const [result] = await eslint.lintText("new Intl.DateTimeFormat('es-CL', { timeZone: 'UTC' })", { filePath: file })
+    assert.equal(result.errorCount, 0, file)
+  }
+})

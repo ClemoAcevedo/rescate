@@ -1,4 +1,6 @@
+import { NotificationsSkeleton } from './NotificationsSkeleton'
 import './notifications.css'
+import { DEFAULT_TIME_ZONE, formatInstant } from '../format/date-time'
 import { useCallback, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -13,7 +15,7 @@ import {
   listNotifications, markNotificationRead, notificationError, type Notification, type NotificationPage,
 } from '../services/notifications-service'
 
-const when = (instant: string) => new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short' }).format(Date.parse(instant))
+const when = (instant: string) => formatInstant(instant, DEFAULT_TIME_ZONE)
 const packs = (quantity: number) => `${quantity} ${quantity === 1 ? 'pack' : 'packs'}`
 
 /** Texto y destino de cada aviso. El destino muestra el estado vigente: un aviso nunca confirma nada. */
@@ -83,7 +85,7 @@ function Inbox({ csrfToken }: { csrfToken: string }) {
   if (!result) {
     return error
       ? <Alert tone="danger" role="alert"><p>{error}</p><Button variant="secondary" onClick={load}>Reintentar</Button></Alert>
-      : <Alert role="status">Cargando avisos…</Alert>
+      : <NotificationsSkeleton />
   }
   return (
     <section aria-label="Bandeja de avisos">
@@ -128,14 +130,14 @@ export function NotificationsPage() {
   const location = useLocation()
   let content
   if (status === 'error') content = <Alert tone="danger" role="alert">{error}<Button onClick={() => { void refreshSession() }}>Reintentar sesión</Button></Alert>
-  else if (status === 'checking' || (!session && status === 'signing-out')) content = <Alert role="status">Comprobando la sesión…</Alert>
+  else if (status === 'checking' || (!session && status === 'signing-out')) content = <NotificationsSkeleton label="Comprobando la sesión…" />
   else if (!session || !csrfToken) content = <Alert>Inicia sesión para ver tus avisos. <Link to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Iniciar sesión</Link></Alert>
   else content = <Inbox key={session.user.id} csrfToken={csrfToken} />
   return (
     <main className="page-content">
       <div className="notifications">
         <h1>Avisos</h1>
-        <p>Ofertas, vencimientos, confirmaciones y cancelaciones de tus solicitudes y reservas. Se guardan aunque no estés conectado.</p>
+        <p>Ofertas, vencimientos, confirmaciones y cancelaciones de tus solicitudes y reservas. Se guardan aunque no estés conectado. Horarios en {DEFAULT_TIME_ZONE}.</p>
         {content}
       </div>
     </main>

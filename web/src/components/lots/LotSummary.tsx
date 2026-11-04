@@ -1,5 +1,5 @@
 import type { LotResponse } from '../../services/lots-service'
-import { formatInstant } from '../../lots/lot-time'
+import { formatInstant } from '../../format/date-time'
 
 /** Vista de solo lectura: un lote publicado no se edita (RF02, OpenAPI). */
 export function LotSummary({ lot, establishmentName }: { lot: LotResponse; establishmentName: string }) {

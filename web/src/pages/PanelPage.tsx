@@ -1,3 +1,6 @@
+import { OperatorPageHeader } from '../components/OperatorPageHeader'
+import { Skeleton } from '../components/ui/Skeleton'
+import { ActivitySkeleton, CommitmentsSkeleton, PanelSkeleton } from './PanelSkeleton'
 import './panel.css'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
@@ -9,7 +12,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input, Select } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
-import { formatInstant, formatWindow } from '../lots/lot-time'
+import { DEFAULT_TIME_ZONE, formatDate, formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import type { OperableEstablishment } from '../services/identity-service'
 import {
@@ -23,7 +26,6 @@ const packsThat = (quantity: number, adjective: string) => `${packs(quantity)} $
 const percent = new Intl.NumberFormat('es-CL', { style: 'percent', maximumFractionDigits: 1 })
 /** Fechas locales del período (YYYY-MM-DD), sin reinterpretarlas en la zona del navegador. */
 const dateUtc = (date: string) => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)))
-const formatDate = (date: string) => new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'UTC' }).format(dateUtc(date))
 /** Igual que MAX_PERIOD_DAYS de la API: ambas fechas incluidas. */
 const MAX_PERIOD_DAYS = 366
 const periodDays = (from: string, to: string) => Math.round((dateUtc(to) - dateUtc(from)) / 86_400_000) + 1
@@ -159,7 +161,7 @@ function Commitments({ establishmentId, lotId, state, refresh, timeZone }: {
   const empty = state === 'active' ? 'No hay reservas ni solicitudes vigentes.' : state === 'ended' ? 'Aún no hay compromisos terminados.' : 'Aún no hay compromisos.'
   return (
     <div aria-busy={loading}>
-      {loading && !value && <p className="panel__status" role="status">Cargando compromisos…</p>}
+      {loading && !value && <CommitmentsSkeleton />}
       {error && <Alert tone="danger" role="alert">{error}</Alert>}
       {value && value.items.length === 0 && <p className="panel__empty">{empty}</p>}
       {value && value.items.length > 0 && (
@@ -205,7 +207,7 @@ function Activity({ establishmentId, lotId, refresh, timeZone, onSelectLot }: {
   const { value, error, loading } = useLoad<ActivityPage>(`${filters}:${page}`, load)
   return (
     <div aria-busy={loading}>
-      {loading && !value && <p className="panel__status" role="status">Cargando historial…</p>}
+      {loading && !value && <ActivitySkeleton />}
       {error && <Alert tone="danger" role="alert">{error}</Alert>}
       {value && value.items.length === 0 && <p className="panel__empty">Aún no hay actividad.</p>}
       {value && value.items.length > 0 && (
@@ -273,22 +275,15 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
   }
   const applyPeriod = (nextFrom: string, nextTo: string) => update({ desde: nextFrom, hasta: nextTo })
   const data = panel.value
-  const timeZone = data?.establishment.timeZone ?? 'America/Santiago'
+  const timeZone = data?.establishment.timeZone ?? DEFAULT_TIME_ZONE
   const openLots = data?.current.lots ?? []
   const lotOptions = [...openLots.map(lot => ({ id: lot.id, description: lot.description })),
     ...(lotId && !openLots.some(lot => lot.id === lotId) ? [{ id: lotId, description: selectedLot?.id === lotId ? selectedLot.description : 'Lote seleccionado' }] : [])]
   const stateTabs = [{ value: null, label: 'Vigentes' }, { value: 'terminados', label: 'Terminados' }, { value: 'todos', label: 'Todos' }]
 
   return (
-    <div className="panel">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Operación</p>
-          <h1>Mi establecimiento</h1>
-          <p>Lo que pasa hoy con tus lotes, quién espera y cómo terminaron los lotes que cerraron.</p>
-        </div>
-        <Link className="ui-button ui-button--primary" to="/operador/lotes/nuevo"><Icon name="plus" />Publicar lote</Link>
-      </header>
+    <div className="panel" aria-busy={panel.loading}>
+      <OperatorPageHeader title="Mi establecimiento" description="Lo que pasa hoy con tus lotes, quién espera y cómo terminaron los lotes que cerraron." />
       <div className="my-lots__toolbar">
         {establishments.length > 1
           ? <FormField label="Establecimiento">{control => (
@@ -304,7 +299,7 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
       </div>
 
       {panel.error && <Alert tone="danger" role="alert">{panel.error} <Button variant="secondary" onClick={() => setRefresh(value => value + 1)}>Reintentar</Button></Alert>}
-      {panel.loading && !data && !panel.error && <p className="panel__status" role="status">Cargando el panel…</p>}
+      {panel.loading && !data && !panel.error && <PanelSkeleton />}
       {/* Sin datos no hay sección de período: si el error viene de las fechas de la URL, se corrigen aquí. */}
       {panel.error && !data && (from || to) && (
         <section className="panel__section" aria-labelledby="panel-period">
@@ -431,7 +426,14 @@ export function PanelPage() {
   const { status, session } = useAuth()
   const { pathname } = useLocation()
   if (status === 'checking' || status === 'error') {
-    return <main className="page-content"><div className="panel"><p className="panel__status" role="status">Comprobando la sesión…</p></div></main>
+    return <main className="page-content"><div className="panel" aria-busy={status === 'checking'}>
+      <OperatorPageHeader title="Mi establecimiento" description="Lo que pasa hoy con tus lotes, quién espera y cómo terminaron los lotes que cerraron." />
+      {status === 'error' ? <Alert role="alert">No fue posible comprobar la sesión. Reintenta desde el aviso superior.</Alert> : <>
+        <span className="visually-hidden" role="status">Comprobando la sesión…</span>
+        <div className="my-lots__toolbar" aria-hidden="true"><Skeleton width="12rem" /><Skeleton className="skeleton-control" width="16rem" /></div>
+        <PanelSkeleton />
+      </>}
+    </div></main>
   }
   if (!session) {
     return <main className="page-content"><Card as="section" className="content-card lot-card" aria-labelledby="panel-title">

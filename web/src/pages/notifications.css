@@ -7,6 +7,8 @@
 .notification--unread { border-color: var(--border-control); box-shadow: inset var(--border-width-strong) 0 0 var(--action-primary); }
 .notification__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .notification__heading h2 { font-size: var(--fs-title-lg); }
+.notification__heading { min-block-size: 2lh; }
+.notification > p:not(.notification__lot) { min-block-size: 3lh; }
 .notification p { margin: 0; overflow-wrap: anywhere; }
 .notification__lot { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
 .notification__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); }
@@ -16,4 +18,5 @@
 
 @media (max-width: 48rem) {
   .notification__footer > .ui-button { flex: 1 1 100%; }
+  .notification__footer > .notification__action-skeleton { flex: 1 1 100%; }
 }
