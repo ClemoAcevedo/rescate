@@ -1,3 +1,4 @@
+import { RecordSkeleton } from '../components/RecordSkeleton'
 import './pickups.css'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -8,7 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
-import { formatInstant, formatWindow } from '../lots/lot-time'
+import { formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import { HttpError } from '../services/http-client'
 import { LotRequestError, getLot, type LotResponse } from '../services/lots-service'
@@ -230,7 +231,7 @@ function Pickups({ lotId, csrfToken }: { lotId: string; csrfToken: string }) {
       </>
     )
   }
-  if (!lot) return <><h1 id="pickups-title">Validar retiros</h1><Alert role="status">Cargando lote…</Alert></>
+  if (!lot) return <><h1 id="pickups-title">Validar retiros</h1><RecordSkeleton label="Cargando lote…" count={1} lines={5} /></>
   return (
     <>
       <LotHeader lot={lot} now={openedAt} />

@@ -1,3 +1,4 @@
+import { formatInstant } from '../../format/date-time'
 import { useEffect, useRef, useState } from 'react'
 import { Alert } from '../ui/Alert'
 import { Badge } from '../ui/Badge'
@@ -11,8 +12,8 @@ import type { LotManagementRequest, LotManagementResponse } from '../../services
 const labels: Record<LotManagementRequest['action'], string> = {
   reduce_stock: 'Descontar stock', pause: 'Pausar publicación', resume: 'Reactivar publicación', withdraw: 'Retirar publicación',
 }
-export function LotManagement({ lotId, version, csrfToken, pickupEndsAt, onChanged }: {
-  lotId: string; version: number; csrfToken: string; pickupEndsAt: string; onChanged: () => void
+export function LotManagement({ lotId, version, csrfToken, pickupEndsAt, timeZone, onChanged }: {
+  lotId: string; version: number; csrfToken: string; pickupEndsAt: string; timeZone: string; onChanged: () => void
 }) {
   const [openedAt] = useState(() => Date.now())
   const [state, setState] = useState<LotManagementResponse | null>(null)
@@ -92,7 +93,7 @@ export function LotManagement({ lotId, version, csrfToken, pickupEndsAt, onChang
             : <Button type="submit" disabled={pending}>{labels[action]}</Button>}
         </form>}
       {state.history.length > 0 && <><h3>Últimas operaciones</h3><ul>{state.history.map(item => <li key={item.id}>
-        {labels[item.action]}{item.quantity === null ? '' : `: ${item.quantity} packs`} · {item.reason} · <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('es-CL')}</time>
+        {labels[item.action]}{item.quantity === null ? '' : `: ${item.quantity} packs`} · {item.reason} · <time dateTime={item.createdAt}>{formatInstant(item.createdAt, timeZone)}</time>
       </li>)}</ul></>}
     </>}
   </Card>

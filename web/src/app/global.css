@@ -277,6 +277,7 @@ code, kbd, samp { font-family: var(--font-mono); }
 .lot-photos p { margin: 0; color: var(--text-muted); }
 .lot-photos__count { color: var(--text-muted); font-size: var(--fs-meta); }
 .lot-photos__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.lot-photos__content { min-block-size: 12rem; }
 .lot-photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
@@ -438,13 +439,15 @@ code, kbd, samp { font-family: var(--font-mono); }
 .lot-card-public__stock--empty { color: var(--text-warning); }
 .lot-card-public__body { display: flex; flex: 1; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-5) var(--sp-5); }
 .lot-card-public__category { color: var(--text-brand); font-size: var(--fs-micro); font-weight: var(--fw-bold); letter-spacing: var(--ls-caps); text-transform: uppercase; }
-.lot-card-public h3 { font-size: var(--fs-title-lg); }
+.lot-card-public h3 { font-size: var(--fs-title-lg); min-block-size: 2lh; }
 .lot-card-public h3 a { color: inherit; text-decoration: none; }
 /* El título es el enlace; su área cubre la tarjeta sin anidar elementos interactivos. */
 .lot-card-public h3 a::after { content: ""; position: absolute; inset: 0; }
 .lot-card-public h3 a:focus-visible { outline: none; }
 .lot-card-public:has(h3 a:focus-visible) { outline: var(--border-width-strong) solid var(--focus-ring); outline-offset: var(--border-width-strong); }
-.lot-card-public__description { display: -webkit-box; margin: 0; overflow: hidden; color: var(--text-muted); font-size: var(--fs-meta); -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lot-card-public__description { display: -webkit-box; min-block-size: 2lh; margin: 0; overflow: hidden; color: var(--text-muted); font-size: var(--fs-meta); -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lot-card-public .lot-meta li > :last-child { flex: 1; min-width: 0; min-block-size: 2lh; }
+.public-lot__header h1 { min-block-size: 2lh; }
 .lot-card-public__link { display: inline-flex; align-items: center; gap: var(--sp-1); margin-top: auto; padding-top: var(--sp-3); font-size: var(--fs-meta); font-weight: var(--fw-semibold); text-decoration: none; }
 .lot-meta { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0 0; padding: 0; list-style: none; color: var(--text-body); font-size: var(--fs-meta); }
 .lot-meta li { display: flex; align-items: flex-start; gap: var(--sp-2); }
@@ -502,7 +505,8 @@ code, kbd, samp { font-family: var(--font-mono); }
 .my-lot__labels { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
 .my-lot__labels .ui-badge { font-size: var(--fs-micro); }
 .my-lot__category { color: var(--text-muted); font-size: var(--fs-meta); }
-.my-lot h2 { font-size: 1.125rem; }
+.my-lot h2 { font-size: 1.125rem; min-block-size: 2lh; }
+.my-lot .lot-meta li > :last-child { min-width: 0; min-block-size: 2lh; }
 .my-lot h2 a { color: inherit; text-decoration: none; }
 .my-lot h2 a:hover { color: var(--text-link-hover); text-decoration: underline; }
 .my-lot .lot-meta { margin: 0; grid-auto-flow: column; justify-content: start; gap: var(--sp-5); }
@@ -610,8 +614,10 @@ code, kbd, samp { font-family: var(--font-mono); }
   .ui-button:active:not(:disabled) { transform: none; }
 }
 
-.reservations { max-width: var(--content-max); margin-inline: auto; display: grid; gap: var(--sp-4); }
-.reservations__list { list-style: none; padding: 0; display: grid; gap: var(--sp-4); }
+.reservations { width: min(100%, var(--content-max)); margin-inline: auto; display: grid; gap: var(--sp-4); }
+.reservations__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.reservations__list h2, .record-skeleton h2 { min-block-size: 2lh; }
+.reservation-facts__window { min-block-size: 2lh; }
 .reservation-detail { display: grid; gap: var(--sp-3); margin-block: var(--sp-4); }
 .pickup-code { padding: var(--sp-4); background: var(--surface-brand-soft); border-radius: var(--radius-md); }
 .pickup-code p { font-family: var(--font-mono); font-size: var(--fs-display-md); letter-spacing: var(--ls-caps); overflow-wrap: anywhere; }

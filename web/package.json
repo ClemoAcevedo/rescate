@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "preview": "vite preview",
-    "test:tooling": "node --test scripts/test-tooling.mjs"
+    "test:tooling": "node --test scripts/test-tooling.mjs",
+    "test": "node --test scripts/test-*.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

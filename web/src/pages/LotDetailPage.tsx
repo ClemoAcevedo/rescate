@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from '../components/Icon'
+import { LotDetailSkeleton } from '../components/lots/LotSkeletons'
 import { LotGallery } from '../components/lots/LotGallery'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -10,7 +11,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
-import { formatInstant } from '../lots/lot-time'
+import { formatInstant } from '../format/date-time'
 import { UnexpectedResponseError } from '../services/http-client'
 import { clearIntent, intentStorageKey, readIntent, saveIntent } from '../services/reservation-intent'
 import { lotTitle } from '../lots/lot-title'
@@ -85,9 +86,9 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
     setQuantity(value); setReserveError(null); key.current = crypto.randomUUID()
   }
 
-  return <main className="page-content"><div className="public-lot">
+  return <main className="page-content"><div className="public-lot" aria-busy={loading}>
     <Link className="back-link" to={lotsPath}><Icon name="arrowLeft" />Volver a explorar lotes</Link>
-    {loading && <Alert className="form-result" role="status">Cargando el lote…</Alert>}
+    {loading && !lot && <LotDetailSkeleton />}
     {loadError && <Alert className="form-result" tone="danger" role="alert">{loadError} <Button variant="secondary" onClick={() => { setLoading(true); setReload(value => value + 1) }}>Reintentar</Button></Alert>}
     {reservation && <div ref={confirmationRef} tabIndex={-1} className="reservation-confirmation reservation-notice">
       <Alert tone="info" role="status">

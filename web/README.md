@@ -8,8 +8,9 @@ en [package.json](package.json) y [package-lock.json](package-lock.json).
 Desde `web/`: `npm ci`, `npm run dev`. Para conectar la comprobación técnica con
 la API local, configurar `VITE_API_BASE_URL=/api`; el proxy usa
 `API_PROXY_TARGET` o `http://localhost:3000`. Ver [entorno local](../docs/desarrollo-local.md).
-Checks: `npm run typecheck`, `npm run lint`, `npm run build`.
-No hay suite ni dependencias de tests dentro de `web/`: la comprobación end-to-end
+Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
+`npm test` comprueba fechas y guardas de lint con el runner nativo de Node, sin
+dependencias nuevas. La comprobación end-to-end
 de autenticación usa el Playwright ya instalado en `api/`, contra servicios reales
 que la persona inicia explícitamente (`npm --prefix api run test:web:auth`).
 Con el servicio `db` de Compose iniciado, `npm --prefix api run test:web:compose`
@@ -142,6 +143,18 @@ respuestas perdidas en [reservas](../docs/reservas.md#vista-del-titular).
 Con Vite iniciado sin mocks de identidad, `npm --prefix api run test:web:reservations`
 prueba el flujo de navegador con respuestas HTTP controladas. `test:web:compose`
 lo incluye junto con los recorridos reales de reserva y cancelación.
+
+## Fechas y estados de carga
+
+Toda fecha visible usa [date-time.ts](src/format/date-time.ts), con formato
+`DD/MM/AAAA · HH:mm` y zona explícita. El [ADR 0019](../docs/adr/0019-fechas-y-cargas-estables.md)
+y la [guía de diseño](../docs/frontend-design-system.md) explican la política de
+zonas, fechas de calendario, inputs nativos y skeletons con la estructura final.
+
+`npm --prefix api run test:web:ux` desde la raíz inicia Vite e intercepta HTTP en
+Chromium para comparar carga/datos a 360 y 1366 px. Requiere las dependencias de
+`api/`, `web/` y Chromium; no requiere API ni PostgreSQL. Si existe un Vite iniciado,
+se puede indicar `WEB_URL`. CI lo ejecuta en el recorrido de navegador.
 
 ## Accesibilidad y claridad
 

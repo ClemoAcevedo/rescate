@@ -1,3 +1,4 @@
+import { LoadingState, Skeleton } from '../ui/Skeleton'
 import { useRef } from 'react'
 import type { LotPhoto as LotPhotoData } from '../../services/lots-service'
 import { buildUrl } from '../../services/http-client'
@@ -44,7 +45,7 @@ export function LotPhotos({ limit = 3, photos, loadFailed, notice, editable, bus
   const disabled = locked || busy !== null
 
   return (
-    <Card as="section" tone="sunken" className="lot-photos" aria-labelledby="lot-photos-title" aria-busy={busy !== null}>
+    <Card as="section" tone="sunken" className="lot-photos" aria-labelledby="lot-photos-title" aria-busy={busy !== null || (visible === null && !loadFailed)}>
       <div className="lot-photos__header">
         <h2 id="lot-photos-title">{editable ? 'Fotos (opcional)' : 'Fotos'}</h2>
         {photos && <span className="lot-photos__count">{photos.length} de {limit}</span>}
@@ -61,7 +62,8 @@ export function LotPhotos({ limit = 3, photos, loadFailed, notice, editable, bus
           <Button className="lot-result__action" variant="secondary" onClick={onRetry}>Reintentar</Button>
         </Alert>
       )}
-      {visible === null && !loadFailed && <p role="status">Cargando fotos…</p>}
+      <div className="lot-photos__content">
+      {visible === null && !loadFailed && <LoadingState label="Cargando fotos…"><div className="lot-photo-grid">{[0, 1, 2].slice(0, limit).map(index => <div className="lot-photo-item" key={index}><Skeleton className="lot-photo" /><Skeleton width="70%" /></div>)}</div></LoadingState>}
       {visible && visible.length === 0 && !editable && <p>Este lote no tiene fotos.</p>}
       {visible && visible.length > 0 && (
         <ul className="lot-photo-grid">
@@ -92,6 +94,7 @@ export function LotPhotos({ limit = 3, photos, loadFailed, notice, editable, bus
           ))}
         </ul>
       )}
+      </div>
       {editable && photos && !full && (
         <div className="lot-photos__actions">
           <input

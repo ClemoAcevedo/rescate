@@ -55,6 +55,22 @@ duplicados y colores/espaciados arbitrarios cuando exista un token. Adaptar el
 material externo al stack local; no copiarlo directamente. Los componentes UI no
 definen contratos HTTP: sigue prevaleciendo OpenAPI S02.
 
+Aplicar el [ADR 0019](docs/adr/0019-fechas-y-cargas-estables.md) a toda vista nueva
+o modificada:
+
+- Mostrar fechas y horas con `web/src/format/date-time.ts`, siempre con zona
+  explícita. Conservar las fechas de calendario sin desplazarlas por zona.
+  No introducir formateadores locales en páginas o componentes; lint lo verifica.
+- Componer cargas con `Skeleton`/`LoadingState` y el layout final: mismos anchos,
+  columnas, proporciones de imágenes y espacio para textos/controles. Un mensaje
+  de carga solo no sustituye una tarjeta o formulario. Mantener los datos y los
+  espacios al refrescar; bloquear acciones según vigencia sin desplazar la vista.
+- Mantener `aria-busy`, un anuncio de carga accesible, formas sin foco y movimiento
+  reducido. Probar carga lenta, vacío, error/reintento y contenido largo a 360 y
+  1366 px. Si cambia el layout asíncrono, ampliar `test:web:ux` para comparar las
+  regiones afectadas antes/después; ejecutar `npm --prefix web test` y la regresión
+  de navegador pertinente. Guía en [design system](docs/frontend-design-system.md).
+
 ## Documentación
 
 La documentación se organiza por área del sistema, no por tarjeta. El

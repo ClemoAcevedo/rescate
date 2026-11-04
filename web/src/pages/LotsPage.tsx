@@ -1,6 +1,9 @@
+import { DEFAULT_TIME_ZONE } from '../format/date-time'
+import { instantToLocalInput, localInputToInstant } from '../lots/lot-time'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon'
+import { LotsSkeleton } from '../components/lots/LotSkeletons'
 import { LotCard } from '../components/lots/LotCard'
 import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
@@ -16,7 +19,7 @@ function fromParams(params: URLSearchParams): Filters {
   const beforeDate = before && Number.isFinite(Date.parse(before)) ? new Date(before) : null
   return { category: params.get('category') ?? '', latitude: params.get('latitude') ?? '',
     longitude: params.get('longitude') ?? '', radiusKm: params.get('radiusKm') ?? '',
-    pickupBefore: beforeDate ? new Date(beforeDate.getTime() - beforeDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '' }
+    pickupBefore: beforeDate ? instantToLocalInput(before!, DEFAULT_TIME_ZONE) : '' }
 }
 
 export function LotsPage() {
@@ -62,7 +65,7 @@ function LotsSearch() {
     if (filters.radiusKm.trim() && !filters.latitude.trim()) {
       setFilterError('Ingresa una zona para aplicar el radio.'); return
     }
-    if (filters.pickupBefore && !Number.isFinite(new Date(filters.pickupBefore).getTime())) {
+    if (filters.pickupBefore && !localInputToInstant(filters.pickupBefore, DEFAULT_TIME_ZONE)) {
       setFilterError('Ingresa una fecha y hora de retiro válidas.'); return
     }
     setFilterError(null)
@@ -72,7 +75,7 @@ function LotsSearch() {
       next.set('latitude', filters.latitude.trim()); next.set('longitude', filters.longitude.trim())
       if (filters.radiusKm.trim()) next.set('radiusKm', filters.radiusKm.trim())
     }
-    if (filters.pickupBefore) next.set('pickupBefore', new Date(filters.pickupBefore).toISOString())
+    if (filters.pickupBefore) next.set('pickupBefore', localInputToInstant(filters.pickupBefore, DEFAULT_TIME_ZONE)!)
     setLoading(true); setError(null); setResult(null); setParams(next); setRetry(value => value + 1)
   }
   const locate = () => {
@@ -111,7 +114,7 @@ function LotsSearch() {
       <form className="explore-filters__form" onSubmit={submit}>
         <div className="explore-filters__main">
           <FormField label="Categoría">{control => <Input {...control} maxLength={100} value={filters.category} onChange={event => change('category', event.target.value)} placeholder="Ej. Panadería" />}</FormField>
-          <FormField label="Retiro comienza antes de">{control => <Input {...control} type="datetime-local" value={filters.pickupBefore} onChange={event => change('pickupBefore', event.target.value)} />}</FormField>
+          <FormField label="Retiro comienza antes de" hint={`Horario en ${DEFAULT_TIME_ZONE}.`}>{control => <Input {...control} type="datetime-local" value={filters.pickupBefore} onChange={event => change('pickupBefore', event.target.value)} />}</FormField>
           <Button type="submit" loading={loading}>{loading ? 'Buscando…' : 'Buscar lotes'}</Button>
         </div>
         <div className="explore-filters__location">
@@ -138,6 +141,7 @@ function LotsSearch() {
           ? `${result.items.length} ${result.items.length === 1 ? 'lote en esta página' : 'lotes en esta página'}` : ''}</p>
       </div>
       {error && <Alert tone="danger" role="alert">{error} <Button variant="secondary" onClick={() => { setLoading(true); setRetry(value => value + 1) }}>Reintentar</Button></Alert>}
+      {loading && !result && <LotsSkeleton />}
       {result && <>
         {result.items.length === 0 ? <Card className="explore-empty">
           <h3>No se encontraron lotes con estos filtros.</h3>

@@ -1,4 +1,5 @@
 import './reservations.css'
+import { DetailSkeleton, RecordSkeleton } from '../components/RecordSkeleton'
 import { useCallback, useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -8,7 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { FormField } from '../components/ui/FormField'
 import { Input } from '../components/ui/FormControls'
-import { formatInstant, formatWindow } from '../lots/lot-time'
+import { formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import { HttpError } from '../services/http-client'
 import { isUnknownOutcome } from '../services/reservations-service'
@@ -21,7 +22,7 @@ function Gate({ children }: { children: ReactNode }) {
   const { status, session, error, refreshSession } = useAuth()
   const location = useLocation()
   if (status === 'error') return <Alert role="alert">{error}<Button onClick={() => void refreshSession()}>Reintentar sesión</Button></Alert>
-  if (status !== 'authenticated') return status === 'anonymous' ? <Alert>Inicia sesión para gestionar tu espera. <Link to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Iniciar sesión</Link></Alert> : <Alert role="status">Comprobando sesión…</Alert>
+  if (status !== 'authenticated') return status === 'anonymous' ? <Alert>Inicia sesión para gestionar tu espera. <Link to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Iniciar sesión</Link></Alert> : <RecordSkeleton label="Comprobando sesión…" lines={3} />
   return <div key={session?.user.id}>{children}</div>
 }
 export function JoinWaitlistPage() {
@@ -84,7 +85,7 @@ function History() {
     listWaitlist(page, controller.signal).then(v => { if (!controller.signal.aborted) { setData(v); setError(null) } }).catch(e => { if (!controller.signal.aborted) { setData(null); setError(waitlistError(e)) } }).finally(() => { if (!controller.signal.aborted) setLoaded(query) })
     return () => controller.abort()
   }, [page, query])
-  return <section>{loaded !== query ? <Alert role="status">Consultando solicitudes…</Alert> : error ? <Alert role="alert">{error}<Button onClick={() => setRetry(v => v + 1)}>Reintentar</Button></Alert> : data && <>
+  return <section>{loaded !== query ? <RecordSkeleton label="Consultando solicitudes…" lines={3} /> : error ? <Alert role="alert">{error}<Button onClick={() => setRetry(v => v + 1)}>Reintentar</Button></Alert> : data && <>
     {!data.items.length && <p>No hay solicitudes en esta página. <Link to="/lotes">Explorar lotes</Link></p>}
     <ul className="reservations__list">{data.items.map(entry => <li key={entry.id}><Card><Badge>{labels[entry.status]}</Badge><h2><Link to={`/espera/${encodeURIComponent(entry.id)}`}>{lotTitle(entry.lot.description)}</Link></h2><p>{entry.requestedQuantity} packs solicitados</p>{entry.position && <p>Tu posición en la cola: {entry.position}</p>}<p>Consulta el detalle para comprobar el estado vigente.</p></Card></li>)}</ul>
     <nav className="explore-pagination" aria-label="Páginas de espera">{page > 1 && <Button onClick={() => setParams({ pagina: String(page - 1) })}>Página anterior</Button>}<span>Página {page}</span>{data.hasNextPage && page < 1000 && <Button onClick={() => setParams({ pagina: String(page + 1) })}>Página siguiente</Button>}</nav>
@@ -151,7 +152,7 @@ function Detail({ id }: { id: string }) {
   }
   const offered = entry?.status === 'offered' && !closed
   return <section className="reservation-detail-content" aria-busy={loading || sending}>
-    {loading && <Alert role="status">Consultando estado vigente…</Alert>}
+    {loading && !entry && <DetailSkeleton label="Consultando estado vigente…" />}
     {message && <Alert role="alert" tone="warning">{message}</Alert>}
     {entry && <Card className="reservation-detail"><div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
       <h2>{lotTitle(entry.lot.description)}</h2><p>{entry.lot.description}</p>

@@ -57,6 +57,7 @@
 .reservation-detail-view .pickup-code h3 { font-size: var(--fs-body); }
 .reservation-detail-view .pickup-code p { font-weight: var(--fw-bold); line-height: var(--lh-title); }
 .reservation-detail-view .pickup-code span { font-size: var(--fs-meta); color: var(--text-muted); }
+.reservation-detail-view .pickup-code p .ui-skeleton { font-size: inherit; color: transparent; }
 .reservation-detail-view .reservation-detail__cancel { justify-self: start; }
 .reservation-detail-view .reservation-detail__refresh { justify-self: start; }
 @media (min-width: 48rem) {

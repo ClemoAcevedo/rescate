@@ -178,3 +178,19 @@
 .ui-alert--warning { background: var(--surface-warning-soft); color: var(--text-warning); }
 .ui-alert--danger { background: var(--surface-danger-soft); color: var(--text-danger); }
 .ui-alert--neutral { background: var(--surface-sunken); color: var(--text-muted); }
+
+/* Formas estáticas: sin destellos ni animaciones, también con movimiento reducido. */
+.ui-skeleton {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  color: transparent;
+  background: var(--surface-disabled);
+  border-radius: var(--radius-sm);
+  user-select: none;
+}
+.loading-state, .loading-state__shapes { min-width: 0; }
+.skeleton-control { min-height: var(--control-h); }
+.skeleton-code { min-height: 8rem; }
+.record-skeleton { display: grid; gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }

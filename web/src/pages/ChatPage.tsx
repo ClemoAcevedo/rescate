@@ -5,9 +5,12 @@ import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { Textarea } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
+import { Skeleton } from '../components/ui/Skeleton'
+import { RecordSkeleton } from '../components/RecordSkeleton'
 import { useVisiblePolling } from '../notifications/use-visible-polling'
 import { chatError, listMessages, sendMessage, type ChatMessage, type SendMessageRequest } from '../services/chat-service'
 import './chat.css'
+import { DEFAULT_TIME_ZONE, formatInstant } from '../format/date-time'
 
 type Outgoing = SendMessageRequest & { status: 'pending' | 'failed' | 'sent'; messageId?: string; error?: string }
 function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
@@ -62,13 +65,15 @@ function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
     } finally { sending.current = false; if (life.active) void load() }
   }
   return <section aria-label="Conversación" className="chat">
-    <p>Coordina el retiro con texto de hasta 1000 caracteres. Los mensajes no confirman lectura ni acreditan el retiro.</p>
-    {open === null && !error && <Alert role="status">Cargando conversación…</Alert>}
+    <p>Coordina el retiro con texto de hasta 1000 caracteres. Los mensajes no confirman lectura ni acreditan el retiro. Horarios en {DEFAULT_TIME_ZONE}.</p>
+    {open === null && !error && <span className="visually-hidden" role="status">Cargando conversación…</span>}
     {error && <Alert tone="warning" role="status">{error}</Alert>}
     {open === false && <Alert role="status">Conversación cerrada. Puedes consultar el historial, pero ya no escribir.</Alert>}
-    <ol className="chat__messages" aria-label="Mensajes">{messages.map(item => <li key={item.id} className={item.mine ? 'chat__mine' : ''}>
+    <ol className="chat__messages" aria-label="Mensajes" aria-busy={open === null && !error}>
+      {open === null && !error && [0, 1].map(index => <li key={index} aria-hidden="true"><strong><Skeleton width="40%" /></strong><p><Skeleton /></p><Skeleton width="50%" /></li>)}
+      {messages.map(item => <li key={item.id} className={item.mine ? 'chat__mine' : ''}>
       <strong>{item.author === 'holder' ? 'Titular' : 'Establecimiento'}{item.mine ? ' (tú)' : ''}</strong>
-      <p>{item.text}</p><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString('es-CL')}</time>
+      <p>{item.text}</p><time dateTime={item.createdAt}>{formatInstant(item.createdAt, DEFAULT_TIME_ZONE)}</time>
     </li>)}</ol>
     <div aria-live="polite">{outgoing.filter(item => !messages.some(message => message.id === item.messageId)).map(item => <div className="chat__outgoing" key={item.idempotencyKey}>
       <p>{item.text}</p><p>{item.status === 'pending' ? 'Pendiente de confirmación…' : item.status === 'sent' ? 'Enviado al servidor' : 'Envío fallido o sin confirmar.'}</p>
@@ -93,7 +98,7 @@ export function ChatPage() {
   const location = useLocation()
   return <main className="page-content"><div className="chat-page"><Link to="/avisos">Volver a avisos</Link><h1>Chat de la reserva</h1>
     {status === 'error' ? <Alert role="alert">{error}<Button onClick={() => { void refreshSession() }}>Reintentar sesión</Button></Alert>
-      : status === 'checking' || status === 'signing-out' ? <Alert role="status">Comprobando sesión…</Alert>
+      : status === 'checking' || status === 'signing-out' ? <RecordSkeleton label="Comprobando sesión…" />
       : session && csrfToken ? <Conversation key={`${session.user.id}:${id}`} id={id} csrfToken={csrfToken} />
       : <Alert>Inicia sesión para conversar. <Link to={`/login?from=${encodeURIComponent(location.pathname)}`}>Iniciar sesión</Link></Alert>}
   </div></main>

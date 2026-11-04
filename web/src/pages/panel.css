@@ -12,6 +12,7 @@
 .panel__section .ui-field { max-width: 20rem; }
 .panel .segmented__item { white-space: nowrap; }
 .panel__columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--sp-8); align-items: start; }
+.panel-skeleton > .loading-state__shapes { display: grid; gap: var(--sp-6); }
 
 /* Cifras de hoy: tarjetas por ancho mínimo, como el resto de la aplicación. */
 .panel-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--sp-3); }

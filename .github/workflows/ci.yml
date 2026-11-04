@@ -48,8 +48,8 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
-      - name: Verify lint file selection after dependency updates
-        run: npm run test:tooling
+      - name: Date/time conventions and lint guardrails
+        run: npm test
       - name: Build
         run: npm run build
 

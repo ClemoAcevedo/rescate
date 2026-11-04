@@ -50,6 +50,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0015](adr/0015-deploy-de-worker-y-web-en-paralelo.md) | Tras la API migrada, worker y web se despliegan en paralelo; la verificación pública espera a ambos |
 | [0016](adr/0016-chat-de-la-reserva.md) | Chat como mensajes de la reserva sin tabla de conversación, cierre derivado de reserva y lote, y retención que borra el texto y conserva el resultado del envío |
 | [0018](adr/0018-carga-remota-en-railway.md) | Generador local por HTTPS hacia un entorno Railway aislado; métricas por ensayo y distinción respecto del protocolo LAN |
+| [0019](adr/0019-fechas-y-cargas-estables.md) | Fechas y horas comunes con zona explícita; skeletons con la estructura final y regresión de geometría en CI |
 
 ## Entregas y evidencia
 
