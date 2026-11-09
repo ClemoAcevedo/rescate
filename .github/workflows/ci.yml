@@ -182,6 +182,8 @@ jobs:
         run: npm --prefix api run db:test:photos:compose
       - name: E2 stock adjustments, pause, withdrawal and configurable photos on PostgreSQL
         run: npm --prefix api run db:test:lot-management:compose
+      - name: K043 incident reports, versions and recipients under the lot lock on PostgreSQL
+        run: npm --prefix api run db:test:incidents:compose
       - name: K025 reservation races and pickup deadlines with worker running and stopped
         run: npm --prefix api run db:test:reservations:compose
       - name: K027 waitlist, partial offers and expiry on empty PostgreSQL

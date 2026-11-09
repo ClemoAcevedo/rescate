@@ -27,6 +27,7 @@ const migrations = [
   '1791700000000_worker-heartbeat',
   '1791800000000_chat-messages',
   '1791900000000_lot-management',
+  '1792000000000_incidents',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -429,7 +430,8 @@ try {
 
   // K014, K022, los consentimientos, la cola, los avisos, K034, K036 y K037 solo agregan tablas: las previas conservan OID.
   const latest = await snapshot()
-  const beforeManagement = latest.filter(row => row.relname !== 'lot_operations')
+  const beforeIncidents = latest.filter(row => !['incidents', 'incident_versions', 'incident_recipients'].includes(row.relname))
+  const beforeManagement = beforeIncidents.filter(row => row.relname !== 'lot_operations')
   const beforeChat = beforeManagement.filter(row => row.relname !== 'chat_messages')
   const beforeHeartbeat = beforeChat.filter(row => row.relname !== 'worker_heartbeat')
   const withIndex = beforeHeartbeat.filter(row => !['pickup_code_security_state', 'pickup_code_failures'].includes(row.relname))
@@ -459,6 +461,10 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.deepEqual(await snapshot(), beforeIncidents)
+  for (const table of ['incidents', 'incident_versions', 'incident_recipients']) assert.equal((await query(`SELECT to_regclass('public.${table}') AS name`))[0].name, null)
+  ok('rollback K043 retira solo las incidencias y sus tipos')
   run('down', '1')
   assert.deepEqual(await snapshot(), beforeManagement)
   assert.equal((await query("SELECT to_regclass('public.lot_operations') AS name"))[0].name, null)
@@ -586,7 +592,7 @@ try {
   assert.deepEqual((await history())[0], applied[0])
   ok('upgrade desde K002/reaplicación: solo K003, sin alterar K002')
   await verifyModel(['lot_photos', 'deliveries', 'user_consents', 'waitlist_entries', 'outbox_events', 'notifications',
-    'pickup_code_security_state', 'pickup_code_failures', 'worker_heartbeat', 'chat_messages', 'lot_operations'])
+    'pickup_code_security_state', 'pickup_code_failures', 'worker_heartbeat', 'chat_messages', 'lot_operations', 'incidents', 'incident_versions', 'incident_recipients'])
   await verifyIdentitySchema(client)
   const reapplied = await history()
   run('up')

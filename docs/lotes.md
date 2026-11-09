@@ -256,8 +256,8 @@ reservas, pausa, cola, retiro contra entrega, invalidación, avisos y vencimient
 lote pausado en PostgreSQL real. `test:web:lot-management` recorre la interfaz a 360 px,
 incluida una respuesta perdida después del commit; forma parte de `test:web:compose`.
 
-Los reportes, versiones, instrucciones y seguimiento de incidencias siguen en
-[K043](https://github.com/ClemoAcevedo/rescate/issues/46) (Felipe Arnolds),
+Los reportes, versiones, instrucciones y destinatarios están en
+[incidencias](incidencias.md). Sus avisos, cierre, vistas y pruebas de seguimiento siguen en
 [K044](https://github.com/ClemoAcevedo/rescate/issues/49) (Clemente Acevedo),
 [K045](https://github.com/ClemoAcevedo/rescate/issues/47) (Jorge Molina),
 [K046](https://github.com/ClemoAcevedo/rescate/issues/48) (Felipe Espinoza) y

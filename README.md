@@ -289,7 +289,8 @@ lo cambia.
   (K030), panel del establecimiento con compromisos, historial y resultados por período
   sobre lotes cerrados (K035), chat de la reserva entre titular y establecimiento con
   secuencia, reintentos sin duplicar, aviso a la otra parte y cierre al cancelar, vencer o retirar
-  (K037, [chat](docs/chat.md)),
+  (K037, [chat](docs/chat.md)), incidencias con reporte, versiones y destinatarios fijados
+  bajo el bloqueo del lote (K043, [incidencias](docs/incidencias.md)),
   según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y

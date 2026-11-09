@@ -11,6 +11,7 @@ import { MAX_PERIOD_DAYS, PeriodRuleError } from "../domain/panel.js"
 import { ReservationRuleError, ReservationTransitionError } from "../domain/reservations.js"
 import { ChatRuleError, MESSAGE_MAX_LENGTH } from "../domain/chat.js"
 import { WaitlistTransitionError } from "../domain/waitlist.js"
+import { INCIDENT_TEXT_MAX_LENGTH, IncidentRuleError } from "../domain/incidents.js"
 import type { HttpSchemas } from "./openapi.js"
 
 type ErrorBody = HttpSchemas["ErrorResponse"]
@@ -37,6 +38,8 @@ const errors = {
   waitlist_entry_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   notification_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
   pickup_review_suspended: [429, "RATE_LIMITED", "Se suspendió la revisión de códigos por intentos fallidos. Intenta nuevamente después del tiempo indicado."],
+  incident_not_found: [404, "NOT_FOUND", "Recurso inexistente."],
+  incident_version_conflict: [409, "CONFLICT", "La incidencia cambió. Vuelve a consultarla antes de reintentar."],
 } as const
 const transitions = {
   cancelled: "La reserva fue cancelada.",
@@ -92,6 +95,10 @@ export function handleError(error: unknown, response: Response, log: Log): void 
     if (error.reason === "invalid_text") sendError(response, 422, "VALIDATION_ERROR", "Revisa el mensaje.",
       [{ path: "/text", message: `Escribe entre 1 y ${MESSAGE_MAX_LENGTH} caracteres.` }])
     else sendError(response, 409, "CONFLICT", "La conversación está cerrada porque la reserva terminó.")
+  } else if (error instanceof IncidentRuleError) {
+    if (error.reason === "invalid_transition") sendError(response, 409, "CONFLICT", "El estado de la incidencia no permite esta operación.")
+    else sendError(response, 422, "VALIDATION_ERROR", "Revisa los campos indicados.",
+      [{ path: error.reason === "invalid_reason" ? "/reason" : "/instructions", message: `Escribe entre 1 y ${INCIDENT_TEXT_MAX_LENGTH} caracteres.` }])
   } else if (error instanceof WaitlistTransitionError) {
     sendError(response, 409, "CONFLICT", waitlistTransitions[error.reason])
   } else if (error instanceof PhotoRuleError) {
