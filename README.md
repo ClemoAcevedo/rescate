@@ -290,14 +290,16 @@ lo cambia.
   sobre lotes cerrados (K035), chat de la reserva entre titular y establecimiento con
   secuencia, reintentos sin duplicar, aviso a la otra parte y cierre al cancelar, vencer o retirar
   (K037, [chat](docs/chat.md)), incidencias con reporte, versiones y destinatarios fijados
-  bajo el bloqueo del lote (K043, [incidencias](docs/incidencias.md)),
+  bajo el bloqueo del lote (K043), cierre explícito por incidencia que conserva entregas y
+  avisos recuperables por versión (K044, [incidencias](docs/incidencias.md)),
   según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y
   salud con PostgreSQL y el último ciclo del worker ([operación](docs/operacion.md), K036).
 - **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
-  (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
+  (K030); convierte destinatarios de incidencias en eventos por tandas de hasta 50 y
+  recupera sus avisos con la misma concesión y reintentos (K044); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
   Registra su último ciclo exitoso y la demora y las tareas en error de cada cola;
   `ops:status` las consulta (K036). Borra una vez al día el texto de los chats cerrados hace
   más de treinta días (K037).

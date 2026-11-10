@@ -1529,7 +1529,7 @@ paths:
     post:
       operationId: createIncidentVersion
       summary: Publicar, actualizar o resolver una incidencia
-      description: "Solo operadores miembros actuales; una incidencia inexistente o de otro establecimiento responde 404. Requiere la versión vigente (0 antes de publicar), motivo, instrucciones y UUID de intención. Publicar pasa de reportada a abierta; actualizar, de abierta o en seguimiento a en seguimiento; resolver, a resuelta, sin reabrir el lote ni rehabilitar códigos. Bajo el bloqueo del lote fija un destinatario por persona. La misma clave y parámetros reproducen 201 y el cuerpo original, que puede ser histórico; otros parámetros responden 409."
+      description: "Solo operadores miembros actuales; una incidencia inexistente o de otro establecimiento responde 404. Requiere la versión vigente (0 antes de publicar), motivo, instrucciones y UUID de intención. Publicar pasa de reportada a abierta; actualizar, de abierta o en seguimiento a en seguimiento; resolver, a resuelta, sin reabrir el lote ni rehabilitar códigos. Bajo el bloqueo del lote fija un destinatario por persona y persiste el trabajo de aviso. closeLot (false por defecto) decide explícitamente cerrar: cancela pendientes, invalida códigos y mueve F/O/R a X, conservando E. No extiende un cierre vencido. Los avisos se generan por tandas recuperables de hasta 50. La misma clave y parámetros reproducen 201 y el cuerpo original, que puede ser histórico; otros parámetros responden 409."
       tags: [Incidents]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -1924,10 +1924,11 @@ components:
         reason: { $ref: "#/components/schemas/IncidentText" }
         instructions: { $ref: "#/components/schemas/IncidentText" }
         idempotencyKey: { type: string, format: uuid }
+        closeLot: { type: boolean, default: false, description: "Decisión explícita de cerrar el lote junto con la versión. Un cierre previo se conserva." }
     IncidentVersionResult:
       type: object
       additionalProperties: false
-      required: [incidentId, version, status, reason, instructions, publishedAt]
+      required: [incidentId, version, status, reason, instructions, publishedAt, closeLot, lotClosed]
       properties:
         incidentId: { $ref: "#/components/schemas/PublicId" }
         version: { type: integer, minimum: 1 }
@@ -1935,16 +1936,20 @@ components:
         reason: { $ref: "#/components/schemas/IncidentText" }
         instructions: { $ref: "#/components/schemas/IncidentText" }
         publishedAt: { $ref: "#/components/schemas/Instant" }
+        closeLot: { type: boolean, description: "Decisión de cierre de este comando." }
+        lotClosed: { type: boolean, description: "El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores." }
     IncidentVersionSummary:
       type: object
       additionalProperties: false
-      required: [version, status, reason, instructions, publishedAt, recipientCount]
+      required: [version, status, reason, instructions, publishedAt, recipientCount, closeLot, lotClosed]
       properties:
         version: { type: integer, minimum: 1 }
         status: { $ref: "#/components/schemas/PublishedIncidentStatus" }
         reason: { $ref: "#/components/schemas/IncidentText" }
         instructions: { $ref: "#/components/schemas/IncidentText" }
         publishedAt: { $ref: "#/components/schemas/Instant" }
+        closeLot: { type: boolean, description: "Decisión de cierre de este comando." }
+        lotClosed: { type: boolean, description: "El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores." }
         recipientCount: { type: integer, minimum: 0, description: "Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores." }
     Incident:
       type: object
@@ -2246,8 +2251,20 @@ components:
         deliveredAt: { $ref: "#/components/schemas/Instant" }
     NotificationKind:
       type: string
-      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled, message_from_holder, message_from_establishment]
+      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled, message_from_holder, message_from_establishment, incident_version]
       description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva. message_from_holder llega a los operadores del local y message_from_establishment al titular cuando la otra parte escribe en el chat de la reserva. No traen el texto, que se lee en la conversación."
+    IncidentNotice:
+      type: object
+      additionalProperties: false
+      required: [id, version, status, reason, instructions, relation, lotClosed]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        version: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/PublishedIncidentStatus" }
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        instructions: { $ref: "#/components/schemas/IncidentText" }
+        relation: { type: string, enum: [received, committed, operator], description: "Vínculo al fijar el destinatario; sin identidades ajenas." }
+        lotClosed: { type: boolean }
     Notification:
       type: object
       additionalProperties: false
@@ -2265,10 +2282,11 @@ components:
           properties:
             id: { $ref: "#/components/schemas/PublicId" }
             description: { type: string }
-        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados según el tipo." }
+        quantity: { type: integer, minimum: 0, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados; 0 en avisos de incidencia, que afectan al lote completo." }
         waitlistEntryId: { type: [string, "null"], description: "Solicitud de espera relacionada; null en una cancelación." }
         reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta. En los avisos de mensaje es la reserva de la conversación." }
         offerExpiresAt: { type: [string, "null"], format: date-time, description: "Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo." }
+        incident: { $ref: "#/components/schemas/IncidentNotice", description: "Solo en incident_version. Conserva motivo e instrucciones de la versión avisada." }
     NotificationPage:
       type: object
       additionalProperties: false

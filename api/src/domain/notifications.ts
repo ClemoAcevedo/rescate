@@ -2,8 +2,19 @@
 // SQL, HTTP ni el reloj; reciben los instantes y la aleatoriedad como valores.
 
 export const NOTIFICATION_KINDS = ['offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled',
-  'message_from_holder', 'message_from_establishment'] as const
+  'message_from_holder', 'message_from_establishment', 'incident_version'] as const
 export type NotificationKind = typeof NOTIFICATION_KINDS[number]
+
+/** Versión que se comunicó; nunca se sustituye por el estado de una versión posterior. */
+export interface IncidentNotice {
+  id: string
+  version: number
+  status: 'open' | 'following' | 'resolved'
+  reason: string
+  instructions: string
+  relation: 'received' | 'committed' | 'operator'
+  lotClosed: boolean
+}
 
 /**
  * Lo que el aviso muestra, tomado bajo el bloqueo de la transición. Identifica la solicitud
@@ -17,6 +28,7 @@ export interface NotificationPayload {
   reservationId: string | null
   /** Solo en una oferta emitida: hasta cuándo se puede aceptar. */
   offerExpiresAt: string | null
+  incident?: IncidentNotice
 }
 
 /** Evento de una transición, con un destinatario; el worker genera su aviso. */

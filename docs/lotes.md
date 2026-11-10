@@ -256,10 +256,10 @@ reservas, pausa, cola, retiro contra entrega, invalidación, avisos y vencimient
 lote pausado en PostgreSQL real. `test:web:lot-management` recorre la interfaz a 360 px,
 incluida una respuesta perdida después del commit; forma parte de `test:web:compose`.
 
-Los reportes, versiones, instrucciones y destinatarios están en
-[incidencias](incidencias.md). Sus avisos, cierre, vistas y pruebas de seguimiento siguen en
-[K044](https://github.com/ClemoAcevedo/rescate/issues/49) (Clemente Acevedo),
-[K045](https://github.com/ClemoAcevedo/rescate/issues/47) (Jorge Molina),
-[K046](https://github.com/ClemoAcevedo/rescate/issues/48) (Felipe Espinoza) y
-[K047](https://github.com/ClemoAcevedo/rescate/issues/51) (Vicente Reñasco).
-El cierre voluntario no implementa ese circuito de incidencias.
+Los reportes, versiones, instrucciones, destinatarios y el cierre por incidencia están en
+[incidencias](incidencias.md). El cierre usa el mismo protocolo que el retiro voluntario,
+pero confirma también la versión y sus destinatarios; sus avisos se generan por tandas.
+Las vistas específicas y la regresión de seguimiento siguen en
+[K045](https://github.com/ClemoAcevedo/rescate/issues/47),
+[K046](https://github.com/ClemoAcevedo/rescate/issues/48) y
+[K047](https://github.com/ClemoAcevedo/rescate/issues/51).

@@ -28,6 +28,7 @@ const migrations = [
   '1791800000000_chat-messages',
   '1791900000000_lot-management',
   '1792000000000_incidents',
+  '1792100000000_incident-delivery',
 ]
 const identityMigrations = migrations.slice(0, 5)
 assert.deepEqual(readdirSync('migrations').sort(), migrations.map(name => `${name}.sql`),
@@ -461,6 +462,10 @@ try {
   const membershipsBeforeDown = await query('SELECT * FROM memberships ORDER BY id')
   assert.ok((await query("SELECT PostGIS_Version() AS version"))[0].version)
   assert.ok((await query("SELECT to_regclass('public.lots_public_location_idx') AS name"))[0].name)
+  run('down', '1')
+  assert.deepEqual(await snapshot(), latest)
+  assert.equal((await query("SELECT count(*)::int n FROM information_schema.columns WHERE table_schema='public' AND table_name='incident_recipients' AND column_name='outbox_event_id'"))[0].n, 0)
+  ok('rollback K044 conserva las tablas y retira el enlace al outbox y los datos de cierre')
   run('down', '1')
   assert.deepEqual(await snapshot(), beforeIncidents)
   for (const table of ['incidents', 'incident_versions', 'incident_recipients']) assert.equal((await query(`SELECT to_regclass('public.${table}') AS name`))[0].name, null)

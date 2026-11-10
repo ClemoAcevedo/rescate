@@ -5,7 +5,7 @@ import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
 import { lotReconciledSql, settleQueue } from './waitlist-queue.js'
-import { appendEvent, lotSnapshot } from './outbox.js'
+import { closeLot } from './lot-closure.js'
 
 type Db = Pick<PoolClient, 'query'>
 async function readView(db: Db, lotId: string): Promise<LotManagementView> {
@@ -74,24 +74,8 @@ export function createLotManagementRepository(pool: Pool): LotManagementReposito
               'UPDATE public.lots SET expired_quantity=expired_quantity+$2 WHERE id=$1', [locked.lotId, command.quantity])
             if (command.action === 'pause' || command.action === 'resume') await client.query(
               'UPDATE public.lots SET paused_at=$2 WHERE id=$1', [locked.lotId, command.action === 'pause' ? locked.at : null])
-            if (command.action === 'withdraw') {
-              await client.query("UPDATE public.lots SET status='withdrawn', closed_at=$2, paused_at=NULL WHERE id=$1", [locked.lotId, locked.at])
-              const cancelled = await client.query<{ id: string; public_id: string; user_id: string; quantity: number }>(
-                `UPDATE public.commitments SET status='cancelled', ended_at=$2, pickup_code_ciphertext=NULL
-                 WHERE lot_id=$1 AND status='confirmed' RETURNING id::text, public_id::text, user_id::text, quantity`, [locked.lotId, locked.at])
-              const packs = cancelled.rows.reduce((sum, reservation) => sum+reservation.quantity, 0)
-              await client.query(`UPDATE public.lots SET reserved_quantity=reserved_quantity-$2,
-                expired_quantity=expired_quantity+$2 WHERE id=$1`, [locked.lotId, packs])
-              const snapshot = await lotSnapshot(client, locked.lotId)
-              for (const reservation of cancelled.rows) await appendEvent(client, reservation.id, {
-                kind: 'reservation_cancelled', recipientUserId: reservation.user_id,
-                payload: { lot: snapshot, quantity: reservation.quantity, waitlistEntryId: null,
-                  reservationId: reservation.public_id, offerExpiresAt: null },
-              }, locked.at)
-            }
-            await settleQueue(client, locked.lotId, locked.at)
-            if (command.action === 'withdraw') await client.query(
-              'UPDATE public.lots SET expired_quantity=expired_quantity+free_quantity WHERE id=$1', [locked.lotId])
+            if (command.action === 'withdraw') await closeLot(client, locked.lotId, 'withdrawn', locked.at)
+            else await settleQueue(client, locked.lotId, locked.at)
             await client.query('UPDATE public.lots SET version=version+1, updated_at=$2 WHERE id=$1', [locked.lotId, locked.at])
             const current = await readView(client, lotId)
             const operation: LotOperation = { id: randomUUID(), action: command.action, quantity: command.quantity ?? null,

@@ -111,6 +111,9 @@ export type NotificationKind =
   | "reservation_cancelled"
   | "message_from_holder"
   | "message_from_establishment"
+  | "incident_version"
+export type PublishedIncidentStatus = "open" | "following" | "resolved"
+export type IncidentText = string
 /**
  * Fecha calendario en la zona del establecimiento, sin hora.
  */
@@ -138,8 +141,6 @@ export type ActivityKind =
   | "offer_expired"
   | "waitlist_left"
   | "waitlist_expired"
-export type IncidentText = string
-export type PublishedIncidentStatus = "open" | "following" | "resolved"
 /**
  * reported: pendiente de revisión; open: publicada; following: en seguimiento; resolved: resuelta.
  */
@@ -673,7 +674,7 @@ export interface Notification {
     description: string
   }
   /**
-   * Packs ofrecidos, confirmados o cancelados según el tipo.
+   * Packs ofrecidos, confirmados o cancelados; 0 en avisos de incidencia, que afectan al lote completo.
    */
   quantity: number
   /**
@@ -688,6 +689,22 @@ export interface Notification {
    * Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo.
    */
   offerExpiresAt: string | null
+  incident?: IncidentNotice
+}
+/**
+ * Solo en incident_version. Conserva motivo e instrucciones de la versión avisada.
+ */
+export interface IncidentNotice {
+  id: PublicId
+  version: number
+  status: PublishedIncidentStatus
+  reason: IncidentText
+  instructions: IncidentText
+  /**
+   * Vínculo al fijar el destinatario; sin identidades ajenas.
+   */
+  relation: "received" | "committed" | "operator"
+  lotClosed: boolean
 }
 export interface NotificationPage {
   /**
@@ -935,6 +952,10 @@ export interface IncidentVersionRequest {
   reason: IncidentText
   instructions: IncidentText
   idempotencyKey: string
+  /**
+   * Decisión explícita de cerrar el lote junto con la versión. Un cierre previo se conserva.
+   */
+  closeLot?: boolean
 }
 export interface IncidentVersionResult {
   incidentId: PublicId
@@ -943,6 +964,14 @@ export interface IncidentVersionResult {
   reason: IncidentText
   instructions: IncidentText
   publishedAt: Instant
+  /**
+   * Decisión de cierre de este comando.
+   */
+  closeLot: boolean
+  /**
+   * El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores.
+   */
+  lotClosed: boolean
 }
 export interface IncidentVersionSummary {
   version: number
@@ -950,6 +979,14 @@ export interface IncidentVersionSummary {
   reason: IncidentText
   instructions: IncidentText
   publishedAt: Instant
+  /**
+   * Decisión de cierre de este comando.
+   */
+  closeLot: boolean
+  /**
+   * El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores.
+   */
+  lotClosed: boolean
   /**
    * Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores.
    */

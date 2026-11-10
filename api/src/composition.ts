@@ -43,8 +43,8 @@ import { createPanelRouter } from "./http/panel-router.js"
 import { createChatRetention, createChatUseCases } from "./application/chat/use-cases.js"
 import { createChatRepository } from "./infrastructure/postgres/chat-repository.js"
 import { createChatRouter } from "./http/chat-router.js"
-import { createIncidentUseCases } from "./application/incidents/use-cases.js"
-import { createIncidentRepository } from "./infrastructure/postgres/incident-repository.js"
+import { createIncidentDispatcher, createIncidentUseCases } from "./application/incidents/use-cases.js"
+import { createIncidentDispatchRepository, createIncidentRepository } from "./infrastructure/postgres/incident-repository.js"
 import { createIncidentsRouter } from "./http/incidents-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
@@ -193,6 +193,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
   const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
   const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
+  const incidentDispatch = createIncidentDispatcher(createIncidentDispatchRepository(pool))
   const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), Math.random, log)
   const chat = createChatRetention(createChatRepository(pool), log)
   let running = true
@@ -217,6 +218,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
           // Un lote, una foto y una tanda de avisos por vuelta: ninguna cola atrasa a las otras.
           const expired = expiries ? await expiries.expireNext() : false
           const processed = photos ? await photos.processNext() : false
+          const dispatched = (await incidentDispatch.processNext()) > 0
           const delivered = (await outbox.processNext()) > 0
           // K036: el latido marca el último ciclo exitoso; la salud de la API lo lee. Cada
           // minuto se registra la demora y las tareas en error de cada cola.
@@ -233,7 +235,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
             await chat.eraseExpired()
             nextChatRetention = Date.now() + 24 * 60 * 60 * 1000
           }
-          if (!expired && !processed && !delivered) await pause(2000)
+          if (!expired && !processed && !dispatched && !delivered) await pause(2000)
         } catch (error) {
           // Sin SQL, rutas ni credenciales en el registro; se reintenta más tarde.
           log({ event: "worker_error", code: errorCode(error) })
