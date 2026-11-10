@@ -5,6 +5,7 @@ import path from 'node:path';
 export const MAX_PATCH_CHARS = 60_000;
 export const MAX_CONTEXT_CHARS = 30_000;
 export const MAX_BATCHES = 16;
+export const MAX_FILES_PER_BATCH = 8;
 const exec = promisify(execFile);
 const shaPattern = /^[a-f0-9]{40}$/;
 const cost = (value) => JSON.stringify(value).length;
@@ -107,7 +108,7 @@ function priority(file) {
   return 3;
 }
 
-export function planReview(files, { budget = MAX_PATCH_CHARS, maxBatches = MAX_BATCHES } = {}) {
+export function planReview(files, { budget = MAX_PATCH_CHARS, maxBatches = MAX_BATCHES, maxFiles = MAX_FILES_PER_BATCH } = {}) {
   const batches = [];
   const omitted = [];
   let batch = [];
@@ -122,7 +123,8 @@ export function planReview(files, { budget = MAX_PATCH_CHARS, maxBatches = MAX_B
     }
     for (const patch of patches) {
       const fragment = { filename: file.filename, previous_filename: file.previous_filename, status: file.status, patch };
-      if (cost([...batch, fragment]) > budget) flush();
+      const paths = new Set(batch.map(item => item.filename));
+      if (cost([...batch, fragment]) > budget || (!paths.has(file.filename) && paths.size >= maxFiles)) flush();
       if (batches.length >= maxBatches) {
         omitted.push({ path: file.filename, reason: 'Se alcanzó el límite de lotes; quedan fragmentos sin revisar.' });
         break;

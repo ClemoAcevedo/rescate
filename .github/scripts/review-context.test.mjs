@@ -174,3 +174,29 @@ test('area docs are bounded so large business documents leave room for dependenc
   assert.ok(context.snippets.some(item => item.path === 'web/src/services/chat-service.ts'));
   assert.ok(encoded(context.snippets) <= 5000);
 });
+
+test('PR195 regression: many small files cannot crowd one batch or lose changed lines', () => {
+  const files = Array.from({ length: 27 }, (_, index) => ({ ...file, filename: `api/src/file-${index}.ts` }));
+  const plan = planReview(files);
+  assert.equal(plan.omitted.length, 0);
+  assert.equal(plan.batches.length, 4);
+  assert.equal(new Set(plan.batches.flat().map(item => item.filename)).size, 27);
+  for (const batch of plan.batches) {
+    assert.ok(new Set(batch.map(item => item.filename)).size <= 8);
+    assert.ok(encoded(batch) <= MAX_PATCH_CHARS);
+  }
+  for (const original of files) for (const side of ['LEFT', 'RIGHT']) {
+    const combined = new Map(plan.batches.flat().filter(item => item.filename === original.filename)
+      .flatMap(item => [...patchLines(item.patch, side, true)]));
+    assert.deepEqual(combined, patchLines(original.patch, side, true));
+  }
+});
+
+test('a file-count cap preserves the explicit pending paths and the batch limit', () => {
+  const files = Array.from({ length: 17 }, (_, index) => ({ ...file, filename: `api/src/file-${index}.ts` }));
+  const plan = planReview(files, { maxBatches: 1 });
+  assert.equal(plan.batches.length, 1);
+  assert.equal(new Set(plan.batches[0].map(item => item.filename)).size, 8);
+  assert.equal(plan.omitted.length, 9);
+  assert.equal(new Set([...plan.batches.flat().map(item => item.filename), ...plan.omitted.map(item => item.path)]).size, 17);
+});

@@ -259,7 +259,7 @@ incluida una respuesta perdida después del commit; forma parte de `test:web:com
 Los reportes, versiones, instrucciones, destinatarios y el cierre por incidencia están en
 [incidencias](incidencias.md). El cierre usa el mismo protocolo que el retiro voluntario,
 pero confirma también la versión y sus destinatarios; sus avisos se generan por tandas.
-Las vistas específicas y la regresión de seguimiento siguen en
-[K045](https://github.com/ClemoAcevedo/rescate/issues/47),
+El historial y el detalle del destinatario conservan las versiones publicadas y su lectura.
+La gestión del operador y la regresión de seguimiento corresponden a
 [K046](https://github.com/ClemoAcevedo/rescate/issues/48) y
 [K047](https://github.com/ClemoAcevedo/rescate/issues/51).

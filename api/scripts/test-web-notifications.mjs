@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createInterface } from 'node:readline/promises'
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
 import { chromium } from './support/browser.mjs'
@@ -163,11 +164,102 @@ try {
   await page.reload()
   await page.getByRole('article', { name: 'Incidencia resuelta', exact: true }).waitFor({ timeout: 20000 })
   assert.equal((await db.query('SELECT status FROM lots WHERE public_id=$1', [lotId])).rows[0].status, 'withdrawn')
+  // K045: historial y URL propias sobre las versiones reales publicadas arriba.
+  await page.getByRole('link', { name: 'Ver historial de incidencias', exact: true }).click()
+  await page.getByRole('heading', { name: 'Historial de incidencias', exact: true }).waitFor()
+  await page.getByRole('article', { name: 'Aviso de incidencia', exact: true }).waitFor()
+  assert.equal(await page.getByRole('article').count(), 2, 'el historial conserva la versión leída y la resuelta')
+  const history = await bea.call('GET', '/notifications?kind=incident_version')
+  const original = history.body.items.find(item => item.incident.version === 1)
+  assert.ok(original.readAt)
+  assert.equal((await bea.call('GET', `/notifications/${cataNotice}`)).status, 404)
+  // El texto del chat ya pasó su retención; las instrucciones de la versión siguen disponibles.
+  await db.query(`UPDATE lots SET pickup_starts_at=now()-interval '42 days', pickup_ends_at=now()-interval '41 days',
+    closed_at=now()-interval '41 days' WHERE public_id=$1`, [lotId])
+  await db.query(`UPDATE commitments SET ended_at=now()-interval '41 days' WHERE lot_id=(SELECT id FROM lots WHERE public_id=$1)`, [lotId])
+  await db.query(`INSERT INTO chat_messages(commitment_id,author_user_id,sequence,idempotency_key,body,created_at)
+    SELECT c.id,c.user_id,1,$2,NULL,now()-interval '42 days' FROM commitments c WHERE c.public_id=$1`,
+    [cataReservation.body.id, randomUUID()])
+  const retainedChat = await cata.call('GET', `/reservations/${cataReservation.body.id}/messages`)
+  assert.equal(retainedChat.status, 200)
+  assert.equal(retainedChat.body.open, false)
+  assert.deepEqual(retainedChat.body.items, [])
+  await page.goto(`${baseUrl}/incidencias/${original.id}`)
+  await page.getByRole('heading', { name: 'Instrucciones', exact: true }).waitFor()
+  await page.getByText('Sin entrega registrada al fijarse esta versión:', { exact: false }).waitFor()
+  await page.getByRole('button', { name: 'Leído', exact: true }).waitFor()
+  for (const width of [360,1366]) {
+    await page.setViewportSize({ width, height: 800 })
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  }
+  const originalReadAt = (await bea.call('GET', `/notifications/${original.id}`)).body.readAt
+  await page.reload()
+  await page.getByRole('button', { name: 'Leído', exact: true }).waitFor()
+  assert.equal((await bea.call('GET', `/notifications/${original.id}`)).body.readAt, originalReadAt)
+  await page.goto(`${baseUrl}/incidencias/${cataNotice}`)
+  await page.getByText('El aviso no existe o no pertenece a tu cuenta.', { exact: true }).waitFor()
+  assert.equal(await page.locator('.incident-detail').count(), 0)
+  // Titular con entrega acreditada: publicación real de otra incidencia, sin cerrar la entrega.
+  const deliveredLot = (await db.query(`INSERT INTO lots (establishment_id,description,category,quantity,address,latitude,longitude,
+    time_zone,pickup_starts_at,pickup_ends_at,status,published_at) VALUES ($1,'Lote con entrega K045','Prueba',1,
+    'Santiago',-33.45,-70.66,'America/Santiago',now()-interval '1 hour',now()+interval '2 hours','published',now())
+    RETURNING public_id::text AS id`, [establishment])).rows[0].id
+  const deliveryReservation = await cata.call('POST', `/public/lots/${deliveredLot}/reservations`, { quantity: 1, idempotencyKey: randomUUID() })
+  const code = (await cata.call('GET', `/reservations/${deliveryReservation.body.id}`)).body.pickupCode
+  const pickup = await ana.call('POST', `/lots/${deliveredLot}/pickups`, { reservationId: deliveryReservation.body.id, code, idempotencyKey: randomUUID() })
+  assert.equal(pickup.status, 201)
+  const deliveredIncident = await cata.call('POST', `/lots/${deliveredLot}/incidents`, { reason: 'Problema tras entregar', idempotencyKey: randomUUID() })
+  assert.equal((await ana.call('POST', `/incidents/${deliveredIncident.body.id}/versions`, {
+    ...version, reason: 'Problema tras entregar', idempotencyKey: randomUUID(),
+  })).status, 201)
+  const cataPage = await cata.context.newPage()
+  await cataPage.goto(`${baseUrl}/incidencias`)
+  const deliveredCard = cataPage.getByRole('article', { name: 'Aviso de incidencia', exact: true }).filter({ hasText: 'Lote con entrega K045' })
+  await deliveredCard.waitFor({ timeout: 20000 })
+  await deliveredCard.getByRole('link', { name: 'Ver incidencia', exact: true }).click()
+  await cataPage.getByText('Con entrega: recibiste packs', { exact: false }).waitFor()
+  await cataPage.getByRole('button', { name: 'Marcar como leído', exact: true }).click()
+  await cataPage.getByRole('button', { name: 'Leído', exact: true }).waitFor()
+  await cataPage.getByText('No acredita que hayas cumplido las instrucciones.', { exact: false }).waitFor()
+  ok('K045: historial de versiones reales, instrucciones tras retención del chat, primera lectura, privacidad y destinatario con entrega')
+
   ok('K044: cerrar por HTTP, reintentar, reconectar, leer instrucciones largas a 360/1366 px, privacidad y resolución sin reapertura')
 
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(rateLimited, [], 'la prueba no debe depender de respuestas 429')
   console.log('K030 web notifications: real API, worker, proxy, CSRF, polling, reconnect, read and permissions checks passed')
+
+  if (process.env.MANUAL_INCIDENTS === '1') {
+    console.log(`\nDemo manual K045 lista: ${baseUrl}/login?from=%2Fincidencias`)
+    console.log(`Cuenta con entrega: ${cata.email}`)
+    console.log(`Cuenta sin entrega: ${bea.email}`)
+    console.log(`Contraseña de ambas cuentas: ${password}`)
+    const ownNotice = (await cata.call('GET', '/notifications?kind=incident_version')).body.items
+      .find(item => item.incident.id === deliveredIncident.body.id)
+    console.log(`URL propia de la cuenta con entrega: ${baseUrl}/incidencias/${ownNotice.id}`)
+    console.log('Con la cuenta sin entrega, esa URL debe rechazar el acceso.')
+    console.log('Comandos: aviso (publica otra versión real para la cuenta con entrega) | salir.')
+    console.log('Para reconexión: abre /avisos, activa Offline en DevTools, escribe aviso aquí y vuelve a Online.')
+    let currentVersion = 1
+    const input = createInterface({ input: process.stdin, output: process.stdout })
+    input.on('SIGINT', () => input.close())
+    try {
+      for await (const line of input) {
+        const command = line.trim()
+        if (command === 'salir') break
+        if (command !== 'aviso') { console.log('Comandos: aviso | salir'); continue }
+        const updated = await ana.call('POST', `/incidents/${deliveredIncident.body.id}/versions`, {
+          action: 'update', version: currentVersion, reason: 'Seguimiento de la incidencia para prueba manual',
+          instructions: 'Nueva versión para comprobar recuperación al reconectar. Contactar al establecimiento.',
+          closeLot: false, idempotencyKey: randomUUID(),
+        })
+        if (updated.status !== 201) { console.log(`No se pudo publicar la versión (${updated.status}).`); continue }
+        currentVersion = updated.body.version
+        console.log(`Versión ${currentVersion} publicada. El worker generará un aviso sin leer.`)
+      }
+    } finally { input.close() }
+  }
+
 } finally {
   await Promise.all(contexts.map((context) => context.close()))
   await browser.close()

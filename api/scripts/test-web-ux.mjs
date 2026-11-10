@@ -31,9 +31,14 @@ const panel = { establishment: { id: 'est_ux', name: 'Almacén ficticio', timeZo
     excluded: { openLots: 2, draftLots: 0 } } }
 const notification = { id: 'notice_ux', kind: 'reservation_confirmed', createdAt: instant, readAt: null,
   lot: { id: lot.id, description: lot.description }, quantity: 2, waitlistEntryId: null, reservationId: reservation.id, offerExpiresAt: null }
+const incidentNotification = { ...notification, id: 'notice_incident', kind: 'incident_version', incident: {
+  id: 'incident_ux', version: 1, status: 'open', reason: 'Contenido incorrecto.',
+  instructions: 'No consumir. Contactar al local.', relation: 'received', lotClosed: true,
+} }
 const operatorLot = { ...lot, establishmentId: 'est_ux', status: 'published', version: 1, reservedQuantity: 2, paused: false,
   createdAt: instant, publishedAt: instant }
 const fixtures = {
+  '/api/notifications/notice_incident': incidentNotification,
   '/api/public/lots': { items: [0, 1, 2].map(index => ({ ...lot, id: `lot_${index}` })), page: 1, hasNextPage: false },
   '/api/public/lots/lot_ux': lot,
   '/api/reservations': { items: [0, 1, 2].map(index => ({ ...reservation, id: `res_${index}` })), page: 1, hasNextPage: false },
@@ -52,6 +57,8 @@ const screens = [
   { path: '/lotes', target: '/api/public/lots', selector: '.lot-card-public', props: ['x', 'y', 'width', 'height'] },
   { path: '/lotes/lot_ux', target: '/api/public/lots/lot_ux', selector: '.lot-gallery > .lot-photo', props: ['x', 'y', 'width', 'height'] },
   { path: '/reservas', target: '/api/reservations', selector: '.reservations__list > li, .record-skeleton > li', props: ['x', 'y', 'width', 'height'] },
+  { path: '/incidencias/notice_incident', target: '/api/notifications/notice_incident', selector: '.incident-detail, .incident-detail__action', props: ['x', 'width'] },
+  { path: '/incidencias', target: '/api/notifications', selector: '.notifications__list .notification', props: ['x', 'width'] },
   { path: '/avisos', target: '/api/notifications', selector: '.notifications__list .notification', props: ['x', 'y', 'width', 'height'] },
   { path: '/reservas/res_ux/chat', target: '/api/reservations/res_ux/messages', selector: '.chat form', props: ['x', 'y', 'width', 'height'] },
   { path: '/operador/panel', target: '/api/establishments/est_ux/panel', selector: '.panel-stat', props: ['x', 'y', 'width', 'height'] },
@@ -75,7 +82,7 @@ function sameGeometry(before, after, props, label) {
 
 try {
   for (const width of [360, 1366]) {
-    for (const screen of screens) {
+    for (const screen of screens.filter(screen => !process.env.UX_PATHS || process.env.UX_PATHS.split(',').includes(screen.path))) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true,
         timezoneId: 'Asia/Tokyo', reducedMotion: 'reduce' })
       const page = await context.newPage()
@@ -89,7 +96,7 @@ try {
         if (path === '/api/auth/session') return route.fulfill({ json: { session, csrfToken: 'controlled' } })
         if (path === screen.target && pending) await held
         if (path === '/api/notifications') return route.fulfill({ json: {
-          items: [0, 1, 2].map(index => ({ ...notification, id: `notice_${index}` })), page: 1, hasNextPage: false, unreadCount: 3,
+          items: [0, 1, 2].map(index => ({ ...(screen.path === '/incidencias' ? incidentNotification : notification), id: `notice_${index}` })), page: 1, hasNextPage: false, unreadCount: 3,
         } })
         assert.ok(fixtures[path], `Ruta sin fixture: ${path}`)
         return route.fulfill({ json: fixtures[path] })
@@ -125,6 +132,57 @@ try {
         if (screen.path === '/avisos' || screen.path.endsWith('/chat')) {
           assert.equal(await page.locator('main time').first().innerText(), '15/01/2030 · 15:05')
           assert.match(await page.locator('main').innerText(), /America\/Santiago/)
+        }
+        if (screen.path === '/incidencias') {
+          const cards = await page.locator('.notification--incident').evaluateAll(elements => elements.map(card => {
+            const paragraphs = [...card.querySelectorAll('p')]
+            return { height: card.getBoundingClientRect().height,
+              natural: paragraphs.every(p => getComputedStyle(p).minBlockSize === '0px') }
+          }))
+          for (const card of cards) {
+            assert.ok(card.natural, 'los párrafos de incidencia no reservan líneas vacías')
+            assert.ok(card.height < (width === 360 ? 620 : 420), 'aviso corto con altura compacta')
+          }
+          let listRelease
+          const listHeld = new Promise(resolve => { listRelease = resolve })
+          await page.route('**/api/notifications?*', async route => {
+            await listHeld
+            await route.fulfill({ json: { items: [0, 1, 2].map(index => ({ ...incidentNotification, id: `notice_${index}` })), page: 1, hasNextPage: false, unreadCount: 3 } })
+          })
+          const stable = await boxes(page, '.notification--incident')
+          await page.evaluate(() => window.dispatchEvent(new Event('online')))
+          await page.locator('[aria-label="Bandeja de avisos"][aria-busy="true"]').waitFor()
+          sameGeometry(stable, await boxes(page, '.notification--incident'), ['x', 'y', 'width', 'height'], 'avisos durante refresco')
+          listRelease()
+          await page.locator('[aria-label="Bandeja de avisos"][aria-busy="false"]').waitFor()
+          sameGeometry(stable, await boxes(page, '.notification--incident'), ['x', 'y', 'width', 'height'], 'avisos actualizados')
+        }
+        if (screen.path === '/incidencias/notice_incident') {
+          // Texto de altura natural: no reservar líneas vacías para igualar una respuesta desconocida.
+          const compact = await page.locator('.incident-detail__text').evaluateAll(sections => sections.map(section => {
+            const heading = section.querySelector('h3').getBoundingClientRect()
+            const text = section.querySelector('p').getBoundingClientRect()
+            return { gap: text.top - heading.bottom, extra: section.getBoundingClientRect().height - heading.height - text.height }
+          }))
+          for (const section of compact) {
+            assert.ok(section.gap >= 0 && section.gap <= 8, 'título y texto separados por un solo token')
+            assert.ok(section.extra <= 8, 'sección sin alturas vacías')
+          }
+          assert.ok(await page.locator('.incident-detail').evaluate(card => card.getBoundingClientRect().height) < (width === 360 ? 850 : 620),
+            'el detalle corto debe mantenerse compacto')
+          let refreshRelease
+          const refreshHeld = new Promise(resolve => { refreshRelease = resolve })
+          await page.route('**/api/notifications/notice_incident', async route => {
+            await refreshHeld
+            await route.fulfill({ json: incidentNotification })
+          })
+          const settled = await boxes(page, '.incident-detail__text, .incident-detail__read')
+          await page.evaluate(() => window.dispatchEvent(new Event('online')))
+          await page.locator('[aria-label="Detalle de incidencia"][aria-busy="true"]').waitFor()
+          sameGeometry(settled, await boxes(page, '.incident-detail__text, .incident-detail__read'), ['x', 'y', 'width', 'height'], 'detalle visible durante refresco')
+          refreshRelease()
+          await page.locator('[aria-label="Detalle de incidencia"][aria-busy="false"]').waitFor()
+          sameGeometry(settled, await boxes(page, '.incident-detail__text, .incident-detail__read'), ['x', 'y', 'width', 'height'], 'detalle actualizado')
         }
         if (screen.path === '/operador/panel') assert.match(await page.locator('.panel-period__scope').innerText(), /01\/01\/2030 y el 15\/01\/2030/)
         console.log(`OK ${width}: ${screen.path}, geometría de carga → datos`)

@@ -17,16 +17,24 @@ const toNotification = (row: NotificationRow): StoredNotification =>
 
 export function createNotificationRepository(pool: Pool): NotificationRepository {
   return {
-    async listByUser(userId, page) {
+    async listByUser(userId, page, kind) {
       const [items, unread] = await Promise.all([
         pool.query<NotificationRow>(
-          `SELECT ${notificationColumns} FROM public.notifications n WHERE n.user_id = $1
-           ORDER BY n.created_at DESC, n.id DESC LIMIT 21 OFFSET $2`, [userId, (page - 1) * 20]),
+          `SELECT ${notificationColumns} FROM public.notifications n WHERE n.user_id = $1 AND ($3::text IS NULL OR n.kind = $3)
+           ORDER BY n.created_at DESC, n.id DESC LIMIT 21 OFFSET $2`, [userId, (page - 1) * 20, kind ?? null]),
         pool.query<{ count: number }>(
           'SELECT count(*)::int AS count FROM public.notifications WHERE user_id = $1 AND read_at IS NULL', [userId]),
       ])
       return { items: items.rows.slice(0, 20).map(toNotification), hasNextPage: items.rows.length > 20,
         unreadCount: unread.rows[0]!.count }
+    },
+
+    async findByUser(userId, notificationId) {
+      if (!uuid.test(notificationId)) return null
+      const { rows } = await pool.query<NotificationRow>(
+        `SELECT ${notificationColumns} FROM public.notifications n
+         WHERE n.user_id = $1 AND n.public_id = $2`, [userId, notificationId])
+      return rows[0] ? toNotification(rows[0]) : null
     },
 
     async markRead(userId, notificationId, at) {

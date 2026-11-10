@@ -22,6 +22,7 @@ export function assertContract(method: string, path: string, response: Response,
     : path.startsWith("/waitlist/") ? "/waitlist/{entryId}"
     : path === "/notifications" ? path
     : /^\/notifications\/[^/]+\/read$/.test(path) ? "/notifications/{notificationId}/read"
+    : /^\/notifications\/[^/]+$/.test(path) ? "/notifications/{notificationId}"
     : path === "/reservations" ? path
     : /^\/reservations\/[^/]+\/cancel$/.test(path) ? "/reservations/{reservationId}/cancel"
     : /^\/reservations\/[^/]+\/messages$/.test(path) ? "/reservations/{reservationId}/messages"

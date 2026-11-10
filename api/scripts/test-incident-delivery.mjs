@@ -16,7 +16,7 @@ import { createLotManagementRepository } from '../dist/infrastructure/postgres/l
 import { createLotManagement } from '../dist/application/lots/management.js'
 import { createPickupCodes } from '../dist/infrastructure/crypto/pickup-codes.js'
 import { createOutboxRepository, createNotificationRepository } from '../dist/infrastructure/postgres/notification-repository.js'
-import { createOutboxProcessor } from '../dist/application/notifications/use-cases.js'
+import { createNotificationUseCases, createOutboxProcessor } from '../dist/application/notifications/use-cases.js'
 import { createOperations } from '../dist/infrastructure/postgres/operations.js'
 
 const connectionString = process.env.DATABASE_URL
@@ -135,6 +135,22 @@ try {
   await notificationRepository.markRead(received.userId, notice.id, now())
   assert.deepEqual(await lotState(mixed), closed)
   ok('todos reciben un aviso por versión, con relación e instrucciones, sin códigos; lectura propia sin efectos')
+  const notificationCases = createNotificationUseCases(notificationRepository, now)
+  const history = await notificationCases.list(received, 1, 'incident_version')
+  assert.equal(history.items.length, 2)
+  assert.ok(history.items.every(item => item.kind === 'incident_version' && item.payload.incident.relation === 'received'))
+  const detail = await notificationCases.get(received, notice.id.toUpperCase())
+  assert.ok(detail.readAt)
+  assert.deepEqual(detail.payload.incident, notice.payload.incident)
+  assert.deepEqual((await notificationCases.markRead(received, notice.id)).readAt, detail.readAt)
+  await assert.rejects(notificationCases.get(outsider, notice.id), { code: 'notification_not_found' })
+  await assert.rejects(notificationCases.get(outsider, randomUUID()), { code: 'notification_not_found' })
+  const older = history.items.find(item => item.payload.incident.version === 1)
+  assert.equal((await notificationCases.get(received, older.id)).payload.incident.status, 'open')
+  assert.equal((await notificationCases.get(received, older.id)).payload.incident.lotClosed, true)
+  assert.deepEqual(await lotState(mixed), closed)
+  ok('K045: historial propio conserva versiones leídas y anteriores; detalle ajeno 404, lectura idempotente sin cumplimiento ni cambios de cierre')
+
 
   // Mantener el ganador dentro de su transacción hasta observar al perdedor esperando el lote.
   for (const winner of ['delivery','closure']) {

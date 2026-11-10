@@ -32,7 +32,7 @@ function SessionGate({ children }: { children: ReactNode }) {
   return <div key={session.user.id}>{children}</div>
 }
 export function ReservationsPage() {
-  return <main className="page-content"><div className="reservations"><h1>Mis reservas</h1><p>Reservas vigentes e historial de cancelaciones, retiros y vencimientos.</p><SessionGate><History /></SessionGate></div></main>
+  return <main className="page-content"><div className="reservations"><h1>Mis reservas</h1><p>Reservas vigentes e historial de cancelaciones, retiros y vencimientos.</p><Link to="/incidencias">Ver historial de incidencias</Link><SessionGate><History /></SessionGate></div></main>
 }
 function History() {
   const [params, setParams] = useSearchParams()
@@ -132,7 +132,7 @@ function Detail({ id }: { id: string }) {
     {reservation && <Card className="reservation-detail">
       <Badge tone={current && !uncertain ? 'success' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && reservation.status === 'confirmed' ? 'Ventana finalizada' : labels[reservation.status]}</Badge>
       <header className="reservation-detail__heading">
-        <h2>{lotTitle(reservation.lot.description)}</h2><Link to={`/reservas/${encodeURIComponent(id)}/chat`}>Abrir chat de la reserva</Link>
+        <h2>{lotTitle(reservation.lot.description)}</h2><Link to={`/reservas/${encodeURIComponent(id)}/chat`}>Abrir chat de la reserva</Link><Link to="/incidencias">Ver historial de incidencias</Link>
         {reservation.lot.description !== lotTitle(reservation.lot.description) && <p>{reservation.lot.description}</p>}
       </header>
       <dl className="reservation-detail__facts">
