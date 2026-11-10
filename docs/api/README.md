@@ -118,6 +118,20 @@ fallo del operador ([límite de códigos](../seguridad.md#límites)). `confirmPi
 lleva `idempotencyKey` por operador ([ADR 0007](../adr/0007-codigo-de-retiro-y-transiciones.md));
 cancelar es idempotente por efecto y no necesita clave.
 
+## Historial de incidencias del destinatario
+
+`GET /notifications?kind=incident_version` devuelve las versiones propias, incluidas las
+leídas, en páginas de 20; `unreadCount` sigue siendo el total de toda la bandeja.
+`GET /notifications/{notificationId}` devuelve un aviso propio sin registrar lectura.
+Ambas consultas usan la sesión; no admiten seleccionar destinatario. El detalle ajeno
+responde el mismo 404 que uno inexistente.
+
+El detalle conserva la instantánea `IncidentNotice` creada por publicación, seguimiento
+o resolución, con el vínculo fijado para esa persona. No depende del estado del lote ni
+de la retención del chat. `POST /notifications/{notificationId}/read` conserva el primer
+instante y solo registra lectura; no acredita cumplimiento de instrucciones. Reglas y
+vistas en [incidencias](../incidencias.md#historial-y-lectura-del-destinatario).
+
 ## Sesión, establecimientos y CSRF
 
 **E1 H p. 21:** sesión opaca persistida en PostgreSQL, duración de **12 horas**;

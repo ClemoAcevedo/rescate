@@ -13,7 +13,7 @@ avisos persisten aunque no esté conectada y se recuperan al volver. El contrato
 | `offer_expired` | Se registra el vencimiento de esa oferta | Titular de la solicitud | `/espera/:id` |
 | `reservation_confirmed` | Se acepta la oferta y nace la reserva | Titular | `/reservas/:id` |
 | `reservation_cancelled` | El titular cancela su [reserva](reservas.md) o el operador retira la publicación | Titular | `/reservas/:id` |
-| `incident_version` | Publicar, actualizar o resolver una [incidencia](incidencias.md) | Destinatarios fijados de esa versión | `/avisos` (instrucciones y lectura) |
+| `incident_version` | Publicar, actualizar o resolver una [incidencia](incidencias.md) | Destinatarios fijados de esa versión | `/incidencias/:notificationId` (instrucciones y lectura propia) |
 | `message_from_holder` | El titular escribe en el [chat](chat.md) de la reserva | Cada operador del local | `/operador/panel` |
 | `message_from_establishment` | Un operador escribe en el [chat](chat.md) de la reserva | Titular | `/reservas/:id` |
 
@@ -37,6 +37,8 @@ el trabajador de [vencimientos](vencimientos.md) la registra, ambos a través de
 | Método | Ruta | Resultado |
 | --- | --- | --- |
 | GET | `/notifications` | 200, avisos propios en páginas de 20, más recientes primero, con `unreadCount` |
+| GET | `/notifications?kind=incident_version` | 200, historial paginado de versiones propias, leídas y sin leer; contador global |
+| GET | `/notifications/:notificationId` | 200, aviso propio sin registrar lectura; 404 si es ajeno o no existe |
 | POST | `/notifications/:notificationId/read` | 200, aviso con su lectura; cuerpo `{}` |
 
 La lectura exige sesión, `Origin` y CSRF.
@@ -45,7 +47,10 @@ La lectura exige sesión, `Origin` y CSRF.
 
 La cabecera muestra «Avisos» con el total sin leer. `/avisos` lista la bandeja con título y
 texto según el tipo, el lote, la fecha y un indicador «Nuevo». Abrir un aviso lo marca como
-leído y lleva a la solicitud o la reserva. La bandeja y el contador consultan cada 15 s con la
+leído y lleva a la solicitud o la reserva. Las incidencias muestran las instrucciones en
+la tarjeta y permiten abrir un detalle propio o registrar lectura con confirmación y reintento.
+`/incidencias` conserva todas las versiones propias, también las leídas; consultar el detalle
+no registra lectura ni acredita cumplimiento de instrucciones. La bandeja y el contador consultan cada 15 s con la
 pestaña visible, se pausan sin conexión y consultan de inmediato al volver a la pestaña o al
 reconectar (anexos H p. 20).
 
@@ -83,4 +88,7 @@ positivo de una búsqueda por patrón.
 | `npm --prefix api run test:web:notifications` | Chromium con API y worker reales: contador por consulta periódica, recuperación al reconectar, bandeja, lectura que lleva a una oferta vencida sin aceptar y bandejas separadas. Corre dentro de `test:web:compose`. |
 
 `test:web:notifications` también comprueba avisos de incidencia y su lectura sin navegar a
-una reserva inexistente. Las instrucciones se muestran en la propia tarjeta.
+una reserva inexistente. Las tarjetas de incidencia agrupan versión y enlace, con párrafos de altura natural
+y un pie para la lectura. Conservan el contenido visible al refrescar. Las instrucciones
+se muestran en la propia tarjeta y en su
+[detalle e historial](incidencias.md#historial-y-lectura-del-destinatario).

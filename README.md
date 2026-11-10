@@ -265,7 +265,9 @@ lo cambia.
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
   avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030),
-  que también muestra los avisos de mensajes del chat (K037); conversación entre titular y
+  que también muestra los avisos de mensajes del chat (K037); historial y detalle propios
+  de versiones de incidencias con instrucciones, vínculo con/sin entrega y lectura
+  persistida sin acreditar cumplimiento (K045); conversación entre titular y
   establecimiento con polling visible cada 5 s, recuperación por secuencia y reintentos
   del mismo envío (K038);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
@@ -292,6 +294,8 @@ lo cambia.
   (K037, [chat](docs/chat.md)), incidencias con reporte, versiones y destinatarios fijados
   bajo el bloqueo del lote (K043), cierre explícito por incidencia que conserva entregas y
   avisos recuperables por versión (K044, [incidencias](docs/incidencias.md)),
+  consulta del historial y detalle de avisos propios independiente del cierre del lote
+  y la retención del chat (K045),
   según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y

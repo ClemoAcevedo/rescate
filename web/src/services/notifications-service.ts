@@ -42,8 +42,8 @@ async function send<T>(path: string, parse: (value: unknown) => T, options: { me
   return result
 }
 
-export function listNotifications(page: number, signal?: AbortSignal): Promise<NotificationPage> {
-  return send(`/notifications?page=${page}`, value => {
+export function listNotifications(page: number, signal?: AbortSignal, kind?: 'incident_version'): Promise<NotificationPage> {
+  return send(`/notifications?page=${page}${kind ? `&kind=${kind}` : ''}`, value => {
     if (!record(value) || !Array.isArray(value.items) || value.items.length > 20 || value.page !== page
       || typeof value.hasNextPage !== 'boolean' || !Number.isSafeInteger(value.unreadCount) || (value.unreadCount as number) < 0) {
       throw new Error('Bandeja inesperada.')
@@ -52,11 +52,20 @@ export function listNotifications(page: number, signal?: AbortSignal): Promise<N
   }, { signal })
 }
 
+/** Consulta la versión propia sin registrar lectura. */
+export function getNotification(id: string): Promise<Notification> {
+  return send(`/notifications/${encodeURIComponent(id)}`, value => {
+    const parsed = notification(value)
+    if (parsed.id.toLowerCase() !== id.toLowerCase()) throw new Error('Aviso inesperado.')
+    return parsed
+  })
+}
+
 /** Registra la lectura; no cambia ofertas ni reservas (RF09). */
 export function markNotificationRead(id: string, csrfToken: string): Promise<Notification> {
   return send(`/notifications/${encodeURIComponent(id)}/read`, value => {
     const parsed = notification(value)
-    if (parsed.id !== id || parsed.readAt === null) throw new Error('Lectura sin confirmar.')
+    if (parsed.id.toLowerCase() !== id.toLowerCase() || parsed.readAt === null) throw new Error('Lectura sin confirmar.')
     return parsed
   }, { method: 'POST', body: {}, headers: { 'X-CSRF-Token': csrfToken } })
 }

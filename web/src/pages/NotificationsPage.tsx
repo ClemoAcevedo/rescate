@@ -28,7 +28,7 @@ function describe(notification: Notification): { title: string; text: string; ac
       const relation = incident.relation === 'received' ? 'Recibiste packs de este lote.'
         : incident.relation === 'committed' ? 'Tuviste un compromiso con este lote.' : 'Eres operador del establecimiento.'
       return { title: incident.status === 'resolved' ? 'Incidencia resuelta' : 'Aviso de incidencia',
-        action: 'Marcar como leído', to: '/avisos',
+        action: notification.readAt ? 'Leído' : 'Marcar como leído', to: '/avisos',
         text: `${relation} ${incident.reason} Instrucciones: ${incident.instructions}${incident.lotClosed ? ' El lote está cerrado.' : ''}` }
     }
     case 'offer_issued':
@@ -53,29 +53,32 @@ function describe(notification: Notification): { title: string; text: string; ac
   }
 }
 
-function Inbox({ csrfToken }: { csrfToken: string }) {
+function Inbox({ csrfToken, incidentsOnly }: { csrfToken: string; incidentsOnly: boolean }) {
   const [params, setParams] = useSearchParams()
   const requested = Number(params.get('pagina') ?? 1)
   const page = Number.isSafeInteger(requested) && requested >= 1 && requested <= 1000 ? requested : 1
   const [result, setResult] = useState<NotificationPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [opening, setOpening] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const loading = useRef(false)
+  const mutating = useRef(false)
   const navigate = useNavigate()
 
   const load = useCallback(() => {
-    if (loading.current) return
-    loading.current = true
-    listNotifications(page)
+    if (loading.current || mutating.current) return
+    loading.current = true; setRefreshing(true)
+    listNotifications(page, undefined, incidentsOnly ? 'incident_version' : undefined)
       .then(value => { setResult(value); setError(null); setUnreadCount(value.unreadCount) })
       .catch(reason => setError(notificationError(reason)))
-      .finally(() => { loading.current = false })
-  }, [page])
+      .finally(() => { loading.current = false; setRefreshing(false) })
+  }, [page, incidentsOnly])
   useVisiblePolling(load, NOTIFICATION_POLL_MS)
 
   /** Abrir registra la lectura y lleva al detalle vigente; si la lectura falla, igual se navega. */
   const open = async (notification: Notification, to: string) => {
-    if (opening) return
+    if (mutating.current || (notification.kind === 'incident_version' && loading.current)) return
+    mutating.current = true; setError(null)
     setOpening(notification.id)
     try {
       if (!notification.readAt) {
@@ -85,40 +88,49 @@ function Inbox({ csrfToken }: { csrfToken: string }) {
           items: current.items.map(item => item.id === read.id ? read : item) })
         setUnreadCount(remaining)
       }
-    } catch { /* la lectura se reintenta al volver a abrir el aviso */ }
-    finally { setOpening(null) }
-    navigate(to)
+    } catch {
+      if (notification.kind === 'incident_version') setError('No se pudo confirmar la lectura. Reintenta; se conserva el primer registro si ya se aplicó.')
+    }
+    finally { mutating.current = false; setOpening(null) }
+    if (notification.kind !== 'incident_version') navigate(to)
   }
 
   if (!result) {
     return error
       ? <Alert tone="danger" role="alert"><p>{error}</p><Button variant="secondary" onClick={load}>Reintentar</Button></Alert>
-      : <NotificationsSkeleton />
+      : <NotificationsSkeleton incidentsOnly={incidentsOnly} />
   }
   return (
-    <section aria-label="Bandeja de avisos">
+    <section aria-label="Bandeja de avisos" aria-busy={refreshing}>
+      <span className="visually-hidden" role="status">{refreshing ? 'Actualizando avisos…' : ''}</span>
       {error && <Alert tone="warning" role="status">{error}</Alert>}
       <p className="notifications__summary" role="status">
         {result.unreadCount === 0 ? 'No tienes avisos sin leer.' : `${result.unreadCount} ${result.unreadCount === 1 ? 'aviso sin leer' : 'avisos sin leer'}.`}
       </p>
-      {result.items.length === 0 && <Card>No hay avisos en esta página. Aquí verás ofertas, vencimientos, confirmaciones y cancelaciones.</Card>}
+      {result.items.length === 0 && <Card>{incidentsOnly ? 'No hay incidencias en esta página.' : 'No hay avisos en esta página. Aquí verás ofertas, reservas, mensajes e incidencias.'}</Card>}
       <ul className="notifications__list">
         {result.items.map(notification => {
           const view = describe(notification)
           const unread = notification.readAt === null
           return (
             <li key={notification.id}>
-              <Card as="article" className={`notification${unread ? ' notification--unread' : ''}`} aria-label={view.title}>
+              <Card as="article" className={`notification${unread ? ' notification--unread' : ''}${notification.incident ? ' notification--incident' : ''}`} aria-label={view.title}>
                 <div className="notification__heading">
                   <h2>{view.title}</h2>
                   {unread && <Badge tone="info">Nuevo</Badge>}
                 </div>
                 <p className="notification__lot">{lotTitle(notification.lot.description)}</p>
-                <p>{view.text}</p>
+                <p className={notification.kind === 'incident_version' ? 'notification__incident-copy' : undefined}>{view.text}</p>
+                {notification.incident && <div className="notification__incident-meta">
+                  <p>Versión {notification.incident.version}</p>
+                  <Link to={`/incidencias/${encodeURIComponent(notification.id)}`}>Ver incidencia</Link>
+                  <p className="notification__reading-note">Registrar lectura no acredita haber cumplido las instrucciones.</p>
+                  <p className="notification__read-state">{notification.readAt ? `Lectura registrada: ${when(notification.readAt)}.` : 'Lectura pendiente de registrar.'}</p>
+                </div>}
                 <div className="notification__footer">
                   <time dateTime={notification.createdAt}>{when(notification.createdAt)}</time>
                   <Button variant={unread ? 'primary' : 'secondary'} loading={opening === notification.id}
-                    disabled={opening !== null} onClick={() => { void open(notification, view.to) }}>{view.action}</Button>
+                    disabled={opening !== null || (notification.kind === 'incident_version' && (notification.readAt !== null || refreshing))} onClick={() => { void open(notification, view.to) }}>{view.action}</Button>
                 </div>
               </Card>
             </li>
@@ -133,19 +145,20 @@ function Inbox({ csrfToken }: { csrfToken: string }) {
   )
 }
 
-export function NotificationsPage() {
+export function NotificationsPage({ incidentsOnly = false }: { incidentsOnly?: boolean }) {
   const { status, session, csrfToken, error, refreshSession } = useAuth()
   const location = useLocation()
   let content
   if (status === 'error') content = <Alert tone="danger" role="alert">{error}<Button onClick={() => { void refreshSession() }}>Reintentar sesión</Button></Alert>
-  else if (status === 'checking' || (!session && status === 'signing-out')) content = <NotificationsSkeleton label="Comprobando la sesión…" />
+  else if (status === 'checking' || (!session && status === 'signing-out')) content = <NotificationsSkeleton label="Comprobando la sesión…" incidentsOnly={incidentsOnly} />
   else if (!session || !csrfToken) content = <Alert>Inicia sesión para ver tus avisos. <Link to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Iniciar sesión</Link></Alert>
-  else content = <Inbox key={session.user.id} csrfToken={csrfToken} />
+  else content = <Inbox key={`${session.user.id}:${incidentsOnly}:${location.search}`} csrfToken={csrfToken} incidentsOnly={incidentsOnly} />
   return (
     <main className="page-content">
       <div className="notifications">
-        <h1>Avisos</h1>
-        <p>Ofertas, vencimientos, confirmaciones y cancelaciones de tus solicitudes y reservas. Se guardan aunque no estés conectado. Horarios en {DEFAULT_TIME_ZONE}.</p>
+        <h1>{incidentsOnly ? 'Historial de incidencias' : 'Avisos'}</h1>
+        <p>{incidentsOnly ? 'Versiones publicadas para ti, incluidas las leídas, aunque el lote esté cerrado y el chat terminado.' : 'Ofertas, reservas, mensajes e incidencias. Se guardan aunque no estés conectado.'} Horarios en {DEFAULT_TIME_ZONE}.</p>
+        <Link to={incidentsOnly ? '/avisos' : '/incidencias'}>{incidentsOnly ? 'Volver a avisos' : 'Ver historial de incidencias'}</Link>
         {content}
       </div>
     </main>

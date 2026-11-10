@@ -58,6 +58,7 @@ test('leer un aviso ajeno o inexistente responde no encontrado; leer no hace nad
     createdAt: at, readAt: at }
   const repository: NotificationRepository = {
     listByUser: async () => assert.fail('no listar'),
+    findByUser: async () => null,
     markRead: async (userId, id) => (userId === '7' && id === stored.id ? stored : null),
   }
   const cases = createNotificationUseCases(repository, () => at)
@@ -113,4 +114,58 @@ test('HTTP: bandeja paginada con contador sin leer, lectura con CSRF y errores s
   try {
     assert.equal((await anonymous.call('GET', '/notifications')).status, 401)
   } finally { await anonymous.close() }
+})
+
+test('K045: historial y detalle propios, lectura idempotente y ninguna identidad ajena', async () => {
+  const stored: StoredNotification = { id: 'a3333333-3333-4333-8333-333333333333', kind: 'incident_version',
+    payload: { ...payload, quantity: 0, incident: { id: '44444444-4444-4444-8444-444444444444', version: 2,
+      status: 'resolved', reason: 'Problema atendido', instructions: 'Contactar al local.', relation: 'received', lotClosed: true } },
+    createdAt: at, readAt: null }
+  let reads = 0
+  const repository: NotificationRepository = {
+    async listByUser(userId, _page, kind) {
+      assert.equal(kind, 'incident_version')
+      return { items: userId === '7' ? [stored] : [], hasNextPage: false, unreadCount: userId === '7' && !stored.readAt ? 1 : 0 }
+    },
+    async findByUser(userId, id) { return userId === '7' && id === stored.id ? stored : null },
+    async markRead(userId, id, instant) {
+      if (userId !== '7' || id !== stored.id) return null
+      reads++; stored.readAt ??= instant; return stored
+    },
+  }
+  const cases = createNotificationUseCases(repository, () => at)
+  const api = await start(cases)
+  try {
+    assert.equal((await api.call('GET', '/notifications?kind=incident_version')).body.items.length, 1)
+    const detail = await api.call('GET', `/notifications/${stored.id.toUpperCase()}`)
+    assert.equal(detail.status, 200)
+    assert.equal(detail.body.incident.instructions, 'Contactar al local.')
+    assert.equal(detail.body.incident.relation, 'received')
+    assert.equal(reads, 0, 'consultar no registra lectura')
+    const snapshot = JSON.stringify(stored.payload)
+    const read = await api.call('POST', `/notifications/${stored.id}/read`, {})
+    const again = await api.call('POST', `/notifications/${stored.id}/read`, {})
+    assert.equal(read.body.readAt, again.body.readAt)
+    assert.equal(JSON.stringify(stored.payload), snapshot)
+    assert.equal((await api.call('GET', '/notifications?kind=incident_version')).body.items[0].readAt, read.body.readAt)
+    assert.equal((await api.call('GET', '/notifications?kind=unknown')).status, 422)
+    assert.equal((await api.call('GET', '/notifications?kind=incident_version&kind=incident_version')).status, 422)
+    assert.equal((await api.call('GET', '/notifications?kind=incident_version&userId=8')).status, 422)
+    assert.equal((await api.call('GET', `/notifications/${stored.id}?userId=8`)).status, 422)
+    Object.assign(stored.payload.incident!, { recipients: ['otro@example.invalid'] })
+    const safe = await api.call('GET', `/notifications/${stored.id}`)
+    assert.equal(JSON.stringify(safe.body).includes('otro@example.invalid'), false)
+  } finally { await api.close() }
+  const other = await start(cases, '8')
+  try {
+    assert.equal((await other.call('GET', '/notifications?kind=incident_version')).body.items.length, 0)
+    const forbidden = await other.call('GET', `/notifications/${stored.id}`)
+    const missing = await other.call('GET', '/notifications/55555555-5555-4555-8555-555555555555')
+    assert.equal(forbidden.status, 404)
+    assert.equal(forbidden.body.error.code, missing.body.error.code)
+    assert.equal((await other.call('POST', `/notifications/${stored.id}/read`, {})).status, 404)
+  } finally { await other.close() }
+  const anonymous = await start(cases, null)
+  try { assert.equal((await anonymous.call('GET', `/notifications/${stored.id}`)).status, 401) }
+  finally { await anonymous.close() }
 })

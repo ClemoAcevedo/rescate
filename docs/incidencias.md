@@ -78,13 +78,59 @@ genera un aviso persistente por evento y destinatario, con concesión y reintent
 fallos queda visible para Operación. Desconectarse no elimina el aviso ni lo marca leído.
 `ops:status` incluye tanto destinatarios aún sin evento como eventos pendientes o fallidos.
 
-La bandeja existente admite estos avisos, muestra instrucciones y distingue a quien recibió
-packs de quien solo tuvo un compromiso. La lectura se limita al destinatario y conserva el
-primer instante; no modifica el lote ni acredita haber seguido las instrucciones. La vista
-específica de historial del destinatario y la gestión del operador siguen en
-[K045](https://github.com/ClemoAcevedo/rescate/issues/47) y
-[K046](https://github.com/ClemoAcevedo/rescate/issues/48); la regresión de seguimiento está en
-[K047](https://github.com/ClemoAcevedo/rescate/issues/51).
+## Historial y lectura del destinatario
+
+`/incidencias` lista las versiones publicadas para la persona de la sesión, incluidas las
+leídas. Se accede desde la bandeja, el historial y el detalle de reservas. Cada aviso abre
+`/incidencias/:notificationId`: el identificador corresponde a un aviso propio, no al caso
+general ni al destinatario de otra persona. Cada versión conserva su motivo, instrucciones,
+estado, vínculo y situación de cierre. Una actualización o resolución agrega otro aviso;
+no reescribe las instrucciones de las versiones anteriores.
+
+El detalle distingue quien recibió packs, quien tuvo un compromiso sin entrega registrada
+y quien recibe como operador, según el vínculo fijado al publicar. Muestra que el estado
+pertenece a esa versión y puede diferir del actual. Las instrucciones se consultan aunque
+el lote esté cerrado, la reserva haya terminado o el texto del chat se haya borrado por
+retención; su lectura no consulta esos recursos ni exige una reserva activa.
+
+La bandeja conserva las instrucciones en la propia tarjeta y ofrece «Ver incidencia».
+«Marcar como leído», tanto en bandeja como en detalle, confirma el registro persistido de
+la primera lectura; una respuesta perdida permite reintentar. El texto diferencia lectura
+de cumplimiento de instrucciones. Leer no modifica el caso, el lote ni las entregas.
+Cada persona solo consulta y marca sus propios avisos: uno ajeno responde el mismo 404 que
+uno inexistente, sin identidades de otros destinatarios.
+
+Historial, detalle y bandeja consultan cada 15 segundos con la pestaña visible y recuperan
+los avisos al reconectar. El filtro de incidencias pagina en el servidor y conserva el
+contador global de avisos sin leer. Las instrucciones siguen siendo accesibles desde el
+historial después de registrar lectura. El detalle agrupa vínculo y cierre en un resumen;
+motivo e instrucciones ocupan su altura natural. El skeleton conserva el ancho y la
+disposición de las regiones, y los datos visibles mantienen su geometría al refrescar.
+
+La gestión del operador corresponde a [K046](https://github.com/ClemoAcevedo/rescate/issues/48)
+y la regresión de seguimiento a [K047](https://github.com/ClemoAcevedo/rescate/issues/51).
+
+## Recorrido manual
+
+Con Docker Desktop activo, dependencias de API y web instaladas y Chromium de Playwright:
+
+```bash
+docker compose up -d --wait db
+MANUAL_INCIDENTS=1 WEB_SCRIPTS=test:web:notifications npm --prefix api run test:web:compose
+```
+
+El comando prepara una base aislada, ejecuta el recorrido integrado y mantiene API, worker
+y web HTTPS en marcha hasta escribir `salir` en la terminal. Imprime la URL de login en
+`https://localhost:5174` y las credenciales de dos cuentas: una con entrega acreditada y otra
+sin entrega. Acepta el certificado local de desarrollo y entra a `/incidencias` para abrir
+las versiones, comprobar las instrucciones y registrar lectura. Las versiones que el
+recorrido ya leyó conservan su registro; `aviso` publica una nueva versión pendiente.
+
+La terminal también imprime la URL de un aviso propio de la cuenta con entrega. Abrirla
+con la otra cuenta rechaza el acceso. Para comprobar reconexión, abre `/avisos` con la
+cuenta con entrega, activa Offline en Network de DevTools, escribe `aviso` en la terminal
+y vuelve a Online. Las versiones de esta demo se publican por los casos de uso reales de
+K043/K044; las cuentas y lotes son ficticios y la base de desarrollo conserva sus datos.
 
 ## Pruebas
 
@@ -93,4 +139,6 @@ específica de historial del destinatario y la gestión del operador siguen en
 | `npm --prefix api test` | Transiciones, límites de texto, autorización antes y dentro del bloqueo, versión e idempotencia. |
 | `npm --prefix api run db:test:incidents:compose` | PostgreSQL real y contrato HTTP: permisos, reporte sin efectos, versiones, todos los estados de compromiso, deduplicación, incorporación posterior, carrera con reservas observando el bloqueo, reintentos concurrentes, lote cerrado y reversión ante fallos. |
 | `npm --prefix api run db:test:incident-delivery:compose` | Cierre con F/O/R/E, ambas carreras con bloqueos observados, reversión tras cerrar, plazos, incorporación posterior, dos dispatchers, cien avisos y worker real matado/reiniciado, múltiples versiones, fallos, reintentos y lectura propia. |
-| `npm --prefix api run test:web:notifications` | API y worker reales por HTTPS: cierre explícito, recuperación al reconectar, instrucciones largas a 360/1366 px, lectura, privacidad y resolución sin reapertura. |
+| `npm --prefix api run test:web:notifications` | API y worker reales por HTTPS: cierre explícito, recuperación al reconectar, instrucciones largas a 360/1366 px, lectura, privacidad y resolución sin reapertura; historial y detalle de versiones propias, lectura persistida, instrucciones tras la retención del chat y destinatario con entrega acreditada. |
+| `npm --prefix api run test:web:incidents` | HTTP controlado validado contra OpenAPI: error/reintento, vacío, reconexión, con/sin entrega, fallo al registrar lectura, contenido largo y aviso ajeno a 360/1366 px. |
+| `npm --prefix api run test:web:ux` | Geometría de las cargas de historial y detalle de incidencia, además de las demás vistas. |

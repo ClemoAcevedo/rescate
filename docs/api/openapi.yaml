@@ -550,6 +550,10 @@ paths:
         - name: page
           in: query
           schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+        - name: kind
+          in: query
+          description: "Historial de versiones de incidencias del destinatario, incluidas las leídas. unreadCount conserva el total global de la bandeja."
+          schema: { type: string, enum: [incident_version] }
       responses:
         "200":
           description: "Página de avisos propios."
@@ -561,13 +565,34 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/Unavailable" }
+  "/notifications/{notificationId}":
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    get:
+      operationId: "getNotification"
+      summary: "Consultar un aviso propio y su versión publicada"
+      description: "No registra lectura. Conserva motivo e instrucciones tras cerrar lote y chat y después de borrar el texto del chat por retención. Solo devuelve la instantánea de su destinatario, sin identidades ajenas. Un aviso ajeno responde el mismo 404 que uno inexistente."
+      tags: ["Notifications"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Aviso propio."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   "/notifications/{notificationId}/read":
     parameters:
       - $ref: "#/components/parameters/NotificationId"
     post:
       operationId: "markNotificationRead"
       summary: "Marcar un aviso propio como leído"
-      description: "Registra la lectura y devuelve el aviso. Repetir conserva el instante de la primera lectura. Leer no cambia ofertas, solicitudes ni reservas: una oferta vencida sigue vencida. 404 si el aviso es ajeno o no existe. Cuerpo: objeto vacío."
+      description: "Registra la lectura y devuelve el aviso. Repetir conserva el instante de la primera lectura. Leer no acredita cumplimiento de instrucciones ni cambia ofertas, solicitudes o reservas: una oferta vencida sigue vencida. 404 si el aviso es ajeno o no existe. Cuerpo: objeto vacío."
       tags: ["Notifications"]
       security: [{ SessionCookie: [] }]
       parameters:

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { IncidentNoticePage } from '../pages/IncidentNoticePage'
 import { ChatPage } from '../pages/ChatPage'
 import { AppLayout } from '../components/AppLayout'
 import { ConnectionPage } from '../pages/ConnectionPage'
@@ -37,6 +38,8 @@ function App() {
         <Route path="espera" element={<WaitlistPage />} />
         <Route path="espera/:id" element={<WaitlistDetailPage />} />
         <Route path="avisos" element={<NotificationsPage />} />
+        <Route path="incidencias" element={<NotificationsPage incidentsOnly />} />
+        <Route path="incidencias/:id" element={<IncidentNoticePage />} />
         <Route path="reservas" element={<ReservationsPage />} />
         <Route path="reservas/:id/chat" element={<ChatPage />} />
         <Route path="reservas/:id" element={<ReservationDetailPage />} />
