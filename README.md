@@ -271,7 +271,9 @@ lo cambia.
   establecimiento con polling visible cada 5 s, recuperación por secuencia y reintentos
   del mismo envío (K038);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
-  período (K035).
+  período (K035); gestión de incidencias del operador con reportes por revisar, publicación,
+  actualización, cierre confirmado y resolución, responsable y avisos pendientes, generados y
+  leídos por versión, y reporte desde la reserva o la espera (K046).
 - **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
   1366 px, distribución y menú de operador de 320 a 1920 px y
   [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
@@ -295,7 +297,8 @@ lo cambia.
   bajo el bloqueo del lote (K043), cierre explícito por incidencia que conserva entregas y
   avisos recuperables por versión (K044, [incidencias](docs/incidencias.md)),
   consulta del historial y detalle de avisos propios independiente del cierre del lote
-  y la retención del chat (K045),
+  y la retención del chat (K045), listado de incidencias por establecimiento con responsable
+  y estado de los avisos de cada versión (K046),
   según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y

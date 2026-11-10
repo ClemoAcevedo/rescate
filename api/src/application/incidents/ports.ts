@@ -17,7 +17,15 @@ export interface IncidentVersionResult {
   lotClosed: boolean
 }
 
-export interface IncidentVersionSummary extends Omit<IncidentVersionResult, 'incidentId'> { recipientCount: number }
+/** Avisos de una versión por destinatario: suman recipientCount, sin identificar a nadie. */
+export interface IncidentNoticeCounts { pending: number; generated: number; read: number }
+
+export interface IncidentVersionSummary extends Omit<IncidentVersionResult, 'incidentId'> {
+  recipientCount: number
+  /** Correo del operador que publicó la versión, aunque ya no sea miembro. */
+  publishedBy: string
+  notices: IncidentNoticeCounts
+}
 
 export interface IncidentView {
   id: string
@@ -27,6 +35,8 @@ export interface IncidentView {
   reportedAt: string
   versions: IncidentVersionSummary[]
 }
+
+export interface EstablishmentIncidentView extends IncidentView { lot: { id: string; description: string } }
 
 export interface IncidentCommand {
   action: IncidentAction
@@ -68,6 +78,11 @@ export interface IncidentRepository {
   findIncident(incidentId: string): Promise<{ establishmentId: string } | null>
   isMember(userId: string, establishmentId: string): Promise<boolean>
   listByLot(lotId: string): Promise<IncidentView[]>
+  /** Identificador interno del establecimiento público, o null si no existe. */
+  findEstablishment(establishmentId: string): Promise<string | null>
+  /** Página de 20 del reporte más reciente al más antiguo; pide uno más para saber si sigue otra. */
+  listByEstablishment(establishmentId: string, query: { status?: IncidentStatus; page: number }):
+    Promise<{ items: EstablishmentIncidentView[]; hasNextPage: boolean }>
   withReport<T>(userId: string, lotId: string, key: string, operate: (writer: ReportWriter) => Promise<T>): Promise<T>
   withCommand<T>(userId: string, incidentId: string, key: string,
     operate: (state: IncidentState | null, writer: IncidentWriter) => Promise<T>): Promise<T>

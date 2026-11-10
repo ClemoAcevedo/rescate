@@ -4,7 +4,8 @@ Una incidencia registra un problema descubierto sobre un lote, antes o después 
 y lo comunica a quienes estuvieron vinculados con ese lote. El contrato HTTP está en
 [OpenAPI](api/openapi.yaml) (etiqueta `Incidents`), los recorridos en
 [casos de uso](casos-de-uso.md#cu-rf11-01--reportar-incidencia-de-un-lote) y las decisiones en
-[ADR 0020](adr/0020-destinatarios-de-incidencias.md).
+[ADR 0020](adr/0020-destinatarios-de-incidencias.md) y
+[ADR 0021](adr/0021-gestion-de-incidencias-del-operador.md).
 
 ## Estados y permisos
 
@@ -107,8 +108,35 @@ historial después de registrar lectura. El detalle agrupa vínculo y cierre en 
 motivo e instrucciones ocupan su altura natural. El skeleton conserva el ancho y la
 disposición de las regiones, y los datos visibles mantienen su geometría al refrescar.
 
-La gestión del operador corresponde a [K046](https://github.com/ClemoAcevedo/rescate/issues/48)
-y la regresión de seguimiento a [K047](https://github.com/ClemoAcevedo/rescate/issues/51).
+La regresión de seguimiento corresponde a [K047](https://github.com/ClemoAcevedo/rescate/issues/51).
+
+## Gestión del operador
+
+`GET /establishments/{establishmentId}/incidents` lista las incidencias de todos los lotes
+del establecimiento, del reporte más reciente al más antiguo, en páginas de 20 y filtrables
+por estado, con el permiso del [panel](panel.md): otro establecimiento recibe 403. Cada
+versión, también en el listado del lote, informa el correo del operador que la publicó,
+aunque después deje de ser miembro, y sus avisos por destinatario: pendientes (sin aviso
+todavía: en cola, reintentando o con un fallo que ve Operación), generados sin leer y
+leídos. Los tres suman `recipientCount` y no identifican a nadie; la API tampoco informa
+quién reportó.
+
+«Mi establecimiento» muestra los reportes por revisar. `/operador/incidencias` lista todas las
+incidencias con filtros por estado y lleva a `/operador/lotes/:lotId/incidencias`, que también se
+abre desde «Mis lotes», el lote publicado y sus tarjetas del panel. Ahí el operador reporta un
+problema, revisa cada reporte y publica, actualiza o resuelve con motivo e instrucciones. El
+motivo parte del reporte o de la última versión. Cerrar el lote es una casilla aparte, solo con
+el lote abierto, y pide confirmar antes de enviar. Cada versión muestra responsable, fecha,
+motivo, instrucciones, decisión de cierre y avisos. Una respuesta perdida permite reintentar la
+misma operación con su clave; una versión desactualizada pide actualizar. Resuelta, la
+incidencia ya no ofrece acciones.
+
+## Reporte de quien reservó
+
+El detalle de una reserva y el de una solicitud de espera ofrecen «Reportar un problema con este
+lote», que abre `/lotes/:id/reportar`. La página aclara que el establecimiento revisa el reporte
+antes de avisar y que la reserva o la espera siguen igual. Una respuesta perdida reintenta el
+mismo reporte; sin acceso al lote, la API responde 404 y la página lo explica.
 
 ## Recorrido manual
 
@@ -136,9 +164,11 @@ K043/K044; las cuentas y lotes son ficticios y la base de desarrollo conserva su
 
 | Comando | Qué comprueba |
 | --- | --- |
-| `npm --prefix api test` | Transiciones, límites de texto, autorización antes y dentro del bloqueo, versión e idempotencia. |
+| `npm --prefix api test` | Transiciones, límites de texto, autorización antes y dentro del bloqueo, versión e idempotencia; listado por establecimiento con 404/403 y consulta estricta contra OpenAPI. |
 | `npm --prefix api run db:test:incidents:compose` | PostgreSQL real y contrato HTTP: permisos, reporte sin efectos, versiones, todos los estados de compromiso, deduplicación, incorporación posterior, carrera con reservas observando el bloqueo, reintentos concurrentes, lote cerrado y reversión ante fallos. |
 | `npm --prefix api run db:test:incident-delivery:compose` | Cierre con F/O/R/E, ambas carreras con bloqueos observados, reversión tras cerrar, plazos, incorporación posterior, dos dispatchers, cien avisos y worker real matado/reiniciado, múltiples versiones, fallos, reintentos y lectura propia. |
 | `npm --prefix api run test:web:notifications` | API y worker reales por HTTPS: cierre explícito, recuperación al reconectar, instrucciones largas a 360/1366 px, lectura, privacidad y resolución sin reapertura; historial y detalle de versiones propias, lectura persistida, instrucciones tras la retención del chat y destinatario con entrega acreditada. |
 | `npm --prefix api run test:web:incidents` | HTTP controlado validado contra OpenAPI: error/reintento, vacío, reconexión, con/sin entrega, fallo al registrar lectura, contenido largo y aviso ajeno a 360/1366 px. |
+| `npm --prefix api run db:test:incident-management:compose` | PostgreSQL real y contrato HTTP: listado por establecimiento con permisos y 422, reporte de quien reservó sin identificarlo, responsable de cada versión aun sin membresía, pendientes/generados/leídos tras el worker y la lectura, filtro por estado y páginas de 20 sin mezclar establecimientos. |
+| `WEB_SCRIPTS=test:web:incident-management npm --prefix api run test:web:compose` | Invocación propia, con su cupo de login por IP. API y worker reales por HTTPS: reporte desde la reserva a 360 px sin cancelarla, reportes por revisar en «Mi establecimiento», publicación con responsable, avisos leídos, filtro por estado, cierre con confirmación, resolución terminal, acceso de otro establecimiento y 360 px sin desbordes ni 429. |
 | `npm --prefix api run test:web:ux` | Geometría de las cargas de historial y detalle de incidencia, además de las demás vistas. |

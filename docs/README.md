@@ -53,6 +53,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0018](adr/0018-carga-remota-en-railway.md) | Generador local por HTTPS hacia un entorno Railway aislado; métricas por ensayo y distinción respecto del protocolo LAN |
 | [0019](adr/0019-fechas-y-cargas-estables.md) | Fechas y horas comunes con zona explícita; skeletons con la estructura final y regresión de geometría en CI |
 | [0020](adr/0020-destinatarios-de-incidencias.md) | Destinatarios de una incidencia fijados por versión bajo el bloqueo del lote; los compromisos nuevos se incorporan a las incidencias vigentes |
+| [0021](adr/0021-gestion-de-incidencias-del-operador.md) | El operador ve el correo de quien publicó cada versión y sus avisos pendientes, generados y leídos, calculados al leer; listado por establecimiento |
 
 ## Entregas y evidencia
 

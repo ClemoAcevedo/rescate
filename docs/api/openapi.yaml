@@ -1497,7 +1497,7 @@ paths:
     get:
       operationId: listLotIncidents
       summary: Consultar las incidencias del lote
-      description: Solo operadores miembros actuales. Devuelve las últimas cincuenta, de más reciente a más antigua, con sus versiones y el total de destinatarios de cada una, sin identificarlos.
+      description: Solo operadores miembros actuales. Devuelve las últimas cincuenta, de más reciente a más antigua, con sus versiones, el correo del operador que publicó cada una y el total y el estado de sus avisos, sin identificar a los destinatarios.
       tags: [Incidents]
       security: [{ SessionCookie: [] }]
       responses:
@@ -1544,6 +1544,38 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/establishments/{establishmentId}/incidents":
+    parameters:
+      - { $ref: "#/components/parameters/EstablishmentId" }
+    get:
+      operationId: listEstablishmentIncidents
+      summary: Listar las incidencias de los lotes del establecimiento
+      description: "K046. Solo operador con membership actual; otro establecimiento recibe 403 y uno inexistente 404. Incidencias de todos los lotes del establecimiento, del reporte más reciente al más antiguo, en páginas de 20, con su lote, sus versiones y el estado de los avisos de cada una. No identifica a quien reportó ni a los destinatarios. Se rechazan filtros desconocidos."
+      tags: [Incidents]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: status
+          in: query
+          description: "Solo las incidencias en este estado. Sin valor, todas."
+          schema: { $ref: "#/components/schemas/IncidentStatus" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: Página de incidencias del establecimiento.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstablishmentIncidentPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -1966,7 +1998,7 @@ components:
     IncidentVersionSummary:
       type: object
       additionalProperties: false
-      required: [version, status, reason, instructions, publishedAt, recipientCount, closeLot, lotClosed]
+      required: [version, status, reason, instructions, publishedAt, recipientCount, closeLot, lotClosed, publishedBy, notices]
       properties:
         version: { type: integer, minimum: 1 }
         status: { $ref: "#/components/schemas/PublishedIncidentStatus" }
@@ -1976,6 +2008,17 @@ components:
         closeLot: { type: boolean, description: "Decisión de cierre de este comando." }
         lotClosed: { type: boolean, description: "El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores." }
         recipientCount: { type: integer, minimum: 0, description: "Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores." }
+        publishedBy: { $ref: "#/components/schemas/Email", description: "Correo del operador que publicó la versión, aunque ya no sea miembro." }
+        notices: { $ref: "#/components/schemas/IncidentNoticeCounts" }
+    IncidentNoticeCounts:
+      type: object
+      additionalProperties: false
+      required: [pending, generated, read]
+      description: "Avisos de la versión por destinatario; suman recipientCount. Sin identificar a nadie."
+      properties:
+        pending: { type: integer, minimum: 0, description: "Aún sin aviso: en cola, reintentando o con un fallo que ve Operación." }
+        generated: { type: integer, minimum: 0, description: "Aviso creado y todavía sin leer." }
+        read: { type: integer, minimum: 0, description: "Aviso con lectura registrada por su destinatario." }
     Incident:
       type: object
       additionalProperties: false
@@ -1998,6 +2041,28 @@ components:
           type: array
           maxItems: 50
           items: { $ref: "#/components/schemas/Incident" }
+    EstablishmentIncident:
+      type: object
+      additionalProperties: false
+      required: [id, status, version, reportReason, reportedAt, versions, lot]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        status: { $ref: "#/components/schemas/IncidentStatus" }
+        version: { type: integer, minimum: 0 }
+        reportReason: { $ref: "#/components/schemas/IncidentText" }
+        reportedAt: { $ref: "#/components/schemas/Instant" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/IncidentVersionSummary" }
+        lot: { $ref: "#/components/schemas/PanelLotRef" }
+    EstablishmentIncidentPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/EstablishmentIncident" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
     PublicLot:
       type: object
       additionalProperties: false

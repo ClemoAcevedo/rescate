@@ -54,8 +54,8 @@ export function MyLotsSkeleton() {
         <h2><Skeleton /><Skeleton width="70%" /></h2>
         <ul className="lot-meta"><li><Icon name="clock" /><span><Skeleton /><Skeleton width="75%" /></span></li><li><Icon name="box" /><span><Skeleton /><Skeleton width="75%" /></span></li></ul>
       </div>
-      <div className="my-lot__actions">{['Ver lote', 'Validar retiros', 'Vista pública'].map((label, index) => <span className="ui-button ui-button--secondary" key={label}>
-        {index === 2 && <Icon name="eye" />}<Skeleton>{label}</Skeleton>
+      <div className="my-lot__actions">{['Ver lote', 'Validar retiros', 'Incidencias', 'Vista pública'].map((label, index) => <span className="ui-button ui-button--secondary" key={label}>
+        {index === 3 && <Icon name="eye" />}<Skeleton>{label}</Skeleton>
       </span>)}</div>
     </li>)}
   </ul></LoadingState>

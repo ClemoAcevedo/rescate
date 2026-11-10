@@ -1,9 +1,10 @@
 // K043 · Application: reportar y publicar incidencias (RF11). Autoriza, reproduce los
 // reintentos y aplica la transición; Infrastructure ejecuta la transacción bajo bloqueo.
+import type { IncidentStatus } from '../../domain/incidents.js'
 import { incidentStatusAfter, normalizeIncidentInstructions, normalizeIncidentReason, planIncidentClosure,
   requireIncidentTransition } from '../../domain/incidents.js'
 import type { Actor } from '../lots/ports.js'
-import { idempotencyConflict, incidentNotFound, incidentVersionConflict, InventoryDiscrepancyError, lotNotFound, notAuthorized } from '../errors.js'
+import { establishmentNotFound, idempotencyConflict, incidentNotFound, incidentVersionConflict, InventoryDiscrepancyError, lotNotFound, notAuthorized } from '../errors.js'
 import type { IncidentCommand, IncidentDispatchRepository, IncidentRepository, IncidentVersionResult } from './ports.js'
 import { OUTBOX_BATCH_SIZE } from '../../domain/notifications.js'
 
@@ -21,6 +22,15 @@ export function createIncidentUseCases(repository: IncidentRepository) {
       if (!lot) throw lotNotFound()
       if (!await repository.isMember(actor.userId, lot.establishmentId)) throw notAuthorized()
       return repository.listByLot(lotId)
+    },
+
+    /** Incidencias de todos los lotes del establecimiento, solo para sus operadores actuales (K046). */
+    async listByEstablishment(actor: Actor, establishmentId: string, query: { status?: IncidentStatus; page: number }) {
+      const id = await repository.findEstablishment(establishmentId.toLowerCase())
+      if (id === null) throw establishmentNotFound()
+      if (!await repository.isMember(actor.userId, id)) throw notAuthorized()
+      const { items, hasNextPage } = await repository.listByEstablishment(id, query)
+      return { items, page: query.page, hasNextPage }
     },
 
     /** Registra el problema sin tocar el lote: no bloquea, cancela ni avisa. */

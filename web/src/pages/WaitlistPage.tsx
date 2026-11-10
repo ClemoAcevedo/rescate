@@ -156,6 +156,7 @@ function Detail({ id }: { id: string }) {
     {message && <Alert role="alert" tone="warning">{message}</Alert>}
     {entry && <Card className="reservation-detail"><div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
       <h2>{lotTitle(entry.lot.description)}</h2><p>{entry.lot.description}</p>
+      <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}/reportar`} state={{ lotDescription: entry.lot.description }}>Reportar un problema con este lote</Link>
       <dl className="reservation-detail__facts"><div><dt>Cantidad solicitada</dt><dd>{entry.requestedQuantity} packs</dd></div>{entry.offeredQuantity !== null && <div><dt>Cantidad ofrecida</dt><dd>{entry.offeredQuantity} packs</dd></div>}<div><dt>Lugar de retiro</dt><dd>{entry.lot.address}</dd></div><div><dt>Ventana de retiro</dt><dd>{formatWindow(entry.lot.pickupStartsAt, entry.lot.pickupEndsAt, entry.lot.timeZone)} ({entry.lot.timeZone})</dd></div></dl>
       <p>{entry.lot.conditions ?? 'Sin condiciones adicionales.'}</p>
       {entry.status === 'waiting' && !closed && <><p>Tu posición en la cola: {entry.position}. Esperar no retiene packs ni crea una reserva.</p><Button variant="danger" disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('leave')}>Salir de la espera y perder mi posición</Button></>}

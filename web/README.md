@@ -44,7 +44,9 @@ también para el operador desde su panel y los avisos;
 `/registro` y `/login` integran K008. `/operador/lotes/nuevo` y
 `/operador/lotes/:lotId` integran el borrador y la publicación de K010 (K011);
 `/operador/lotes/:lotId/retiros` revisa códigos y confirma retiros (K024); `/operador/panel` muestra el
-[panel del establecimiento](../docs/panel.md) (K035). `/conexion` consulta únicamente
+[panel del establecimiento](../docs/panel.md) (K035). `/operador/incidencias` y
+`/operador/lotes/:lotId/incidencias` gestionan las incidencias, y `/lotes/:id/reportar` recibe el
+reporte de quien reservó o esperó ([incidencias](../docs/incidencias.md#gestión-del-operador), K046). `/conexion` consulta únicamente
 `/health`; las rutas desconocidas muestran la pantalla 404. Recargas directas
 requieren fallback SPA del servidor en producción.
 

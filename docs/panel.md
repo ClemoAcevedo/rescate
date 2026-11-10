@@ -37,8 +37,9 @@ contrato HTTP está en [OpenAPI](api/openapi.yaml) (etiqueta `Panel`).
   vencimientos y retiros. Una reserva nacida de una oferta aparece una vez, como oferta
   aceptada. Los hechos simultáneos muestran primero el cierre del lote.
 
-Las incidencias del lote y sus avisos (pendientes, generados y leídos) se agregan al panel
-con RF11 (#46, #48).
+«Incidencias por revisar» muestra los reportes sin publicar del establecimiento y enlaza a su
+[gestión](incidencias.md#gestión-del-operador), donde cada versión informa sus avisos
+pendientes, generados y leídos.
 
 ## Contrato HTTP
 

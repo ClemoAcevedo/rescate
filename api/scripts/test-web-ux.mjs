@@ -46,6 +46,7 @@ const fixtures = {
   '/api/reservations/res_ux/messages': { items: [{ id: 'msg_ux', sequence: 1, author: 'operator', mine: false, text: 'Nos vemos en el retiro.', createdAt: instant }], hasMore: false, open: true },
   '/api/establishments/est_ux/panel': panel,
   '/api/establishments/est_ux/commitments': { items: [], page: 1, hasNextPage: false },
+  '/api/establishments/est_ux/incidents': { items: [], page: 1, hasNextPage: false },
   '/api/establishments/est_ux/activity': { items: [{ id: 'event_ux', kind: 'lot_published', at: instant, lot, quantity: 10 }], page: 1, hasNextPage: false },
   '/api/establishments/est_ux/lots': { items: [0, 1, 2].map(index => ({ ...operatorLot, id: `lot_${index}` })), page: 1, hasNextPage: false },
   '/api/lots/lot_ux': operatorLot,
