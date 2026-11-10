@@ -15,6 +15,8 @@ import { FormField } from '../components/ui/FormField'
 import { DEFAULT_TIME_ZONE, formatDate, formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import type { OperableEstablishment } from '../services/identity-service'
+import { listEstablishmentIncidents, type EstablishmentIncidentPage } from '../services/incidents-service'
+import { lotIncidentsPath } from '../incidents/incident-labels'
 import {
   getPanel, listActivity, listCommitments, panelError,
   type ActivityEvent, type ActivityPage, type EstablishmentPanel, type OperatorCommitment, type OperatorCommitmentPage, type PanelInventory,
@@ -228,6 +230,35 @@ function Activity({ establishmentId, lotId, refresh, timeZone, onSelectLot }: {
   )
 }
 
+/** Reportes sin publicar del establecimiento: lo que el operador debe revisar primero (K046). */
+function IncidentsToReview({ establishmentId, refresh, single }: { establishmentId: string; refresh: number; single: boolean }) {
+  const load = useCallback((signal: AbortSignal) => listEstablishmentIncidents(establishmentId, { status: 'reported', page: 1 }, signal),
+    [establishmentId])
+  const { value, error, loading } = useLoad<EstablishmentIncidentPage>(`${establishmentId}:${refresh}`, load)
+  const all = `/operador/incidencias${single ? '' : `?establecimiento=${encodeURIComponent(establishmentId)}`}`
+  return (
+    <section className="panel__section" aria-labelledby="panel-incidents" aria-busy={loading}>
+      <div className="panel__section-head">
+        <h2 id="panel-incidents">Incidencias por revisar</h2>
+        <Link to={all}>Ver todas las incidencias</Link>
+      </div>
+      {error && <Alert tone="danger" role="alert">{error}</Alert>}
+      {value && value.items.length === 0 && <p className="panel__empty">No hay reportes por revisar.</p>}
+      {value && value.items.length > 0 && <>
+        <p className="panel__status">{value.hasNextPage ? 'Más de 20 reportes' : value.items.length === 1 ? '1 reporte' : `${value.items.length} reportes`} sin publicar. Nadie recibe avisos hasta que publiques una versión.</p>
+        <ul className="panel-incidents">
+          {value.items.slice(0, 5).map(item => (
+            <li key={item.id}>
+              <Link to={lotIncidentsPath(item.lot.id, item.id)}>{lotTitle(item.lot.description)}</Link>
+              <span>{item.reportReason}</span>
+            </li>
+          ))}
+        </ul>
+      </>}
+    </section>
+  )
+}
+
 function PeriodForm({ from, to, onApply }: { from: string; to: string; onApply: (from: string, to: string) => void }) {
   const [draft, setDraft] = useState({ from, to })
   const [error, setError] = useState<string | null>(null)
@@ -344,12 +375,15 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
                         <Button variant="secondary" aria-pressed={lotId === lot.id}
                           onClick={() => update({ lote: lotId === lot.id ? null : lot.id })}>{lotId === lot.id ? 'Ver todos los lotes' : 'Ver compromisos'}</Button>
                         <Link className="ui-button ui-button--secondary" to={`/operador/lotes/${encodeURIComponent(lot.id)}/retiros`}>Validar retiros</Link>
+                        <Link className="ui-button ui-button--secondary" to={lotIncidentsPath(lot.id)}>Incidencias</Link>
                       </div>
                     </Card>
                   </li>
                 ))}
               </ul>}
           </section>
+
+          <IncidentsToReview establishmentId={establishment.id} refresh={refresh} single={establishments.length === 1} />
 
           <section className="panel__section" aria-labelledby="panel-period">
             <div className="panel__section-head">
