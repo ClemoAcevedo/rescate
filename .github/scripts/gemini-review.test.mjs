@@ -533,3 +533,59 @@ test('a GitHub publication failure is reported instead of announcing a completed
   assert.equal(h.artifacts.length, 1);
   assert.ok(!h.messages.some(message => message.startsWith('Revisión completa:')));
 });
+
+for (const provider of ['Gemini', 'OpenRouter']) test(`PR195: ${provider} receives exact batch coverage in payload and structured schema`, async () => {
+  const files = [file, { ...file, filename: 'web/src/other.ts' }];
+  const h = harness({ files, planOptions: { maxFiles: 1 },
+    ...(provider === 'OpenRouter' ? { statuses: [401], openRouterApiKey: 'openrouter-test-key' } : {}),
+    sourceFiles: { 'api/package.json': '{"type":"module"}' },
+  });
+  const result = await runReview(h.options);
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.coverage.reviewedFiles.sort(), files.map(item => item.filename).sort());
+  const requests = provider === 'Gemini' ? h.models() : h.openRouterRequests();
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    const body = JSON.parse(request.body);
+    const payload = JSON.parse(provider === 'Gemini' ? body.contents[0].parts[0].text : body.messages[1].content);
+    const constraint = (provider === 'Gemini' ? body.generationConfig.responseSchema : body.response_format.json_schema.schema)
+      .properties.reviewedFiles;
+    assert.deepEqual(payload.expectedFiles, [...new Set(payload.files.map(item => item.filename))].sort());
+    if (provider === 'OpenRouter') assert.deepEqual(body.reasoning, { max_tokens: 2048, exclude: true });
+    assert.equal(constraint.minItems, 1);
+    assert.equal(constraint.maxItems, 1);
+    assert.deepEqual(constraint.items.enum, payload.expectedFiles);
+    assert.ok(!constraint.items.enum.includes('api/package.json'), 'context is not reviewed-file coverage');
+    assert.ok(!constraint.items.enum.includes(payload.otherFiles[0]), 'other batches are not coverage');
+  }
+});
+
+test('PR195: wrong coverage is corrected, never silently inferred from the requested paths', async () => {
+  const h = harness({ model: (payload, attempt) => ({ ...review([], payload.files),
+    reviewedFiles: attempt === 0 ? ['unreviewed-context.ts'] : payload.expectedFiles }) });
+  const result = await runReview(h.options);
+  assert.equal(result.complete, true);
+  assert.equal(h.models().length, 2);
+  assert.match(result.diagnostics[0].reason, /cobertura/);
+  assert.deepEqual(h.waits, [10_000]);
+  assert.match(JSON.parse(h.models()[1].body).systemInstruction.parts[0].text, /REINTENTO CORRECTIVO/);
+  assert.match(JSON.parse(h.models()[1].body).systemInstruction.parts[0].text, /otherFiles y context son solo contexto/);
+});
+
+test('a version 3 review does not suppress the stricter coverage contract', async () => {
+  const h = harness({ reviews: [{ user: { login: 'github-actions[bot]' }, commit_id: sha,
+    body: `<!-- gemini-pr-review:v3:${sha}:${base}:complete -->` }] });
+  await runReview(h.options);
+  assert.equal(h.models().length, 1);
+});
+
+for (const provider of ['Gemini', 'OpenRouter']) test(`${provider} classifies body timeouts separately from malformed JSON`, async () => {
+  const timeout = { ok: true, json: async () => { throw new DOMException('secret body or key', 'AbortError'); } };
+  const h = harness(provider === 'Gemini' ? { geminiReplies: [timeout] }
+    : { openRouterApiKey: 'openrouter-test-key', openRouterReplies: [timeout] });
+  const result = await runReview({ ...h.options, ...(provider === 'OpenRouter' ? { apiKey: undefined } : {}) });
+  assert.equal(result.complete, true);
+  assert.match(result.diagnostics[0].reason, /tiempo de espera al recibir/);
+  assert.doesNotMatch(JSON.stringify([result, h.messages]), /secret body or key/);
+  assert.equal(result.usage.unknownRequests, 1);
+});

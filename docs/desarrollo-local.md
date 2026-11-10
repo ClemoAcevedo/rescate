@@ -366,9 +366,10 @@ se revisa con la versión que ya existe en esa base.
 El [planificador](../.github/scripts/review-context.mjs) recupera el diff completo
 desde el merge-base hasta el HEAD, sin depender del patch recortado de GitHub.
 Prioriza código de producción y reparte todos los diffs de texto en hasta 16 lotes
-de 60 000 caracteres JSON cada uno. Divide también bloques grandes conservando los
-números de línea de ambos lados. Binarios, cambios sin diff de texto, líneas que no
-caben y límites excedidos quedan enumerados como pendientes; no producen cobertura
+de 60 000 caracteres JSON y un máximo de ocho archivos distintos por consulta. El límite
+de archivos evita que muchos cambios pequeños compitan por la respuesta del mismo lote.
+Divide también bloques grandes conservando los números de línea de ambos lados. Binarios,
+cambios sin diff de texto, líneas que no caben y límites excedidos quedan enumerados como pendientes; no producen cobertura
 completa.
 
 Cada lote añade hasta 30 000 caracteres de extractos numerados del HEAD: versiones
@@ -386,6 +387,10 @@ una sola pasada con salida estructurada y hasta cinco hallazgos de severidad alt
 o media. Cada hallazgo necesita una línea cambiada (`RIGHT` o `LEFT`), caso
 reproducible, impacto, corrección, confianza mínima 0,85 y una cita exacta del código
 visible. El modelo debe buscar validaciones que lo refuten antes de incluirlo.
+Cada consulta lleva `expectedFiles`, con las rutas únicas de ese lote: el esquema restringe
+los valores y la cantidad de `reviewedFiles` a esa lista. Los imports, documentos y archivos de otros lotes
+son contexto, no cobertura. El script sigue rechazando omisiones, duplicados o rutas ajenas;
+no infiere que se revisó un archivo por haberlo enviado.
 El script comprueba formato, cobertura, ubicación y cita; estas comprobaciones no
 prueban la corrección del diagnóstico. El comentario muestra como máximo cinco
 hallazgos, ordenados por severidad y confianza; el artefacto conserva todos.
@@ -397,7 +402,11 @@ para corregir el formato. Los demás errores HTTP no se reintentan y desactivan
 ese proveedor durante la ejecución: `401` indica credenciales inválidas, `403`
 acceso denegado y `429` límite de uso. Si Gemini no completa el lote, se intenta
 OpenRouter con las mismas validaciones. Los motivos de ambos quedan en los logs
-y en `diagnostics` del resultado, incluso si un intento posterior funciona.
+y en `diagnostics` del resultado, incluso si un intento posterior funciona. Los timeouts
+al recibir el cuerpo se distinguen de un JSON inválido. El respaldo solicita un presupuesto
+de 2048 tokens de razonamiento dentro de los 16 384 de salida y excluye ese texto de la
+respuesta para dejar espacio al JSON de revisión; el uso informado sigue contabilizándose.
+OpenRouter documenta este [control del razonamiento](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
 
 Un lote fallido queda pendiente y se continúa con los restantes. Si solo falla un
 fragmento, el archivo sigue pendiente aunque sus demás fragmentos se revisen.
