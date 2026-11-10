@@ -18,7 +18,7 @@ export const lotReconciledSql = `l.reserved_quantity = COALESCE((SELECT sum(c.qu
     WHERE w.lot_id = l.id AND w.status = 'offered'), 0)`
 
 /** Devuelve cuántas solicitudes se cerraron por vencimiento. `at` es el reloj de la base tras el bloqueo. */
-export async function settleQueue(client: PoolClient, lotId: string, at: Date): Promise<number> {
+export async function settleQueue(client: PoolClient, lotId: string, at: Date, notifyExpired = true): Promise<number> {
   const found = await client.query<{ status: string; pickup_ends_at: Date; paused_at: Date | null }>(
     'SELECT status::text, pickup_ends_at, paused_at FROM public.lots WHERE id = $1', [lotId])
   const lot = found.rows[0]
@@ -33,7 +33,7 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date): 
   // K030: cada oferta vencida avisa a su titular en la misma transacción (ADR 0012).
   let snapshot: { id: string; description: string } | null = null
   const lotOf = async () => snapshot ??= await lotSnapshot(client, lotId)
-  for (const row of lapsed.rows) {
+  for (const row of notifyExpired ? lapsed.rows : []) {
     await appendEvent(client, row.id, { kind: 'offer_expired', recipientUserId: row.user_id, payload: {
       lot: await lotOf(), quantity: row.offered_quantity, waitlistEntryId: row.public_id, reservationId: null, offerExpiresAt: null,
     } }, at)

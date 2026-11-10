@@ -1,5 +1,6 @@
 // K043 · Domain: reglas puras de las incidencias del lote (RF11, anexos H p. 20 e I p. 26).
 // Un reporte no tiene efectos; publicar, actualizar y resolver crean una versión.
+import type { LotStatus } from './lots.js'
 
 export type IncidentStatus = 'reported' | 'open' | 'following' | 'resolved'
 export type PublishedIncidentStatus = Exclude<IncidentStatus, 'reported'>
@@ -9,9 +10,17 @@ export type IncidentAction = typeof INCIDENT_ACTIONS[number]
 export const INCIDENT_TEXT_MAX_LENGTH = 2000
 
 export class IncidentRuleError extends Error {
-  constructor(readonly reason: 'invalid_reason' | 'invalid_instructions' | 'invalid_transition') {
+  constructor(readonly reason: 'invalid_reason' | 'invalid_instructions' | 'invalid_transition' | 'unpublished_lot') {
     super(reason)
   }
+}
+
+/** Un cierre explícito no reescribe cierres previos ni extiende una ventana vencida. */
+export function planIncidentClosure(status: LotStatus, pickupEndsAt: Date, at: Date):
+  { status: 'withdrawn' | 'expired'; at: Date } | null {
+  if (status === 'draft') throw new IncidentRuleError('unpublished_lot')
+  if (status !== 'published') return null
+  return at >= pickupEndsAt ? { status: 'expired', at: pickupEndsAt } : { status: 'withdrawn', at }
 }
 
 function normalizeText(value: string, violation: 'invalid_reason' | 'invalid_instructions'): string {

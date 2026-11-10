@@ -3,7 +3,7 @@ import type { Notification, NotificationPage } from './openapi'
 
 export type { Notification, NotificationPage }
 const kinds = ['offer_issued', 'offer_expired', 'reservation_confirmed', 'reservation_cancelled',
-  'message_from_holder', 'message_from_establishment']
+  'message_from_holder', 'message_from_establishment', 'incident_version']
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const instant = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value))
 const nullableId = (value: unknown) => value === null || (typeof value === 'string' && value.length > 0)
@@ -12,14 +12,28 @@ function notification(value: unknown): Notification {
   if (!record(value) || typeof value.id !== 'string' || !value.id || !kinds.includes(String(value.kind))
     || !instant(value.createdAt) || !(value.readAt === null || instant(value.readAt))
     || !record(value.lot) || typeof value.lot.id !== 'string' || typeof value.lot.description !== 'string'
-    || !Number.isSafeInteger(value.quantity) || (value.quantity as number) < 1
+    || !Number.isSafeInteger(value.quantity) || (value.quantity as number) < (value.kind === 'incident_version' ? 0 : 1)
     || !nullableId(value.waitlistEntryId) || !nullableId(value.reservationId)
     || !(value.offerExpiresAt === null || instant(value.offerExpiresAt))) throw new Error('Aviso inesperado.')
+  let incident: Notification['incident']
+  if (value.kind === 'incident_version') {
+    const detail = value.incident
+    if (!record(detail) || typeof detail.id !== 'string' || !detail.id
+      || !Number.isSafeInteger(detail.version) || (detail.version as number) < 1
+      || !['open', 'following', 'resolved'].includes(String(detail.status))
+      || typeof detail.reason !== 'string' || !detail.reason || typeof detail.instructions !== 'string' || !detail.instructions
+      || !['received', 'committed', 'operator'].includes(String(detail.relation)) || typeof detail.lotClosed !== 'boolean') {
+      throw new Error('Incidencia inesperada.')
+    }
+    incident = { id: detail.id, version: detail.version as number, status: detail.status as NonNullable<Notification['incident']>['status'],
+      reason: detail.reason, instructions: detail.instructions, relation: detail.relation as NonNullable<Notification['incident']>['relation'],
+      lotClosed: detail.lotClosed }
+  }
   // Selección explícita: solo los campos del contrato llegan a la vista.
   return { id: value.id, kind: value.kind as Notification['kind'], createdAt: value.createdAt, readAt: value.readAt,
     lot: { id: value.lot.id, description: value.lot.description }, quantity: value.quantity as number,
     waitlistEntryId: value.waitlistEntryId as string | null, reservationId: value.reservationId as string | null,
-    offerExpiresAt: value.offerExpiresAt as string | null }
+    offerExpiresAt: value.offerExpiresAt as string | null, ...(incident ? { incident } : {}) }
 }
 
 async function send<T>(path: string, parse: (value: unknown) => T, options: { method?: 'POST'; body?: object; headers?: Record<string, string>; signal?: AbortSignal } = {}) {

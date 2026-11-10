@@ -97,6 +97,7 @@ export function handleError(error: unknown, response: Response, log: Log): void 
     else sendError(response, 409, "CONFLICT", "La conversación está cerrada porque la reserva terminó.")
   } else if (error instanceof IncidentRuleError) {
     if (error.reason === "invalid_transition") sendError(response, 409, "CONFLICT", "El estado de la incidencia no permite esta operación.")
+    else if (error.reason === "unpublished_lot") sendError(response, 409, "CONFLICT", "Un borrador no admite cierre por incidencia.")
     else sendError(response, 422, "VALIDATION_ERROR", "Revisa los campos indicados.",
       [{ path: error.reason === "invalid_reason" ? "/reason" : "/instructions", message: `Escribe entre 1 y ${INCIDENT_TEXT_MAX_LENGTH} caracteres.` }])
   } else if (error instanceof WaitlistTransitionError) {

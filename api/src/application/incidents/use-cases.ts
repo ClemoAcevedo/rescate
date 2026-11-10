@@ -1,13 +1,15 @@
 // K043 · Application: reportar y publicar incidencias (RF11). Autoriza, reproduce los
 // reintentos y aplica la transición; Infrastructure ejecuta la transacción bajo bloqueo.
-import { incidentStatusAfter, normalizeIncidentInstructions, normalizeIncidentReason,
+import { incidentStatusAfter, normalizeIncidentInstructions, normalizeIncidentReason, planIncidentClosure,
   requireIncidentTransition } from '../../domain/incidents.js'
 import type { Actor } from '../lots/ports.js'
-import { idempotencyConflict, incidentNotFound, incidentVersionConflict, lotNotFound, notAuthorized } from '../errors.js'
-import type { IncidentCommand, IncidentRepository, IncidentVersionResult } from './ports.js'
+import { idempotencyConflict, incidentNotFound, incidentVersionConflict, InventoryDiscrepancyError, lotNotFound, notAuthorized } from '../errors.js'
+import type { IncidentCommand, IncidentDispatchRepository, IncidentRepository, IncidentVersionResult } from './ports.js'
+import { OUTBOX_BATCH_SIZE } from '../../domain/notifications.js'
 
 function sameCommand(prior: IncidentVersionResult, incidentId: string, command: IncidentCommand): boolean {
   return prior.incidentId === incidentId && prior.status === incidentStatusAfter(command.action)
+    && prior.closeLot === (command.closeLot ?? false)
     && prior.version === command.version + 1 && prior.reason === command.reason && prior.instructions === command.instructions
 }
 
@@ -53,9 +55,22 @@ export function createIncidentUseCases(repository: IncidentRepository) {
           return prior
         }
         if (state.version !== command.version) throw incidentVersionConflict()
-        return writer.publish(actor.userId, command, requireIncidentTransition(state.status, command.action))
+        const status = requireIncidentTransition(state.status, command.action)
+        if (command.closeLot) {
+          const closure = planIncidentClosure(state.lot.status, state.lot.pickupEndsAt, state.at)
+          if (closure) {
+            if (!state.lot.reconciled) throw new InventoryDiscrepancyError(state.lot.id)
+            await writer.closeLot(closure.status, closure.at)
+          }
+        }
+        return writer.publish(actor.userId, command, status)
       })
     },
   }
 }
 export type IncidentUseCases = ReturnType<typeof createIncidentUseCases>
+
+/** Una tanda por vuelta del worker; los destinatarios confirmados sobreviven a reinicios. */
+export function createIncidentDispatcher(repository: IncidentDispatchRepository) {
+  return { processNext: () => repository.enqueue(OUTBOX_BATCH_SIZE) }
+}

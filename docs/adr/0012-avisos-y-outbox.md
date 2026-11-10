@@ -45,8 +45,8 @@ en la misma transacción, sin coordinación adicional.
 
 Entre la transición y el aviso hay la latencia del worker (consulta cada 2 s sin trabajo); con
 el worker detenido, los eventos esperan sin perderse. La bandeja consulta cada 15 s con la vista
-visible y al reconectar, sin push ni WebSocket. Los avisos de incidencias (RF11) agregarán su
-propio conjunto de destinatarios sobre el mismo outbox.
+visible y al reconectar, sin push ni WebSocket. Los avisos de [incidencias](../incidencias.md) (RF11) fijan su conjunto de destinatarios
+por versión y lo convierten en eventos sobre el mismo outbox, por tandas de hasta 50.
 
 ## Verificación
 

@@ -14,7 +14,7 @@ function notificationBody(notification: StoredNotification): HttpSchemas['Notifi
   return { id: notification.id, kind: notification.kind, createdAt: notification.createdAt.toISOString(),
     readAt: notification.readAt === null ? null : notification.readAt.toISOString(),
     lot: { id: payload.lot.id, description: payload.lot.description }, quantity: payload.quantity,
-    waitlistEntryId: payload.waitlistEntryId, reservationId: payload.reservationId, offerExpiresAt: payload.offerExpiresAt }
+    waitlistEntryId: payload.waitlistEntryId, reservationId: payload.reservationId, offerExpiresAt: payload.offerExpiresAt, ...(payload.incident ? { incident: payload.incident } : {}) }
 }
 
 export function createNotificationsRouter(cases: NotificationUseCases, authenticate: Authenticate,

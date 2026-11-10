@@ -34,7 +34,8 @@ export function createIncidentsRouter(cases: IncidentUseCases, authenticate: Aut
 
   router.post('/incidents/:incidentId/versions', withActor(async (actor, request, response) => {
     const body = readBody(request.body, { action: isAction, version: isVersion, reason: isText,
-      instructions: isText, idempotencyKey: isUuid }) as unknown as IncidentCommand
+      instructions: isText, idempotencyKey: isUuid,
+      closeLot: value => value === undefined || typeof value === 'boolean' }) as unknown as IncidentCommand
     const result = await cases.command(actor, id(request.params.incidentId), body)
     response.status(201).json(result satisfies HttpSchemas['IncidentVersionResult'])
   }))

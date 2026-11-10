@@ -1,7 +1,12 @@
 // K043 · Infrastructure: incidencias en PostgreSQL (ADR 0020). No decide permisos ni
 // transiciones: ejecuta bajo el bloqueo del lote lo que Application pide.
-import type { IncidentReport, IncidentRepository, IncidentVersionResult, IncidentView } from '../../application/incidents/ports.js'
+import type { IncidentDispatchRepository, IncidentReport, IncidentRepository, IncidentVersionResult, IncidentView } from '../../application/incidents/ports.js'
 import type { IncidentStatus, PublishedIncidentStatus } from '../../domain/incidents.js'
+import type { LotStatus } from '../../domain/lots.js'
+import type { IncidentNotice } from '../../domain/notifications.js'
+import { closeLot } from './lot-closure.js'
+import { lotReconciledSql } from './waitlist-queue.js'
+import { appendEvent } from './outbox.js'
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
@@ -9,7 +14,7 @@ import type { Pool, PoolClient } from './pool.js'
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const iso = (column: string) => `to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`
 const versionColumns = `i.public_id::text AS "incidentId", v.version, v.status, v.reason, v.instructions,
-  ${iso('v.created_at')} AS "publishedAt"`
+  ${iso('v.created_at')} AS "publishedAt", v.close_lot AS "closeLot", v.lot_closed AS "lotClosed"`
 
 type Db = Pick<PoolClient, 'query'>
 async function member(db: Db, userId: string, establishmentId: string) {
@@ -70,6 +75,7 @@ export function createIncidentRepository(pool: Pool): IncidentRepository {
            ${iso('i.created_at')} AS "reportedAt",
            COALESCE((SELECT json_agg(json_build_object('version', v.version, 'status', v.status, 'reason', v.reason,
                'instructions', v.instructions, 'publishedAt', ${iso('v.created_at')},
+               'closeLot', v.close_lot, 'lotClosed', v.lot_closed,
                'recipientCount', (SELECT count(*) FROM public.incident_recipients r
                  WHERE r.incident_id = v.incident_id AND r.version = v.version)) ORDER BY v.version)
              FROM public.incident_versions v WHERE v.incident_id = i.id), '[]'::json) AS versions
@@ -116,7 +122,7 @@ export function createIncidentRepository(pool: Pool): IncidentRepository {
       return withTransaction(pool, async (client) => {
         await lockIntent(client, 'incident_version', userId, key)
         const unavailable = async (): Promise<never> => { throw new Error('No se escribe sin incidencia') }
-        const missing = { isMember: unavailable, prior: unavailable, publish: unavailable }
+        const missing = { isMember: unavailable, prior: unavailable, publish: unavailable, closeLot: unavailable }
         if (!uuid.test(incidentId)) return operate(null, missing)
         const owner = await client.query<{ lot_id: string }>(
           `SELECT l.public_id::text AS lot_id FROM public.incidents i JOIN public.lots l ON l.id = i.lot_id
@@ -124,11 +130,18 @@ export function createIncidentRepository(pool: Pool): IncidentRepository {
         const locked = owner.rows[0] && await lockLot(client, owner.rows[0].lot_id)
         if (!locked) return operate(null, missing)
         // Todas las versiones pasan por este bloqueo: el estado leído aquí sigue vigente al escribir.
-        const { rows: [incident] } = await client.query<{ id: string; status: IncidentStatus; version: number; establishment_id: string }>(
-          `SELECT i.id::text, i.status, i.version, l.establishment_id::text FROM public.incidents i
+        const { rows: [incident] } = await client.query<{ id: string; status: IncidentStatus; version: number; establishment_id: string;
+          lot_status: LotStatus; pickup_ends_at: Date; reconciled: boolean }>(
+          `SELECT i.id::text, i.status, i.version, l.establishment_id::text,
+             l.status AS lot_status, l.pickup_ends_at, ${lotReconciledSql} AS reconciled FROM public.incidents i
            JOIN public.lots l ON l.id = i.lot_id WHERE i.public_id = $1`, [incidentId])
-        return operate({ status: incident!.status, version: incident!.version }, {
+        return operate({ status: incident!.status, version: incident!.version, at: locked.at,
+          lot: { id: owner.rows[0]!.lot_id, status: incident!.lot_status, pickupEndsAt: incident!.pickup_ends_at, reconciled: incident!.reconciled } }, {
           isMember: actorId => member(client, actorId, incident!.establishment_id),
+          async closeLot(status, at) {
+            await closeLot(client, locked.lotId, status, at, false)
+            await client.query('UPDATE public.lots SET version=version+1, updated_at=$2 WHERE id=$1', [locked.lotId, locked.at])
+          },
           async prior(actorId, intent) {
             const { rows } = await client.query<IncidentVersionResult>(
               `SELECT ${versionColumns} FROM public.incident_versions v JOIN public.incidents i ON i.id = v.incident_id
@@ -139,9 +152,12 @@ export function createIncidentRepository(pool: Pool): IncidentRepository {
             const version = incident!.version + 1
             await client.query('UPDATE public.incidents SET status = $2, version = $3 WHERE id = $1', [incident!.id, status, version])
             await client.query(
-              `INSERT INTO public.incident_versions (incident_id, version, status, reason, instructions, published_by, idempotency_key, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-              [incident!.id, version, status, command.reason, command.instructions, actorId, command.idempotencyKey, locked.at])
+              `INSERT INTO public.incident_versions (incident_id, version, status, reason, instructions, published_by, idempotency_key,
+                 created_at, close_lot, lot_closed)
+               SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9, l.status IN ('expired','withdrawn') OR l.pickup_ends_at <= $8
+               FROM public.lots l WHERE l.id=$10`,
+              [incident!.id, version, status, command.reason, command.instructions, actorId, command.idempotencyKey,
+                locked.at, command.closeLot ?? false, locked.lotId])
             await fixRecipients(client, incident!.id, version, locked.lotId, locked.at)
             const { rows } = await client.query<IncidentVersionResult>(
               `SELECT ${versionColumns} FROM public.incident_versions v JOIN public.incidents i ON i.id = v.incident_id
@@ -151,5 +167,35 @@ export function createIncidentRepository(pool: Pool): IncidentRepository {
         })
       })
     },
+  }
+}
+
+/** Los bloqueos de destinatarios duran solo la creación de una tanda; no se bloquea el lote. */
+export function createIncidentDispatchRepository(pool: Pool): IncidentDispatchRepository {
+  return {
+    enqueue: limit => withTransaction(pool, async client => {
+      const { rows } = await client.query<{ incident_id: string; version: number; user_id: string; relation: IncidentNotice['relation'];
+        id: string; status: IncidentNotice['status']; reason: string; instructions: string; lot_closed: boolean;
+        lot_id: string; description: string; created_at: Date }>(
+        `SELECT r.incident_id::text, r.version, r.user_id::text, r.relation, i.public_id::text AS id,
+           v.status, v.reason, v.instructions, v.lot_closed, l.public_id::text AS lot_id, l.description,
+           GREATEST(v.created_at, r.created_at) AS created_at
+         FROM public.incident_recipients r JOIN public.incident_versions v
+           ON v.incident_id=r.incident_id AND v.version=r.version
+         JOIN public.incidents i ON i.id=r.incident_id JOIN public.lots l ON l.id=i.lot_id
+         WHERE r.outbox_event_id IS NULL ORDER BY r.incident_id,r.version,r.user_id
+         LIMIT $1 FOR UPDATE OF r SKIP LOCKED`, [limit])
+      for (const row of rows) {
+        const eventId = await appendEvent(client, row.incident_id, { kind: 'incident_version', recipientUserId: row.user_id,
+          payload: { lot: { id: row.lot_id, description: row.description }, quantity: 0,
+            waitlistEntryId: null, reservationId: null, offerExpiresAt: null,
+            incident: { id: row.id, version: row.version, status: row.status, reason: row.reason,
+              instructions: row.instructions, relation: row.relation, lotClosed: row.lot_closed } },
+        }, row.created_at, row.version)
+        await client.query(`UPDATE public.incident_recipients SET outbox_event_id=$4
+          WHERE incident_id=$1 AND version=$2 AND user_id=$3`, [row.incident_id, row.version, row.user_id, eventId])
+      }
+      return rows.length
+    }),
   }
 }

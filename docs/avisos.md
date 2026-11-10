@@ -13,6 +13,7 @@ avisos persisten aunque no esté conectada y se recuperan al volver. El contrato
 | `offer_expired` | Se registra el vencimiento de esa oferta | Titular de la solicitud | `/espera/:id` |
 | `reservation_confirmed` | Se acepta la oferta y nace la reserva | Titular | `/reservas/:id` |
 | `reservation_cancelled` | El titular cancela su [reserva](reservas.md) o el operador retira la publicación | Titular | `/reservas/:id` |
+| `incident_version` | Publicar, actualizar o resolver una [incidencia](incidencias.md) | Destinatarios fijados de esa versión | `/avisos` (instrucciones y lectura) |
 | `message_from_holder` | El titular escribe en el [chat](chat.md) de la reserva | Cada operador del local | `/operador/panel` |
 | `message_from_establishment` | Un operador escribe en el [chat](chat.md) de la reserva | Titular | `/reservas/:id` |
 
@@ -50,6 +51,13 @@ reconectar (anexos H p. 20).
 
 ## Outbox y worker
 
+Para incidencias, el worker convierte primero hasta 50 destinatarios aún sin evento en
+`outbox_events`, en una transacción corta que marca sus filas de origen. La versión forma
+parte de la unicidad del evento: una actualización vuelve a avisar a cada persona. Un fallo
+antes de confirmar deja los destinatarios pendientes; después, la concesión y los reintentos
+del outbox recuperan el aviso. El cierre por incidencia usa estos avisos y conserva las
+entregas previas. Los detalles están en [incidencias](incidencias.md).
+
 `outbox_events` guarda tipo, fila, versión, destinatario, datos del aviso, estado
 (`pending`, `processed`, `failed`), intentos, disponibilidad y reclamo. El worker:
 
@@ -73,3 +81,6 @@ positivo de una búsqueda por patrón.
 | `npm --prefix api run db:test:notifications:compose` | PostgreSQL real: evento confirmado con la transición y ausente si se revierte, un aviso por evento al reprocesar, aceptación, permisos, oferta vencida que leer no reactiva, persistencia tras cerrar sesión, reclamo vencido retomado, dos workers en paralelo con 100 eventos y evento `failed`. |
 | `npm --prefix api run db:test:queue-worker:compose` | Flujo de [cola](cola-de-espera.md) con el worker muerto tras reclamar la tanda: al reiniciar, un aviso por evento en la sesión de cada persona. |
 | `npm --prefix api run test:web:notifications` | Chromium con API y worker reales: contador por consulta periódica, recuperación al reconectar, bandeja, lectura que lleva a una oferta vencida sin aceptar y bandejas separadas. Corre dentro de `test:web:compose`. |
+
+`test:web:notifications` también comprueba avisos de incidencia y su lectura sin navegar a
+una reserva inexistente. Las instrucciones se muestran en la propia tarjeta.

@@ -1,6 +1,7 @@
 // K043 · Application: límites hacia Infrastructure para las incidencias. No exponen pg ni
 // SQL; los comandos que crean versiones reciben el estado bajo el bloqueo del lote.
 import type { IncidentAction, IncidentStatus, PublishedIncidentStatus } from '../../domain/incidents.js'
+import type { LotStatus } from '../../domain/lots.js'
 
 export interface IncidentReport { id: string; lotId: string; reason: string; createdAt: string }
 
@@ -12,6 +13,8 @@ export interface IncidentVersionResult {
   reason: string
   instructions: string
   publishedAt: string
+  closeLot: boolean
+  lotClosed: boolean
 }
 
 export interface IncidentVersionSummary extends Omit<IncidentVersionResult, 'incidentId'> { recipientCount: number }
@@ -31,6 +34,8 @@ export interface IncidentCommand {
   reason: string
   instructions: string
   idempotencyKey: string
+  /** Decisión explícita; omitir equivale a false. */
+  closeLot?: boolean
 }
 
 export interface ReportWriter {
@@ -40,14 +45,23 @@ export interface ReportWriter {
   insert(reason: string): Promise<IncidentReport>
 }
 
-export interface IncidentState { status: IncidentStatus; version: number }
+export interface IncidentState {
+  status: IncidentStatus
+  version: number
+  lot: { id: string; status: LotStatus; pickupEndsAt: Date; reconciled: boolean }
+  at: Date
+}
 
 export interface IncidentWriter {
   isMember(userId: string): Promise<boolean>
   prior(userId: string, key: string): Promise<IncidentVersionResult | null>
+  closeLot(status: 'withdrawn' | 'expired', at: Date): Promise<void>
   /** Confirma estado, versión y destinatarios juntos, bajo el bloqueo del lote. */
   publish(userId: string, command: IncidentCommand, status: PublishedIncidentStatus): Promise<IncidentVersionResult>
 }
+
+/** Convierte hasta limit destinatarios pendientes en eventos, atómicamente y sin bloquear lotes. */
+export interface IncidentDispatchRepository { enqueue(limit: number): Promise<number> }
 
 export interface IncidentRepository {
   findLot(lotId: string): Promise<{ establishmentId: string } | null>

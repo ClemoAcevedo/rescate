@@ -56,7 +56,8 @@ export function createOperations(pool: Pool, maxExpiryAttempts: number): Operati
         `WITH lots AS (
            SELECT d.due_at FROM (${DUE_LOTS}) d JOIN public.lots l ON l.id = d.lot_id WHERE NOT (${LOT_FAILED})),
          events AS (
-           SELECT e.created_at, ${EVENT_FAILED} AS failed FROM public.outbox_events e WHERE e.status IN ('pending', 'failed')),
+           SELECT e.created_at, ${EVENT_FAILED} AS failed FROM public.outbox_events e WHERE e.status IN ('pending', 'failed')
+           UNION ALL SELECT r.created_at, false FROM public.incident_recipients r WHERE r.outbox_event_id IS NULL),
          queues AS (
            SELECT 1 AS position, 'expiries' AS queue, count(*)::int AS pending, min(due_at) AS oldest,
              (SELECT count(*)::int FROM public.lots l WHERE ${LOT_FAILED}) AS failed FROM lots

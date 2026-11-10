@@ -27,7 +27,7 @@ async function account(label) {
   }
   assert.equal((await call('POST', '/auth/register', { email, password, privacyConsent: true })).status, 201)
   assert.equal((await call('POST', '/auth/login', { email, password })).status, 200)
-  return { context, call }
+  return { context, call, email }
 }
 
 try {
@@ -122,6 +122,48 @@ try {
     WHERE (e.payload->'lot'->>'id') = $1 GROUP BY kind ORDER BY kind`, [lotId])
   assert.deepEqual(counts.rows, [{ kind: 'offer_expired', n: 1 }, { kind: 'offer_issued', n: 1 }, { kind: 'reservation_cancelled', n: 1 }])
   ok('cada bandeja muestra solo lo propio; un aviso por evento y destinatario')
+
+  // K044: la bandeja existente debe poder recuperar los avisos del nuevo tipo.
+  await db.query(`INSERT INTO memberships(user_id,establishment_id) SELECT id,$2 FROM users WHERE email=$1`, [ana.email, establishment])
+  const incident = await cata.call('POST', `/lots/${lotId}/incidents`, { reason: 'Revisar el contenido', idempotencyKey: randomUUID() })
+  assert.equal(incident.status, 201)
+  const version = { action: 'publish', version: 0, reason: 'Problema de contenido. '.repeat(40),
+    instructions: 'No consumir. Contactar al establecimiento.', closeLot: true, idempotencyKey: randomUUID() }
+  const versionPath = `/incidents/${incident.body.id}/versions`
+  assert.equal((await ana.call('POST', versionPath, { ...version, closeLot: 'true' })).status, 422)
+  assert.equal((await bea.call('POST', versionPath, version)).status, 404)
+  await bea.context.setOffline(true)
+  const published = await ana.call('POST', versionPath, version)
+  assert.equal(published.status, 201); assert.equal(published.body.lotClosed, true)
+  assert.deepEqual((await ana.call('POST', versionPath, version)).body, published.body)
+  assert.equal((await ana.call('POST', versionPath, { ...version, closeLot: false })).status, 409)
+  await page.waitForTimeout(2500)
+  await bea.context.setOffline(false)
+  const incidentCard = page.getByRole('article', { name: 'Aviso de incidencia', exact: true })
+  await incidentCard.waitFor({ timeout: 20000 })
+  await incidentCard.getByText(/Tuviste un compromiso con este lote/).waitFor()
+  await incidentCard.getByText(/No consumir\. Contactar al establecimiento/).waitFor()
+  await incidentCard.getByText(/El lote está cerrado/).waitFor()
+  for (const width of [360,1366]) {
+    await page.setViewportSize({ width, height: 800 })
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  }
+  const incidentRead = page.waitForResponse(r => /\/api\/notifications\/[^/]+\/read$/.test(new URL(r.url()).pathname))
+  await incidentCard.getByRole('button', { name: 'Marcar como leído' }).click()
+  assert.equal((await incidentRead).status(), 200)
+  assert.equal(await incidentCard.getByText('Nuevo', { exact: true }).count(), 0)
+  const cataId = (await db.query('SELECT id FROM users WHERE email=$1', [cata.email])).rows[0].id
+  const cataNotice = (await db.query(`SELECT n.public_id::text AS id FROM notifications n
+    WHERE n.user_id=$1 AND n.kind='incident_version'`, [cataId])).rows[0].id
+  assert.equal((await bea.call('POST', `/notifications/${cataNotice}/read`, {})).status, 404)
+  assert.equal((await db.query('SELECT status FROM commitments WHERE public_id=$1', [cataReservation.body.id])).rows[0].status, 'cancelled')
+  const resolved = await ana.call('POST', versionPath, { ...version, action: 'resolve', version: 1,
+    reason: 'Problema atendido', instructions: 'La incidencia se ha resuelto.', closeLot: false, idempotencyKey: randomUUID() })
+  assert.equal(resolved.status, 201); assert.equal(resolved.body.lotClosed, true)
+  await page.reload()
+  await page.getByRole('article', { name: 'Incidencia resuelta', exact: true }).waitFor({ timeout: 20000 })
+  assert.equal((await db.query('SELECT status FROM lots WHERE public_id=$1', [lotId])).rows[0].status, 'withdrawn')
+  ok('K044: cerrar por HTTP, reintentar, reconectar, leer instrucciones largas a 360/1366 px, privacidad y resolución sin reapertura')
 
   assert.deepEqual(pageErrors, [])
   assert.deepEqual(rateLimited, [], 'la prueba no debe depender de respuestas 429')

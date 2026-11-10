@@ -23,6 +23,14 @@ function describe(notification: Notification): { title: string; text: string; ac
   const entry = `/espera/${encodeURIComponent(notification.waitlistEntryId ?? '')}`
   const reservation = `/reservas/${encodeURIComponent(notification.reservationId ?? '')}`
   switch (notification.kind) {
+    case 'incident_version': {
+      const incident = notification.incident!
+      const relation = incident.relation === 'received' ? 'Recibiste packs de este lote.'
+        : incident.relation === 'committed' ? 'Tuviste un compromiso con este lote.' : 'Eres operador del establecimiento.'
+      return { title: incident.status === 'resolved' ? 'Incidencia resuelta' : 'Aviso de incidencia',
+        action: 'Marcar como leído', to: '/avisos',
+        text: `${relation} ${incident.reason} Instrucciones: ${incident.instructions}${incident.lotClosed ? ' El lote está cerrado.' : ''}` }
+    }
     case 'offer_issued':
       return { title: `Tienes una oferta por ${packs(notification.quantity)}`, action: 'Ver oferta', to: entry,
         text: `Puedes aceptarla hasta ${notification.offerExpiresAt ? when(notification.offerExpiresAt) : 'su vencimiento'} (el plazo se vuelve a comprobar al aceptar).` }

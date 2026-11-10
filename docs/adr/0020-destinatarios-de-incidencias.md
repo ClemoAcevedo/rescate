@@ -12,7 +12,19 @@ incorporan a su titular a la última versión de cada incidencia vigente, de mod
 publicar y reservar no pueden omitir a nadie, gane quien gane.
 
 La tabla es el conjunto fijado y no la bandeja. Generar los avisos por tandas desde esas
-filas queda en K044, sobre el outbox de ADR 0012. Publicar no llama a servicios externos.
+filas usa el outbox de ADR 0012. Publicar no llama a servicios externos.
+
+El worker bloquea hasta 50 filas pendientes de destinatarios con `SKIP LOCKED`, crea los
+eventos con versión explícita y guarda `outbox_event_id` en la misma transacción corta.
+No toma el bloqueo del lote. Así, una caída revierte toda la tanda o deja eventos que el
+outbox recupera con su concesión y sus reintentos. La clave del evento incluye tipo,
+incidencia, versión y persona; una versión nueva no colisiona con la anterior.
+
+`closeLot` decide explícitamente cerrar junto con una versión. Application valida la
+transición y la conciliación; Infrastructure ejecuta el protocolo común de cierre con
+el mismo cliente, antes de fijar los destinatarios. `lotClosed` conserva el estado de
+cierre de esa versión. Resolver no revierte cierres. La decisión forma parte de los
+parámetros idempotentes y se conserva en el historial.
 
 La fila guarda el vínculo de la persona con el lote al momento de fijarla (`received`,
 `committed` u `operator`), porque el texto distingue a quien recibió packs y ese hecho
