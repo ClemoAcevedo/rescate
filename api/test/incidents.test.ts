@@ -4,7 +4,12 @@ import { randomUUID } from 'node:crypto'
 import { IncidentRuleError, normalizeIncidentInstructions, normalizeIncidentReason, planIncidentClosure,
   requireIncidentTransition } from '../src/domain/incidents.js'
 import { createIncidentUseCases } from '../src/application/incidents/use-cases.js'
-import type { IncidentCommand, IncidentRepository, IncidentState, IncidentVersionResult } from '../src/application/incidents/ports.js'
+import type { EstablishmentIncidentView, IncidentCommand, IncidentRepository, IncidentState, IncidentVersionResult } from '../src/application/incidents/ports.js'
+import { once } from 'node:events'
+import type { AddressInfo } from 'node:net'
+import { createApp } from '../src/app.js'
+import { createIncidentsRouter } from '../src/http/incidents-router.js'
+import { assertContract } from './support/openapi.js'
 
 const actor = { userId: '7' }
 const incidentId = '00000000-0000-4000-8000-000000000001'
@@ -21,6 +26,8 @@ function repository({ state = { status: 'reported', version: 0 } as Pick<Inciden
     findIncident: async () => ({ establishmentId: '1' }),
     isMember: async () => member,
     listByLot: async () => [],
+    findEstablishment: async () => '1',
+    listByEstablishment: async () => ({ items: [], hasNextPage: false }),
     withReport: async () => { throw new Error('no usado') },
     async withCommand(_user, _incident, _key, operate) {
       calls.locked++
@@ -115,4 +122,61 @@ test('la misma clave con otros parámetros es un conflicto', async () => {
   }
   const { fake } = repository({ prior: { ...published, incidentId: '00000000-0000-4000-8000-000000000002' } })
   await assert.rejects(createIncidentUseCases(fake).command(actor, incidentId, command()), { code: 'idempotency_conflict' })
+})
+
+const ESTABLISHMENT = '11111111-1111-4111-8111-111111111111'
+const LOT = '33333333-3333-4333-8333-333333333333'
+const versionOf = ({ incidentId: _id, ...version }: IncidentVersionResult) => version
+const listed: EstablishmentIncidentView = { id: incidentId, status: 'open', version: 1, reportReason: 'Pan con moho',
+  reportedAt: '2030-01-01T11:00:00.000Z', lot: { id: LOT, description: 'Pan del día' },
+  versions: [{ ...versionOf(published), recipientCount: 3, publishedBy: 'operadora@example.test', notices: { pending: 1, generated: 1, read: 1 } }] }
+
+test('K046: solo un operador actual lista las incidencias de su establecimiento', async () => {
+  const queries: unknown[] = []
+  const base = repository().fake
+  const fake: IncidentRepository = { ...base,
+    findEstablishment: async id => id === ESTABLISHMENT ? '10' : null,
+    isMember: async (_user, establishment) => establishment === '10',
+    listByEstablishment: async (id, query) => { queries.push([id, query]); return { items: [listed], hasNextPage: true } },
+  }
+  const cases = createIncidentUseCases(fake)
+  await assert.rejects(cases.listByEstablishment(actor, '22222222-2222-4222-8222-222222222222', { page: 1 }), { code: 'establishment_not_found' })
+  await assert.rejects(createIncidentUseCases({ ...fake, isMember: async () => false }).listByEstablishment(actor, ESTABLISHMENT, { page: 1 }),
+    { code: 'not_authorized' })
+  assert.equal(queries.length, 0, 'no se consulta sin permiso')
+  const page = await cases.listByEstablishment(actor, ESTABLISHMENT.toUpperCase(), { status: 'open', page: 2 })
+  assert.deepEqual(page, { items: [listed], page: 2, hasNextPage: true })
+  assert.deepEqual(queries, [['10', { status: 'open', page: 2 }]])
+})
+
+test('K046 · HTTP: incidencias del establecimiento según contrato y consulta estricta', async () => {
+  const base = repository().fake
+  const app = createApp({ incidentsRouter: createIncidentsRouter(createIncidentUseCases({ ...base,
+    findEstablishment: async id => id === ESTABLISHMENT ? '10' : null,
+    listByEstablishment: async () => ({ items: [listed], hasNextPage: false }),
+  }), async () => ({ userId: '7' }), async () => {}, () => {}) })
+  const server = app.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const call = async (path: string) => {
+    const response = await fetch(origin + path)
+    const body = await response.json()
+    assertContract('GET', path, response, body)
+    return { status: response.status, body }
+  }
+  try {
+    const ok = await call(`/establishments/${ESTABLISHMENT}/incidents?status=open&page=1`)
+    assert.equal(ok.status, 200)
+    assert.deepEqual(ok.body.items[0].versions[0].notices, { pending: 1, generated: 1, read: 1 })
+    assert.equal(ok.body.items[0].versions[0].publishedBy, 'operadora@example.test')
+    assert.equal((await call('/establishments/22222222-2222-4222-8222-222222222222/incidents')).status, 404)
+    for (const [query, field] of [['status=closed', '/status'], ['page=0', '/page'], ['lotId=x', '/lotId'],
+      ['status=open&status=resolved', '/status']] as const) {
+      const invalid = await call(`/establishments/${ESTABLISHMENT}/incidents?${query}`)
+      assert.equal(invalid.status, 422, query)
+      assert.deepEqual(invalid.body.error.details.issues.map((issue: { path: string }) => issue.path), [field], query)
+    }
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  }
 })

@@ -202,6 +202,9 @@ export interface HttpSchemas {
   IncidentVersionSummary: IncidentVersionSummary
   Incident: Incident
   IncidentList: IncidentList
+  IncidentNoticeCounts: IncidentNoticeCounts
+  EstablishmentIncident: EstablishmentIncident
+  EstablishmentIncidentPage: EstablishmentIncidentPage
 }
 export interface LotManagementRequest {
   action: "reduce_stock" | "pause" | "resume" | "withdraw"
@@ -991,6 +994,28 @@ export interface IncidentVersionSummary {
    * Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores.
    */
   recipientCount: number
+  /**
+   * Correo normalizado en minúsculas, sin espacios exteriores; no afirma verificación ni elimina puntos o sufijos +.
+   */
+  publishedBy: string
+  notices: IncidentNoticeCounts
+}
+/**
+ * Avisos de la versión por destinatario; suman recipientCount. Sin identificar a nadie.
+ */
+export interface IncidentNoticeCounts {
+  /**
+   * Aún sin aviso: en cola, reintentando o con un fallo que ve Operación.
+   */
+  pending: number
+  /**
+   * Aviso creado y todavía sin leer.
+   */
+  generated: number
+  /**
+   * Aviso con lectura registrada por su destinatario.
+   */
+  read: number
 }
 export interface Incident {
   id: PublicId
@@ -1005,4 +1030,21 @@ export interface IncidentList {
    * @maxItems 50
    */
   items: Incident[]
+}
+export interface EstablishmentIncident {
+  id: PublicId
+  status: IncidentStatus
+  version: number
+  reportReason: IncidentText
+  reportedAt: Instant
+  versions: IncidentVersionSummary[]
+  lot: PanelLotRef
+}
+export interface EstablishmentIncidentPage {
+  /**
+   * @maxItems 20
+   */
+  items: EstablishmentIncident[]
+  page: number
+  hasNextPage: boolean
 }

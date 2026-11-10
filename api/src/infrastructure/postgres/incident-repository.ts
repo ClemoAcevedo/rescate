@@ -1,6 +1,7 @@
-// K043 · Infrastructure: incidencias en PostgreSQL (ADR 0020). No decide permisos ni
+// K043/K046 · Infrastructure: incidencias en PostgreSQL (ADR 0020 y 0021). No decide permisos ni
 // transiciones: ejecuta bajo el bloqueo del lote lo que Application pide.
-import type { IncidentDispatchRepository, IncidentReport, IncidentRepository, IncidentVersionResult, IncidentView } from '../../application/incidents/ports.js'
+import type { EstablishmentIncidentView, IncidentDispatchRepository, IncidentReport, IncidentRepository, IncidentVersionResult,
+  IncidentView } from '../../application/incidents/ports.js'
 import type { IncidentStatus, PublishedIncidentStatus } from '../../domain/incidents.js'
 import type { LotStatus } from '../../domain/lots.js'
 import type { IncidentNotice } from '../../domain/notifications.js'
@@ -15,6 +16,27 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const iso = (column: string) => `to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`
 const versionColumns = `i.public_id::text AS "incidentId", v.version, v.status, v.reason, v.instructions,
   ${iso('v.created_at')} AS "publishedAt", v.close_lot AS "closeLot", v.lot_closed AS "lotClosed"`
+
+/**
+ * Versiones de la incidencia `i`, con el correo de quien publicó cada una y sus avisos por
+ * destinatario: sin evento o sin aviso aún, aviso sin leer y aviso leído (K046).
+ */
+const versionsJson = `COALESCE((SELECT json_agg(json_build_object('version', v.version, 'status', v.status, 'reason', v.reason,
+    'instructions', v.instructions, 'publishedAt', ${iso('v.created_at')}, 'closeLot', v.close_lot, 'lotClosed', v.lot_closed,
+    'publishedBy', u.email, 'recipientCount', n.total,
+    'notices', json_build_object('pending', n.pending, 'generated', n.generated, 'read', n.read)) ORDER BY v.version)
+  FROM public.incident_versions v JOIN public.users u ON u.id = v.published_by
+  CROSS JOIN LATERAL (SELECT count(*)::int AS total,
+      count(*) FILTER (WHERE m.id IS NULL)::int AS pending,
+      count(*) FILTER (WHERE m.id IS NOT NULL AND m.read_at IS NULL)::int AS generated,
+      count(*) FILTER (WHERE m.read_at IS NOT NULL)::int AS read
+    FROM public.incident_recipients r
+    LEFT JOIN public.notifications m ON m.event_id = r.outbox_event_id AND m.user_id = r.user_id
+    WHERE r.incident_id = v.incident_id AND r.version = v.version) n
+  WHERE v.incident_id = i.id), '[]'::json)`
+const incidentColumns = `i.public_id::text AS id, i.status, i.version, i.report_reason AS "reportReason",
+  ${iso('i.created_at')} AS "reportedAt", ${versionsJson} AS versions`
+const PAGE_SIZE = 20
 
 type Db = Pick<PoolClient, 'query'>
 async function member(db: Db, userId: string, establishmentId: string) {
@@ -71,17 +93,25 @@ export function createIncidentRepository(pool: Pool): IncidentRepository {
     async listByLot(lotId) {
       // Una sola consulta: cada incidencia y sus versiones pertenecen a la misma foto.
       const { rows } = await pool.query<IncidentView>(
-        `SELECT i.public_id::text AS id, i.status, i.version, i.report_reason AS "reportReason",
-           ${iso('i.created_at')} AS "reportedAt",
-           COALESCE((SELECT json_agg(json_build_object('version', v.version, 'status', v.status, 'reason', v.reason,
-               'instructions', v.instructions, 'publishedAt', ${iso('v.created_at')},
-               'closeLot', v.close_lot, 'lotClosed', v.lot_closed,
-               'recipientCount', (SELECT count(*) FROM public.incident_recipients r
-                 WHERE r.incident_id = v.incident_id AND r.version = v.version)) ORDER BY v.version)
-             FROM public.incident_versions v WHERE v.incident_id = i.id), '[]'::json) AS versions
-         FROM public.incidents i JOIN public.lots l ON l.id = i.lot_id
+        `SELECT ${incidentColumns} FROM public.incidents i JOIN public.lots l ON l.id = i.lot_id
          WHERE l.public_id = $1 ORDER BY i.id DESC LIMIT 50`, [lotId])
       return rows
+    },
+
+    async findEstablishment(establishmentId) {
+      if (!uuid.test(establishmentId)) return null
+      const { rows } = await pool.query<{ id: string }>(
+        'SELECT id::text FROM public.establishments WHERE public_id = $1', [establishmentId])
+      return rows[0]?.id ?? null
+    },
+
+    async listByEstablishment(establishmentId, { status, page }) {
+      const { rows } = await pool.query<EstablishmentIncidentView>(
+        `SELECT ${incidentColumns}, json_build_object('id', l.public_id::text, 'description', l.description) AS lot
+         FROM public.incidents i JOIN public.lots l ON l.id = i.lot_id
+         WHERE l.establishment_id = $1 AND ($2::public.incident_status IS NULL OR i.status = $2)
+         ORDER BY i.id DESC LIMIT $3 OFFSET $4`, [establishmentId, status ?? null, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE])
+      return { items: rows.slice(0, PAGE_SIZE), hasNextPage: rows.length > PAGE_SIZE }
     },
 
     async withReport(userId, lotId, key, operate) {
