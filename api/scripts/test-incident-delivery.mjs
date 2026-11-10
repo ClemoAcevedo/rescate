@@ -263,19 +263,33 @@ try {
   assert.equal((await pending(failedIncident.id)).length, 1); assert.equal((await events(failedIncident.id)).length, 0)
   await query('DROP TRIGGER fail_k044_event ON outbox_events'); await query('DROP FUNCTION fail_k044_event()')
   await dispatcher.processNext()
-  const failDelivery = createOutboxProcessor({ ...outbox, deliver: async () => { throw new Error('fallo al generar aviso') } }, now, () => 0.5)
-  await failDelivery.processNext()
-  let [event] = await events(failedIncident.id)
-  assert.equal(event.status, 'pending'); assert.equal(event.attempts, 1); assert.ok(event.available_at > now())
-  await query("UPDATE outbox_events SET available_at=now(),attempts=4 WHERE id=$1", [event.id])
-  await failDelivery.processNext()
-  ;[event] = await events(failedIncident.id)
+  // Un solo reloj para disponibilidad y reclamo: PostgreSQL conserva microsegundos,
+  // mientras Date tiene milisegundos. No depender de cuánto tarde una consulta en CI.
+  let attemptAt = new Date((await query('SELECT clock_timestamp() AS at'))[0].at.getTime()+1000)
+  const failDelivery = createOutboxProcessor({ ...outbox, deliver: async () => { throw new Error('fallo al generar aviso') } },
+    () => attemptAt, () => 0.5)
+  let event
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    assert.equal(await failDelivery.processNext(), 1, `se reclama el intento ${attempt}`)
+    ;[event] = await events(failedIncident.id)
+    assert.equal(event.attempts, attempt)
+    if (attempt < 5) {
+      assert.equal(event.status, 'pending'); assert.ok(event.available_at > attemptAt)
+      assert.equal(await failDelivery.processNext(), 0, 'no se reintenta antes de la espera')
+      attemptAt = new Date(event.available_at.getTime()-1)
+      assert.equal(await failDelivery.processNext(), 0, 'un milisegundo antes sigue pendiente')
+      attemptAt = event.available_at
+    }
+  }
   assert.equal(event.status, 'failed'); assert.equal(event.attempts, 5)
   assert.equal((await createOperations(pool, 5).readBacklog()).find(q => q.queue === 'notifications').failed, 1)
   // Operación reactiva el mismo evento; las dos entregas idempotentes no duplican el aviso.
-  await query("UPDATE outbox_events SET status='pending',attempts=0,available_at=now() WHERE id=$1", [event.id])
-  const [reclaimed] = await outbox.claim(50, now(), new Date(Date.now()+120000))
-  await outbox.deliver(reclaimed, now()); await outbox.deliver(reclaimed, now())
+  await query("UPDATE outbox_events SET status='pending',attempts=0,available_at=$2 WHERE id=$1", [event.id, attemptAt])
+  const reclaimedEvents = await outbox.claim(50, attemptAt, new Date(attemptAt.getTime()+120000))
+  assert.equal(reclaimedEvents.length, 1)
+  const [reclaimed] = reclaimedEvents
+  assert.equal(reclaimed.id, String(event.id))
+  await outbox.deliver(reclaimed, attemptAt); await outbox.deliver(reclaimed, attemptAt)
   assert.equal((await query('SELECT count(*)::int n FROM notifications WHERE event_id=$1', [event.id]))[0].n, 1)
   ok('fallo de fan-out conserva el pendiente; entrega reintenta con espera, falla visible a cinco intentos y se reactiva sin duplicar')
 
