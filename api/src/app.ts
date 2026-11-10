@@ -16,6 +16,7 @@ export interface AppDependencies {
   notificationsRouter?: Router
   chatRouter?: Router
   panelRouter?: Router
+  incidentsRouter?: Router
   photosRouter?: Router
   authRouter?: Router
   traffic?: express.RequestHandler
@@ -68,6 +69,7 @@ export function createApp(dependencies: AppDependencies = {}): express.Express {
   if (dependencies.notificationsRouter) app.use(dependencies.notificationsRouter)
   if (dependencies.chatRouter) app.use(dependencies.chatRouter)
   if (dependencies.panelRouter) app.use(dependencies.panelRouter)
+  if (dependencies.incidentsRouter) app.use(dependencies.incidentsRouter)
   // Fotos: cuerpo binario con su propio límite; express.json ignora image/*.
   if (dependencies.photosRouter) app.use(dependencies.photosRouter)
 

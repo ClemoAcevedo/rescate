@@ -18,6 +18,8 @@ export type ApplicationErrorCode =
   | "waitlist_entry_not_found"
   | "notification_not_found"
   | "pickup_review_suspended"
+  | "incident_not_found"
+  | "incident_version_conflict"
 
 export class ApplicationError extends Error {
   readonly code: ApplicationErrorCode
@@ -55,6 +57,13 @@ export const pickupCodeNotFound = (): ApplicationError =>
 /** Inexistente o de otra persona: no se distingue para no revelar solicitudes ajenas. */
 export const waitlistEntryNotFound = (): ApplicationError =>
   new ApplicationError("waitlist_entry_not_found", "La solicitud no existe.")
+
+/** Inexistente o de otro establecimiento: no se distingue para no exponer incidencias ajenas. */
+export const incidentNotFound = (): ApplicationError =>
+  new ApplicationError("incident_not_found", "La incidencia no existe.")
+
+export const incidentVersionConflict = (): ApplicationError =>
+  new ApplicationError("incident_version_conflict", "La incidencia cambió desde su última lectura.")
 
 export const establishmentNotFound = (): ApplicationError =>
   new ApplicationError("establishment_not_found", "El establecimiento no existe.")

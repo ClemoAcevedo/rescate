@@ -6,6 +6,7 @@ import type {
 } from '../../application/waitlist/ports.js'
 import type { WaitlistStatus } from '../../domain/waitlist.js'
 import { isAssignable } from '../../domain/waitlist.js'
+import { incorporateIncidentRecipient } from './incident-repository.js'
 import { lockIntent, lockLot } from './lot-lock.js'
 import { appendEvent } from './outbox.js'
 import { withTransaction } from './pool.js'
@@ -100,6 +101,7 @@ export function createWaitlistRepository(pool: Pool): WaitlistRepository {
             const inserted = await client.query<{ id: string }>(
               `INSERT INTO public.waitlist_entries (user_id, lot_id, requested_quantity, idempotency_key, created_at)
                VALUES ($1, $2, $3, $4, $5) RETURNING id::text`, [userId, locked.lotId, quantity, key, at])
+            await incorporateIncidentRecipient(client, locked.lotId, userId, at)
             // ADR 0002: si hay libres, la cabeza recibe de inmediato una oferta, parcial si no alcanza.
             await settleQueue(client, locked.lotId, at)
             const reread = await client.query<EntryRow>(

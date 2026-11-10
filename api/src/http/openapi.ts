@@ -138,6 +138,12 @@ export type ActivityKind =
   | "offer_expired"
   | "waitlist_left"
   | "waitlist_expired"
+export type IncidentText = string
+export type PublishedIncidentStatus = "open" | "following" | "resolved"
+/**
+ * reported: pendiente de revisión; open: publicada; following: en seguimiento; resolved: resuelta.
+ */
+export type IncidentStatus = "reported" | "open" | "following" | "resolved"
 
 export interface HttpSchemas {
   LotManagementRequest: LotManagementRequest
@@ -188,6 +194,13 @@ export interface HttpSchemas {
   SentMessage: SentMessage
   ChatMessage: ChatMessage
   ChatMessagePage: ChatMessagePage
+  IncidentReportRequest: IncidentReportRequest
+  IncidentReport: IncidentReport
+  IncidentVersionRequest: IncidentVersionRequest
+  IncidentVersionResult: IncidentVersionResult
+  IncidentVersionSummary: IncidentVersionSummary
+  Incident: Incident
+  IncidentList: IncidentList
 }
 export interface LotManagementRequest {
   action: "reduce_stock" | "pause" | "resume" | "withdraw"
@@ -902,4 +915,57 @@ export interface ChatMessagePage {
    * true mientras se puede escribir. Cancelar, vencer o retirar la reserva o cerrar el lote lo dejan en false para siempre.
    */
   open: boolean
+}
+export interface IncidentReportRequest {
+  reason: IncidentText
+  idempotencyKey: string
+}
+export interface IncidentReport {
+  id: PublicId
+  lotId: PublicId
+  reason: IncidentText
+  createdAt: Instant
+}
+export interface IncidentVersionRequest {
+  action: "publish" | "update" | "resolve"
+  /**
+   * Versión vigente de la incidencia; 0 antes de publicar.
+   */
+  version: number
+  reason: IncidentText
+  instructions: IncidentText
+  idempotencyKey: string
+}
+export interface IncidentVersionResult {
+  incidentId: PublicId
+  version: number
+  status: PublishedIncidentStatus
+  reason: IncidentText
+  instructions: IncidentText
+  publishedAt: Instant
+}
+export interface IncidentVersionSummary {
+  version: number
+  status: PublishedIncidentStatus
+  reason: IncidentText
+  instructions: IncidentText
+  publishedAt: Instant
+  /**
+   * Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores.
+   */
+  recipientCount: number
+}
+export interface Incident {
+  id: PublicId
+  status: IncidentStatus
+  version: number
+  reportReason: IncidentText
+  reportedAt: Instant
+  versions: IncidentVersionSummary[]
+}
+export interface IncidentList {
+  /**
+   * @maxItems 50
+   */
+  items: Incident[]
 }

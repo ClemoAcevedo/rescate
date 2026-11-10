@@ -1,4 +1,5 @@
 import type { DiscoveryRepository, PublicLot, PublicPhoto, Reservation } from '../../application/discovery/ports.js'
+import { incorporateIncidentRecipient } from './incident-repository.js'
 import { lockIntent, lockLot } from './lot-lock.js'
 import { withTransaction } from './pool.js'
 import type { Pool, PoolClient } from './pool.js'
@@ -113,6 +114,7 @@ export function createDiscoveryRepository(pool: Pool): DiscoveryRepository {
                RETURNING public_id::text AS id, $6::text AS lot_id, quantity, created_at`,
               [userId, locked.lotId, quantity, at, key, lotId, Buffer.from(code.ciphertext), Buffer.from(code.fingerprint)],
             )
+            await incorporateIncidentRecipient(client, locked.lotId, userId, at)
             return toReservation(inserted.rows[0]!)
           },
         })

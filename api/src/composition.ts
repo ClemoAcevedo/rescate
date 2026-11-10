@@ -43,6 +43,9 @@ import { createPanelRouter } from "./http/panel-router.js"
 import { createChatRetention, createChatUseCases } from "./application/chat/use-cases.js"
 import { createChatRepository } from "./infrastructure/postgres/chat-repository.js"
 import { createChatRouter } from "./http/chat-router.js"
+import { createIncidentUseCases } from "./application/incidents/use-cases.js"
+import { createIncidentRepository } from "./infrastructure/postgres/incident-repository.js"
+import { createIncidentsRouter } from "./http/incidents-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
 import { createAuthentication } from "./http/authentication.js"
 import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
@@ -155,7 +158,9 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
     authentication.authenticate, authentication.protectCommand, limits, log)
   const panelRouter = createPanelRouter(createPanelUseCases(createPanelRepository(pool), () => new Date()),
     authentication.authenticate, log)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, chatRouter, panelRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
+  const incidentsRouter = createIncidentsRouter(createIncidentUseCases(createIncidentRepository(pool)),
+    authentication.authenticate, authentication.protectCommand, log)
+  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, chatRouter, panelRouter, incidentsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
     // /health no pasa por el límite por IP: checkHealth comparte una sola consulta a la base.
     health: operations.checkHealth,
     traffic: (req, res, next) => {
