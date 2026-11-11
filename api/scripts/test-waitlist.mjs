@@ -316,6 +316,24 @@ try {
   assert.ok(decisions.every(result => result.status === 200))
   ok('ingresos simultáneos reciben posiciones distintas; cinco aceptaciones crean una sola reserva')
 
+  // --- FIFO por id numérico: dos solicitudes con ids de distinta cantidad de dígitos (p. ej. 99 y 100).
+  const digits = await makeLot(1)
+  assert.equal((await reserve(luis, digits, 1)).status, 201)
+  const { rows: [{ max }] } = await database.query('SELECT coalesce(max(id), 0)::int AS max FROM waitlist_entries')
+  const power = 10 ** String(max + 1).length
+  await database.query(`SELECT setval(pg_get_serial_sequence('public.waitlist_entries', 'id'), $1)`, [power - 2])
+  const older = await join(ana, digits, 1), newer = await join(pedro, digits, 1)
+  assert.deepEqual([older.body.position, newer.body.position], [1, 2])
+  const { rows: ids } = await database.query('SELECT id::int FROM waitlist_entries WHERE public_id = ANY($1::uuid[]) ORDER BY id',
+    [[older.body.id, newer.body.id]])
+  assert.deepEqual(ids.map(row => row.id), [power - 1, power])
+  const luisDigits = (await luis.call('GET', '/reservations')).body.items.find(item => item.lot.id === digits)
+  assert.equal((await luis.call('POST', `/reservations/${luisDigits.id}/cancel`, {})).status, 200)
+  assert.equal((await stored(older.body.id)).status, 'offered')
+  assert.equal((await stored(newer.body.id)).status, 'waiting')
+  assert.equal((await view(pedro, newer.body.id)).position, 1)
+  ok('la oferta sigue el orden numérico de las solicitudes aunque sus ids tengan distinta cantidad de dígitos')
+
   // --- Conciliación: Q = F + O + R + E + X; O y R coinciden con sus registros.
   const unreconciled = await database.query(`SELECT l.public_id FROM lots l
     WHERE l.quantity <> l.free_quantity + l.offered_quantity + l.reserved_quantity + l.delivered_quantity + l.expired_quantity
