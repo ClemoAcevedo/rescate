@@ -60,9 +60,10 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date, n
     `SELECT l.free_quantity AS free, ${lotReconciledSql} AS reconciled FROM public.lots l WHERE l.id = $1`, [lotId])
   // Una discrepancia bloquea nuevas asignaciones, también las ofertas, hasta su revisión.
   if (!state.rows[0]!.reconciled || state.rows[0]!.free <= 0) return closed
+  // ORDER BY califica la columna: sin alias usaría el id ya convertido a texto y pondría 10 antes que 2.
   const queue = await client.query<{ id: string; requested_quantity: number }>(
-    `SELECT id::text, requested_quantity FROM public.waitlist_entries
-     WHERE lot_id = $1 AND status = 'waiting' ORDER BY id`, [lotId])
+    `SELECT w.id::text AS id, w.requested_quantity FROM public.waitlist_entries w
+     WHERE w.lot_id = $1 AND w.status = 'waiting' ORDER BY w.id`, [lotId])
   const plan = planOffers(state.rows[0]!.free,
     queue.rows.map(row => ({ id: row.id, requestedQuantity: row.requested_quantity })), at, lot.pickup_ends_at)
   let offered = 0
