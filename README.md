@@ -316,7 +316,10 @@ lo cambia.
   y en tres navegadores (K031); casos críticos del anexo H a su escala: último pack con 20
   personas en 100 lotes, 20 reintentos de una clave en reservas y chat, oferta en el
   límite con el worker detenido, operador ajeno y 100 ofertas vencidas con el worker real
-  ([integridad](docs/rendimiento.md#integridad), K039).
+  ([integridad](docs/rendimiento.md#integridad), K039); seguimiento de incidencias con 100
+  destinatarios mixtos, chats cerrados, worker matado a mitad de los avisos y una versión que
+  compite con reservas y retiros, sin avisos duplicados y con E conservado
+  ([incidencias](docs/incidencias.md#pruebas), K047).
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).

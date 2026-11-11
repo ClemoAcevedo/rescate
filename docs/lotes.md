@@ -260,6 +260,5 @@ Los reportes, versiones, instrucciones, destinatarios y el cierre por incidencia
 [incidencias](incidencias.md). El cierre usa el mismo protocolo que el retiro voluntario,
 pero confirma también la versión y sus destinatarios; sus avisos se generan por tandas.
 El historial y el detalle del destinatario conservan las versiones publicadas y su lectura.
-La gestión del operador y la regresión de seguimiento corresponden a
-[K046](https://github.com/ClemoAcevedo/rescate/issues/48) y
-[K047](https://github.com/ClemoAcevedo/rescate/issues/51).
+La gestión del operador corresponde a [K046](https://github.com/ClemoAcevedo/rescate/issues/48);
+la regresión de seguimiento está en las [pruebas de incidencias](incidencias.md#pruebas).

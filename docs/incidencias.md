@@ -69,9 +69,11 @@ del comando y si el lote estaba cerrado al publicar esa versión.
 La versión y cada fila de `incident_recipients` son el trabajo durable confirmado con la
 publicación. El worker toma hasta 50 destinatarios pendientes con `FOR UPDATE SKIP LOCKED`,
 inserta sus eventos y los enlaza con `outbox_event_id` en una transacción corta, sin bloquear
-el lote. Si falla o muere antes del commit, la tanda sigue pendiente. Dos workers pueden
-avanzar sobre tandas distintas. Una reserva posterior agrega otro pendiente de la versión
-vigente, aunque la primera tanda ya se haya enviado.
+el lote. Si falla o muere antes del commit, la tanda sigue pendiente. Si muere mientras
+genera avisos, los ya confirmados se conservan y los eventos que había reclamado esperan la
+concesión de 120 s del outbox; el worker reiniciado sigue antes con los que no tenían evento.
+Dos workers pueden avanzar sobre tandas distintas. Una reserva posterior agrega otro
+pendiente de la versión vigente, aunque la primera tanda ya se haya enviado.
 
 El evento `incident_version` es único por incidencia, versión y persona. Conserva motivo,
 instrucciones, vínculo y estado de cierre de la versión comunicada. El [outbox](avisos.md)
@@ -107,8 +109,6 @@ contador global de avisos sin leer. Las instrucciones siguen siendo accesibles d
 historial después de registrar lectura. El detalle agrupa vínculo y cierre en un resumen;
 motivo e instrucciones ocupan su altura natural. El skeleton conserva el ancho y la
 disposición de las regiones, y los datos visibles mantienen su geometría al refrescar.
-
-La regresión de seguimiento corresponde a [K047](https://github.com/ClemoAcevedo/rescate/issues/51).
 
 ## Gestión del operador
 
@@ -167,6 +167,7 @@ K043/K044; las cuentas y lotes son ficticios y la base de desarrollo conserva su
 | `npm --prefix api test` | Transiciones, límites de texto, autorización antes y dentro del bloqueo, versión e idempotencia; listado por establecimiento con 404/403 y consulta estricta contra OpenAPI. |
 | `npm --prefix api run db:test:incidents:compose` | PostgreSQL real y contrato HTTP: permisos, reporte sin efectos, versiones, todos los estados de compromiso, deduplicación, incorporación posterior, carrera con reservas observando el bloqueo, reintentos concurrentes, lote cerrado y reversión ante fallos. |
 | `npm --prefix api run db:test:incident-delivery:compose` | Cierre con F/O/R/E, ambas carreras con bloqueos observados, reversión tras cerrar, plazos, incorporación posterior, dos dispatchers, cien avisos y worker real matado/reiniciado, múltiples versiones, fallos, reintentos y lectura propia. |
+| `npm --prefix api run db:test:incident-followup:compose` | Seguimiento después de entregar con el worker real: cien destinatarios mixtos creados por los casos de uso, chats cerrados y con texto borrado por retención, worker matado con 30 de 100 avisos y reiniciado, versión que retiene el bloqueo mientras 10 reservas y 10 retiros lo esperan, y cierre; quien retiró después figura como `received` en la versión siguiente. Exige un aviso por versión y persona, en 30 s o menos con el worker sano, y conserva E y F+O+R+E+X. Tarda unos dos minutos por la concesión. |
 | `npm --prefix api run test:web:notifications` | API y worker reales por HTTPS: cierre explícito, recuperación al reconectar, instrucciones largas a 360/1366 px, lectura, privacidad y resolución sin reapertura; historial y detalle de versiones propias, lectura persistida, instrucciones tras la retención del chat y destinatario con entrega acreditada. |
 | `npm --prefix api run test:web:incidents` | HTTP controlado validado contra OpenAPI: error/reintento, vacío, reconexión, con/sin entrega, fallo al registrar lectura, contenido largo y aviso ajeno a 360/1366 px. |
 | `npm --prefix api run db:test:incident-management:compose` | PostgreSQL real y contrato HTTP: listado por establecimiento con permisos y 422, reporte de quien reservó sin identificarlo, responsable de cada versión aun sin membresía, pendientes/generados/leídos tras el worker y la lectura, filtro por estado y páginas de 20 sin mezclar establecimientos. |
