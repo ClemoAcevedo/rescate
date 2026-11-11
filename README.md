@@ -319,7 +319,11 @@ lo cambia.
   ([integridad](docs/rendimiento.md#integridad), K039); seguimiento de incidencias con 100
   destinatarios mixtos, chats cerrados, worker matado a mitad de los avisos y una versión que
   compite con reservas y retiros, sin avisos duplicados y con E conservado
-  ([incidencias](docs/incidencias.md#pruebas), K047).
+  ([incidencias](docs/incidencias.md#pruebas), K047); regresión de inventario y códigos que
+  revisa un código válido antes de cada vía de cierre, prueba el código antiguo y hace competir dos
+  operadores y un reintento contra cancelar, retirar la publicación o cerrar por incidencia en ambos
+  órdenes, y `test:regression` repite todas esas suites guardando commit, scripts, bases y resultados
+  ([reservas](docs/reservas.md#regresión-de-inventario-y-códigos), K049).
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).

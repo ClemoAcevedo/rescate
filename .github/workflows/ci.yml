@@ -186,6 +186,8 @@ jobs:
         run: npm --prefix api run db:test:incidents:compose
       - name: Cierre por incidencia y avisos recuperables (K044)
         run: npm --prefix api run db:test:incident-delivery:compose
+      - name: K049 pickup codes after review, old codes and two operators against every closure
+        run: npm --prefix api run db:test:pickup-codes:compose
       - name: K047 incident follow-up with mixed recipients, worker kill mid-delivery and races
         run: npm --prefix api run db:test:incident-followup:compose
       - name: K046 operator incident management, publisher and notice states on PostgreSQL
