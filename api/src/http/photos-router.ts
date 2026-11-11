@@ -42,10 +42,12 @@ export function photoBody(lotId: string, photo: LotPhoto): HttpSchemas["LotPhoto
   }
 }
 
-class UploadTooLargeError extends Error {}
+class UploadTooLargeError extends Error {
+  constructor(readonly request: Request) { super("upload_too_large") }
+}
 class UploadAbortedError extends Error {}
 
-/** Acumula el cuerpo hasta `maxBytes`; corta la conexión si se supera. */
+/** Acumula el cuerpo hasta `maxBytes`. Si se supera responde 413 y descarta el resto. */
 function readLimited(request: Request, maxBytes: number): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -62,7 +64,7 @@ function readLimited(request: Request, maxBytes: number): Promise<Uint8Array> {
     }
     const onData = (chunk: Buffer) => {
       total += chunk.length
-      if (total > maxBytes) finish(new UploadTooLargeError())
+      if (total > maxBytes) finish(new UploadTooLargeError(request))
       else chunks.push(chunk)
     }
     const onEnd = () => finish(null)
@@ -72,14 +74,33 @@ function readLimited(request: Request, maxBytes: number): Promise<Uint8Array> {
   })
 }
 
+/**
+ * Tras el 413 el cliente puede seguir enviando la foto. Cerrar con bytes sin leer manda
+ * un RST y el cliente pierde la respuesta (#171). Se descarta el resto hasta un tope y
+ * solo quien lo supera o se demora pierde la conexión.
+ */
+const DISCARD_LIMIT_BYTES = 4 * PHOTO_LIMITS.maxUploadBytes
+const DISCARD_TIMEOUT_MS = 10_000
+function discardRest(request: Request): void {
+  let discarded = 0
+  const cut = () => request.socket.destroy()
+  const timer = setTimeout(cut, DISCARD_TIMEOUT_MS)
+  request.on("data", (chunk: Buffer) => {
+    discarded += chunk.length
+    if (discarded > DISCARD_LIMIT_BYTES) cut()
+  })
+  request.once("close", () => clearTimeout(timer))
+  request.resume()
+}
+
 const id = (value: unknown): string => typeof value === "string" ? value : ""
 
 export function createPhotosRouter({ useCases, authenticate, protectCommand, maxPhotosPerLot = PHOTO_LIMITS.maxPhotosPerLot, log = event => console.error(event) }: PhotosRouterOptions): Router {
   const router = Router()
   const fail = (error: unknown, response: Response) => {
     if (error instanceof UploadTooLargeError) {
-      response.set("Connection", "close")
       sendError(response, 413, "PAYLOAD_TOO_LARGE", "La foto supera 5 MiB.")
+      discardRest(error.request)
     } else if (error instanceof UploadAbortedError) {
       if (!response.headersSent) sendError(response, 400, "MALFORMED_REQUEST", "La carga se interrumpió.")
     } else handleError(error, response, log)
@@ -101,7 +122,7 @@ export function createPhotosRouter({ useCases, authenticate, protectCommand, max
       }
       // Un tamaño declarado excesivo se rechaza antes de reservar la carga.
       const declared = Number(request.headers["content-length"])
-      if (Number.isFinite(declared) && declared > PHOTO_LIMITS.maxUploadBytes) throw new UploadTooLargeError()
+      if (Number.isFinite(declared) && declared > PHOTO_LIMITS.maxUploadBytes) throw new UploadTooLargeError(request)
       const lotId = id(request.params.lotId)
       const photo = await useCases.upload(actor, { lotId, readContent: (maxBytes) => readLimited(request, maxBytes) })
       response.status(202).json(photoBody(lotId, photo))
