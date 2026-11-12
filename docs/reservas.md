@@ -58,14 +58,18 @@ el estado que provocó un 409 al confirmar.
 `/reservas` muestra las reservas propias, incluidas canceladas, retiradas y vencidas,
 en páginas de 20. `/reservas/:id` consulta el estado vigente y muestra cantidad,
 lugar, condiciones, ventana en la zona del lote e instantes de creación y término.
-El detalle organiza los datos con etiquetas y destaca el código en un bloque propio.
-El aviso de solicitud registrada enlaza al detalle vigente y mantiene el identificador
-como dato secundario. Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
+El detalle pone primero el estado y el código de retiro destacado («Muéstralo en el local
+al retirar»); luego cantidad, lugar y ventana, las condiciones y, agrupadas abajo, las
+acciones secundarias (chat, reportar un problema e historial de incidencias). Cancelar
+queda al final. «Actualizar» consulta el estado a pedido. Tras reservar, el detalle del lote
+muestra «Reservaste N packs» con el enlace «Ver mi código de retiro»; no muestra el
+identificador de la reserva. El botón de envío es «Reservar N packs». Sin packs libres, el
+panel ofrece «Unirme a la lista de espera» como acción principal. Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
 URLs ni almacenamiento del navegador.
 
 El detalle muestra el código únicamente con una respuesta válida y confirmada,
 antes del cierre y sin una cancelación pendiente de comprobar. Al finalizar la
-ventana lo oculta y ofrece consultar el estado; vuelve a consultar al regresar a
+ventana lo oculta; vuelve a consultar al regresar a
 la pestaña y cada quince segundos mientras está visible. Un resultado de creación
 reproducido por idempotencia lleva al detalle para conocer el estado actual, pues puede corresponder a una reserva ya terminada.
 
@@ -75,7 +79,10 @@ se separan y se apilan en móvil. No anuncia cancelación
 hasta recibir el estado `cancelled`. Ante una respuesta perdida oculta el código
 y permite consultar el estado o repetir la cancelación de la misma reserva. Un
 conflicto conserva el aviso hasta consultar el resultado vigente. El registro
-terminado sigue accesible desde el historial.
+terminado sigue accesible desde el historial. Una consulta fallida conserva los
+datos de retiro, indica que el estado no está actualizado y oculta el código sin
+quitar su espacio. Bloquea la cancelación hasta consultar con éxito; recuperar
+la conexión inicia una nueva consulta. Un rechazo de acceso retira los datos.
 
 La reserva directa guarda clave y cantidad por actor y lote en `sessionStorage`
 antes de enviar. Navegar o recargar la misma pestaña recupera esa intención, incluso
@@ -133,6 +140,7 @@ huella. Compose trae una clave ficticia que la API rechaza en producción
 | `npm --prefix api run test:web:pickups` | Navegador con API y PostgreSQL reales: acceso denegado, código inexistente, revisar y confirmar una vez ante doble clic, código usado, revisión seguida de cancelación (409 sin entrega), ventana sin comenzar, lote cerrado y código ausente de URL y almacenamiento. |
 | `npm --prefix api test` | Reglas de plazo y transición, normalización, cifrado y huella, y recorrido HTTP contra OpenAPI con repositorio en memoria. |
 | `npm --prefix api run db:test:reservations:compose` | PostgreSQL real: última unidad, reintentos, dos operadores, cancelación contra retiro, plazos tras esperar el bloqueo, vencimiento repetido, rollback y conciliación del inventario con reservas y entregas. Repite la suite con el worker activo y detenido. |
+| `npm --prefix api run db:test:pickup-codes:compose` | PostgreSQL real con la matriz de códigos del anexo I de E1 (p. 27). Revisión válida seguida de cancelación, retiro de publicación, cierre por incidencia y plazo vencido con y sin registrar. Código antiguo frente a la reserva nueva y a otro lote. Dos operadores y un reintento contra cada vía de cierre, cinco carreras por orden. |
 | `npm --prefix api run db:test:compose` | Restricciones de estado, término, código y entregas, y rollback de la migración. |
 | `npm --prefix api run db:test:security:compose` | Límite de códigos por operador con PostgreSQL y reinicio de la API, y retiro rechazado a operadores ajenos ([seguridad](seguridad.md#pruebas)). |
 
@@ -150,6 +158,31 @@ rechace operaciones vencidas aunque el registro siga confirmado, y registran el
 cierre ellas mismas. El worker real con vencimientos se prueba en
 [vencimientos](vencimientos.md#pruebas).
 
-CI ejecuta ambas fases. `test:web:compose` también incluye la suite de reservas.
+CI ejecuta ambas fases y la suite de códigos. `test:web:compose` también incluye la suite de reservas.
 La prueba de navegador acepta el certificado HTTPS autofirmado del entorno local
 en sus contextos de Playwright.
+
+## Regresión de inventario y códigos
+
+```sh
+npm --prefix api run test:regression
+```
+
+Con el servicio `db` de Compose iniciado, corre una tras otra las suites que cuidan
+inventario y códigos, cada una con su base dedicada. Son códigos, reservas, cola de
+espera, vencimientos, gestión de lotes, incidencias (reporte, cierre y seguimiento) e
+[integridad](rendimiento.md#integridad). Para correr solo algunas se pasan sus nombres,
+por ejemplo `npm --prefix api run test:regression -- pickup-codes reservations`.
+
+Los resultados quedan en `api/.regression-results/<fecha>-<commit>/`. Ahí está la
+salida de cada suite y un `summary.json` con el commit, si había cambios sin commit,
+las versiones de Node y PostgreSQL, el hash de cada script, la base que usó, los grupos
+y carreras aprobados, la duración y el resultado. `summary.md` resume lo mismo en una
+tabla para pegar en el PR. Una suite que falla no detiene las siguientes y la
+regresión termina con error.
+
+En las carreras de la suite de códigos el orden lo fija un bloqueo propio del lote,
+igual que en K025. Si la entrega llega primero, el reintento con la misma clave repite
+la respuesta, el otro operador recibe `delivered` y la cancelación también. Retirar la
+publicación o cerrar por incidencia conservan esa entrega y pasan el resto a X. Si el
+cierre llega primero, las tres confirmaciones reciben `cancelled` y no queda entrega.

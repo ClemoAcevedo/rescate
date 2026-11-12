@@ -5,6 +5,9 @@ las reservas y solicitudes de espera, el historial y los resultados de los lotes
 cerraron en un período (anexos A p. 3, informe E1 p. 5 y maqueta M05 del anexo G). El
 contrato HTTP está en [OpenAPI](api/openapi.yaml) (etiqueta `Panel`).
 
+La carga inicial reserva el espacio de la última actualización junto al botón
+«Actualizar», conservando la posición de los indicadores al recibir los datos.
+
 ## Reglas
 
 - **Por establecimiento.** Solo un operador con membership actual consulta el panel. Otro
@@ -37,8 +40,9 @@ contrato HTTP está en [OpenAPI](api/openapi.yaml) (etiqueta `Panel`).
   vencimientos y retiros. Una reserva nacida de una oferta aparece una vez, como oferta
   aceptada. Los hechos simultáneos muestran primero el cierre del lote.
 
-Las incidencias del lote y sus avisos (pendientes, generados y leídos) se agregan al panel
-con RF11 (#46, #48).
+«Incidencias por revisar» muestra los reportes sin publicar del establecimiento y enlaza a su
+[gestión](incidencias.md#gestión-del-operador), donde cada versión informa sus avisos
+pendientes, generados y leídos.
 
 ## Contrato HTTP
 

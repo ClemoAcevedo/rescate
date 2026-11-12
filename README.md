@@ -265,12 +265,19 @@ lo cambia.
   de retiro por el operador (K024); ingreso voluntario a la espera, posición, oferta
   parcial, aceptación explícita y vencimiento con estado comprobado (K029); bandeja de
   avisos con contador sin leer, consulta cada 15 s y recuperación al reconectar (K030),
-  que también muestra los avisos de mensajes del chat (K037); conversación entre titular y
+  que también muestra los avisos de mensajes del chat (K037); historial y detalle propios
+  de versiones de incidencias con instrucciones, vínculo con/sin entrega y lectura
+  persistida sin acreditar cumplimiento (K045); conversación entre titular y
   establecimiento con polling visible cada 5 s, recuperación por secuencia y reintentos
   del mismo envío (K038);
   «Mi establecimiento» con inventario por lote, compromisos, historial y resultados del
-  período (K035).
-- **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
+  período (K035); gestión de incidencias del operador con reportes por revisar, publicación,
+  actualización, cierre confirmado y resolución, responsable y avisos pendientes, generados y
+  leídos por versión, y reporte desde la reserva o la espera (K046).
+- **Accesibilidad:** recuperación ante consultas fallidas de reserva y espera,
+  chat vacío/sin conexión, anuncios de mensajes y foco al reintentar;
+  `test:web:k050` recorre avisos, reserva, espera y chat a ambos anchos (K050).
+  Recorrido automatizado de teclado, foco y etiquetas a 360 y
   1366 px, distribución y menú de operador de 320 a 1920 px y
   [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
   de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para
@@ -289,14 +296,20 @@ lo cambia.
   (K030), panel del establecimiento con compromisos, historial y resultados por período
   sobre lotes cerrados (K035), chat de la reserva entre titular y establecimiento con
   secuencia, reintentos sin duplicar, aviso a la otra parte y cierre al cancelar, vencer o retirar
-  (K037, [chat](docs/chat.md)),
+  (K037, [chat](docs/chat.md)), incidencias con reporte, versiones y destinatarios fijados
+  bajo el bloqueo del lote (K043), cierre explícito por incidencia que conserva entregas y
+  avisos recuperables por versión (K044, [incidencias](docs/incidencias.md)),
+  consulta del historial y detalle de avisos propios independiente del cierre del lote
+  y la retención del chat (K045), listado de incidencias por establecimiento con responsable
+  y estado de los avisos de cada versión (K046),
   según OpenAPI. Límites de login, códigos de retiro y
   tráfico, con los fallos de login y de código persistidos, y registros sin secretos
   (K034). Una línea por solicitud con identificador, operación, estado y duración, y
   salud con PostgreSQL y el último ciclo del worker ([operación](docs/operacion.md), K036).
 - **Worker:** registra vencimientos de lotes, reservas y ofertas con concesión y
   reintentos acotados (K028); genera los avisos del outbox por tandas recuperables
-  (K030); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
+  (K030); convierte destinatarios de incidencias en eventos por tandas de hasta 50 y
+  recupera sus avisos con la misma concesión y reintentos (K044); valida fotos, genera imagen y miniatura sin EXIF y limpia temporales (K014).
   Registra su último ciclo exitoso y la demora y las tareas en error de cada cola;
   `ops:status` las consulta (K036). Borra una vez al día el texto de los chats cerrados hace
   más de treinta días (K037).
@@ -306,10 +319,23 @@ lo cambia.
   y en tres navegadores (K031); casos críticos del anexo H a su escala: último pack con 20
   personas en 100 lotes, 20 reintentos de una clave en reservas y chat, oferta en el
   límite con el worker detenido, operador ajeno y 100 ofertas vencidas con el worker real
-  ([integridad](docs/rendimiento.md#integridad), K039).
+  ([integridad](docs/rendimiento.md#integridad), K039); seguimiento de incidencias con 100
+  destinatarios mixtos, chats cerrados, worker matado a mitad de los avisos y una versión que
+  compite con reservas y retiros, sin avisos duplicados y con E conservado
+  ([incidencias](docs/incidencias.md#pruebas), K047); regresión de inventario y códigos que
+  revisa un código válido antes de cada vía de cierre, prueba el código antiguo y hace competir dos
+  operadores y un reintento contra cancelar, retirar la publicación o cerrar por incidencia en ambos
+  órdenes, y `test:regression` repite todas esas suites guardando commit, scripts, bases y resultados
+  ([reservas](docs/reservas.md#regresión-de-inventario-y-códigos), K049).
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
+- **Pruebas de imágenes y retención:** HTML con firma de imagen, PNG de más de 20 MP,
+  temporal escrito por una API detenida, worker detenido 25 h y membership revocada no
+  publican ni dejan objetos; en producción las fotos solo van al bucket. Borrar el texto
+  del chat conserva compromiso, entrega y avisos, y una incidencia posterior llega a quien
+  retiró. Cada deploy comprueba que las imágenes publicadas siguen disponibles
+  ([fotos](docs/fotos.md#pruebas), [chat](docs/chat.md#retención), K051).
 - **Calidad para E3:** SAST con Semgrep y SCA de ambos lockfiles en CI; cobertura de
   API por capa y frontend por módulo, estrategia Testing Trophy y mock HTTP del chat
   validado contra OpenAPI ([pruebas y cobertura](docs/desarrollo-local.md#estrategia-de-pruebas-testing-trophy)).

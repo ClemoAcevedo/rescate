@@ -1,7 +1,10 @@
+import { OperatorPageHeader } from '../components/OperatorPageHeader'
+import { Skeleton } from '../components/ui/Skeleton'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from '../components/Icon'
+import { MyLotsSkeleton } from '../components/lots/LotSkeletons'
 import { LotPhoto } from '../components/lots/LotPhoto'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -9,7 +12,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Select } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
-import { formatWindow } from '../lots/lot-time'
+import { formatWindow } from '../format/date-time'
 import { lotStatusBadges } from '../lots/lot-status'
 import { lotTitle } from '../lots/lot-title'
 import type { OperableEstablishment } from '../services/identity-service'
@@ -54,7 +57,8 @@ function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
           {lot.status === 'draft' ? 'Continuar borrador' : 'Ver lote'}
         </Link>
         {lot.status !== 'draft' && (
-          <Link className="ui-button ui-button--secondary" to={`${editorPath}/retiros`}>Validar retiros</Link>
+          <><Link className="ui-button ui-button--secondary" to={`${editorPath}/retiros`}>Validar retiros</Link>
+            <Link className="ui-button ui-button--secondary" to={`${editorPath}/incidencias`}>Incidencias</Link></>
         )}
         {lot.status === 'published' && !lot.paused && !ended && (
           <Link className="ui-button ui-button--ghost" to={`/lotes/${encodeURIComponent(lot.id)}`}><Icon name="eye" />Vista pública</Link>
@@ -97,14 +101,7 @@ function MyLots({ establishments }: { establishments: OperableEstablishment[] })
 
   return (
     <div className="my-lots">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Operación</p>
-          <h1>Mis lotes</h1>
-          <p>Retoma tus borradores y revisa cómo van las reservas de lo que publicaste.</p>
-        </div>
-        <Link className="ui-button ui-button--primary" to="/operador/lotes/nuevo"><Icon name="plus" />Publicar lote</Link>
-      </header>
+      <OperatorPageHeader title="Mis lotes" description="Retoma tus borradores y revisa cómo van las reservas de lo que publicaste." />
       <div className="my-lots__toolbar">
         {establishments.length > 1
           ? <FormField label="Establecimiento">{control => (
@@ -123,7 +120,7 @@ function MyLots({ establishments }: { establishments: OperableEstablishment[] })
         </nav>
       </div>
       <section aria-label="Lotes del establecimiento" aria-busy={loading}>
-        {loading && !result && <p className="my-lots__status" role="status">Cargando tus lotes…</p>}
+        {loading && !result && <MyLotsSkeleton />}
         {error && <Alert tone="danger" role="alert">{error} <Button variant="secondary" onClick={() => setRetry(value => value + 1)}>Reintentar</Button></Alert>}
         {result && result.items.length === 0 && (
           <Card className="empty-state">
@@ -150,7 +147,14 @@ export function MyLotsPage() {
   const { status, session } = useAuth()
   const { pathname } = useLocation()
   if (status === 'checking' || status === 'error') {
-    return <main className="page-content"><div className="my-lots"><p className="my-lots__status" role="status">Comprobando la sesión…</p></div></main>
+    return <main className="page-content"><div className="my-lots" aria-busy={status === 'checking'}>
+      <OperatorPageHeader title="Mis lotes" description="Retoma tus borradores y revisa cómo van las reservas de lo que publicaste." />
+      {status === 'error' ? <Alert role="alert">No fue posible comprobar la sesión. Reintenta desde el aviso superior.</Alert> : <>
+        <span className="visually-hidden" role="status">Comprobando la sesión…</span>
+        <div className="my-lots__toolbar" aria-hidden="true"><Skeleton width="12rem" /><Skeleton className="skeleton-control" width="16rem" /></div>
+        <MyLotsSkeleton />
+      </>}
+    </div></main>
   }
   if (!session) {
     return <main className="page-content"><Card as="section" className="content-card lot-card" aria-labelledby="my-lots-title">

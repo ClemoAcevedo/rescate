@@ -18,7 +18,7 @@ export const lotReconciledSql = `l.reserved_quantity = COALESCE((SELECT sum(c.qu
     WHERE w.lot_id = l.id AND w.status = 'offered'), 0)`
 
 /** Devuelve cuántas solicitudes se cerraron por vencimiento. `at` es el reloj de la base tras el bloqueo. */
-export async function settleQueue(client: PoolClient, lotId: string, at: Date): Promise<number> {
+export async function settleQueue(client: PoolClient, lotId: string, at: Date, notifyExpired = true): Promise<number> {
   const found = await client.query<{ status: string; pickup_ends_at: Date; paused_at: Date | null }>(
     'SELECT status::text, pickup_ends_at, paused_at FROM public.lots WHERE id = $1', [lotId])
   const lot = found.rows[0]
@@ -33,7 +33,7 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date): 
   // K030: cada oferta vencida avisa a su titular en la misma transacción (ADR 0012).
   let snapshot: { id: string; description: string } | null = null
   const lotOf = async () => snapshot ??= await lotSnapshot(client, lotId)
-  for (const row of lapsed.rows) {
+  for (const row of notifyExpired ? lapsed.rows : []) {
     await appendEvent(client, row.id, { kind: 'offer_expired', recipientUserId: row.user_id, payload: {
       lot: await lotOf(), quantity: row.offered_quantity, waitlistEntryId: row.public_id, reservationId: null, offerExpiresAt: null,
     } }, at)
@@ -60,9 +60,10 @@ export async function settleQueue(client: PoolClient, lotId: string, at: Date): 
     `SELECT l.free_quantity AS free, ${lotReconciledSql} AS reconciled FROM public.lots l WHERE l.id = $1`, [lotId])
   // Una discrepancia bloquea nuevas asignaciones, también las ofertas, hasta su revisión.
   if (!state.rows[0]!.reconciled || state.rows[0]!.free <= 0) return closed
+  // ORDER BY califica la columna: sin alias usaría el id ya convertido a texto y pondría 10 antes que 2.
   const queue = await client.query<{ id: string; requested_quantity: number }>(
-    `SELECT id::text, requested_quantity FROM public.waitlist_entries
-     WHERE lot_id = $1 AND status = 'waiting' ORDER BY id`, [lotId])
+    `SELECT w.id::text AS id, w.requested_quantity FROM public.waitlist_entries w
+     WHERE w.lot_id = $1 AND w.status = 'waiting' ORDER BY w.id`, [lotId])
   const plan = planOffers(state.rows[0]!.free,
     queue.rows.map(row => ({ id: row.id, requestedQuantity: row.requested_quantity })), at, lot.pickup_ends_at)
   let offered = 0

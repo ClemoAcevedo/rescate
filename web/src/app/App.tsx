@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { IncidentNoticePage } from '../pages/IncidentNoticePage'
 import { ChatPage } from '../pages/ChatPage'
 import { AppLayout } from '../components/AppLayout'
 import { ConnectionPage } from '../pages/ConnectionPage'
@@ -9,11 +10,13 @@ import { LotsPage } from '../pages/LotsPage'
 import { MyLotsPage } from '../pages/MyLotsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
+import { LotIncidentsPage, OperatorIncidentsPage } from '../pages/OperatorIncidentsPage'
 import { PanelPage } from '../pages/PanelPage'
 import { PickupsPage } from '../pages/PickupsPage'
 import { ReservationsPage, ReservationDetailPage } from '../pages/ReservationsPage'
 import { JoinWaitlistPage, WaitlistPage, WaitlistDetailPage } from '../pages/WaitlistPage'
 import { RegisterPage } from '../pages/RegisterPage'
+import { ReportIncidentPage } from '../pages/ReportIncidentPage'
 
 function RootRedirect() {
   const { search } = useLocation()
@@ -33,10 +36,15 @@ function App() {
         <Route path="operador/lotes/nuevo" element={<LotEditorPage />} />
         <Route path="operador/lotes/:lotId" element={<LotEditorPage />} />
         <Route path="operador/lotes/:lotId/retiros" element={<PickupsPage />} />
+        <Route path="operador/lotes/:lotId/incidencias" element={<LotIncidentsPage />} />
+        <Route path="operador/incidencias" element={<OperatorIncidentsPage />} />
+        <Route path="lotes/:id/reportar" element={<ReportIncidentPage />} />
         <Route path="lotes/:id/espera" element={<JoinWaitlistPage />} />
         <Route path="espera" element={<WaitlistPage />} />
         <Route path="espera/:id" element={<WaitlistDetailPage />} />
         <Route path="avisos" element={<NotificationsPage />} />
+        <Route path="incidencias" element={<NotificationsPage incidentsOnly />} />
+        <Route path="incidencias/:id" element={<IncidentNoticePage />} />
         <Route path="reservas" element={<ReservationsPage />} />
         <Route path="reservas/:id/chat" element={<ChatPage />} />
         <Route path="reservas/:id" element={<ReservationDetailPage />} />

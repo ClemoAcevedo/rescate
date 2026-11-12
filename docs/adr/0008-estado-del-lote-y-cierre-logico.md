@@ -21,7 +21,7 @@ El worker implementa `published → expired` y la gestión del operador implemen
 `published → withdrawn`, ambas con el bloqueo común de
 [ADR 0006](0006-inventario-del-lote.md) y el movimiento del inventario pendiente a X.
 La pausa es reversible y conserva el estado publicado; ver
-[ADR 0017](0017-gestion-de-publicaciones.md). K044 (#49) incorpora el circuito de cierre por incidencia.
+[ADR 0017](0017-gestion-de-publicaciones.md). El [circuito de incidencias](../incidencias.md) usa el mismo cierre lógico con la decisión explícita `closeLot`.
 
 ## Alternativas descartadas
 

@@ -62,7 +62,7 @@ Nada envía alertas: Operación revisa una vez al día (anexos H p. 22).
 | Cola | Pendiente | En error: no se reintenta sola |
 | --- | --- | --- |
 | `expiries` | Lote con cierre u oferta vencidos sin registrar, incluido el último intento en curso | Lote con `expiry_attempts` agotados y sin concesión vigente; se devuelve al worker como indica [vencimientos](vencimientos.md) |
-| `notifications` | Evento `pending` del outbox | Evento `failed`, o `pending` con los intentos agotados y la concesión vencida (`LEASE_EXPIRED`, su worker murió); ver [avisos](avisos.md) |
+| `notifications` | Destinatario de incidencia aún sin evento, o evento `pending` del outbox | Evento `failed`, o `pending` con los intentos agotados y la concesión vencida (`LEASE_EXPIRED`, su worker murió); ver [avisos](avisos.md) |
 | `photos` | Foto `pending` de validar | Foto rechazada por `processing_failed`; quien opera el lote la vuelve a cargar ([fotos](fotos.md)) |
 
 `failed` cuenta todo lo acumulado: baja solo cuando cada tarea se corrige.

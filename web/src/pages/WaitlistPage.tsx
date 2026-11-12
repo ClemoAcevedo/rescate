@@ -1,14 +1,16 @@
 import './reservations.css'
+import { DetailSkeleton, RecordSkeleton } from '../components/RecordSkeleton'
 import { useCallback, useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { Icon } from '../components/Icon'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { FormField } from '../components/ui/FormField'
 import { Input } from '../components/ui/FormControls'
-import { formatInstant, formatWindow } from '../lots/lot-time'
+import { formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import { HttpError } from '../services/http-client'
 import { isUnknownOutcome } from '../services/reservations-service'
@@ -16,17 +18,27 @@ import { readIntent, saveIntent, clearIntent } from '../services/reservation-int
 import { joinWaitlist, getWaitlistEntry, listWaitlist, commandWaitlist, waitlistError, type WaitlistEntry } from '../services/waitlist-service'
 import type { WaitlistPage as Page } from '../services/openapi'
 
-const labels = { waiting: 'En espera', offered: 'Oferta pendiente de aceptación', accepted: 'Oferta aceptada', declined: 'Oferta rechazada', expired: 'Solicitud vencida', left: 'Fuera de la cola' }
+const labels = { waiting: 'En espera', offered: 'Oferta por aceptar', accepted: 'Oferta aceptada', declined: 'Oferta rechazada', expired: 'Espera vencida', left: 'Saliste de la lista' }
+const tones = { waiting: 'info', offered: 'warning', accepted: 'success', declined: 'neutral', expired: 'neutral', left: 'neutral' } as const
+const packs = (n: number) => `${n} ${n === 1 ? 'pack' : 'packs'}`
+// Cuenta regresiva m:ss, o h:mm:ss si falta más de una hora.
+function countdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = String(total % 60).padStart(2, '0')
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
+}
 function Gate({ children }: { children: ReactNode }) {
   const { status, session, error, refreshSession } = useAuth()
   const location = useLocation()
   if (status === 'error') return <Alert role="alert">{error}<Button onClick={() => void refreshSession()}>Reintentar sesión</Button></Alert>
-  if (status !== 'authenticated') return status === 'anonymous' ? <Alert>Inicia sesión para gestionar tu espera. <Link to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Iniciar sesión</Link></Alert> : <Alert role="status">Comprobando sesión…</Alert>
+  if (status !== 'authenticated') return status === 'anonymous' ? <Alert>Inicia sesión para gestionar tu espera. <Link to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Iniciar sesión</Link></Alert> : <RecordSkeleton label="Comprobando sesión…" lines={3} />
   return <div key={session?.user.id}>{children}</div>
 }
 export function JoinWaitlistPage() {
   const { id = '' } = useParams()
-  return <main className="page-content"><div className="reservations"><Link to={`/lotes/${encodeURIComponent(id)}`}>Volver al lote</Link><h1>Entrar a la espera</h1><Gate><Join key={id} lotId={id} /></Gate></div></main>
+  return <main className="page-content"><div className="reservations"><Link className="back-link" to={`/lotes/${encodeURIComponent(id)}`}><Icon name="arrowLeft" />Volver al lote</Link><h1>Unirme a la lista de espera</h1><Gate><Join key={id} lotId={id} /></Gate></div></main>
 }
 function Join({ lotId }: { lotId: string }) {
   const { session, csrfToken, refreshSession } = useAuth()
@@ -47,7 +59,7 @@ function Join({ lotId }: { lotId: string }) {
     busy.current = true; setSending(true); setError(null)
     try {
       try { saveIntent(storageKey, { quantity: amount, idempotencyKey: key.current }) }
-      catch { setError('Habilita el almacenamiento de esta pestaña para conservar la solicitud antes de enviarla.'); return }
+      catch { setError('No pudimos guardar tu pedido en esta pestaña. Habilita el almacenamiento del navegador e inténtalo de nuevo.'); return }
       const entry = await joinWaitlist(lotId, { quantity: amount, idempotencyKey: key.current }, csrfToken)
       clearIntent(storageKey)
       navigate(`/espera/${encodeURIComponent(entry.id)}`, { replace: true })
@@ -58,17 +70,21 @@ function Join({ lotId }: { lotId: string }) {
       if (reason instanceof HttpError && reason.status === 401) void refreshSession()
     } finally { busy.current = false; setSending(false) }
   }
-  return <Card><p>Entrar es voluntario y no crea una reserva ni retiene packs mientras esperas. Solo corresponde si no puedes reservar directamente o hay personas esperando.</p>
-    <p>Podrías recibir menos packs que los solicitados. Deberás aceptar la oferta expresamente antes de su vencimiento. Aceptar, rechazar o dejarla vencer cierra la solicitud sin saldo ni prioridad residual; no hay reingreso automático.</p>
-    <form className="reserve-form" onSubmit={submit}><FormField label="Cantidad solicitada" required>{control => <Input {...control} type="number" min="1" max="2147483647" step="1" value={quantity} disabled={sending || uncertain} onChange={e => { setQuantity(e.target.value); key.current = crypto.randomUUID() }} />}</FormField>
-      {uncertain && <Alert tone="warning">Hay un ingreso pendiente de comprobar. El reintento conserva la misma cantidad y clave.</Alert>}
+  return <Card className="waitlist-join">
+    <p>Te avisamos si se liberan packs de este lote. Antes de unirte, ten en cuenta que</p>
+    <ul className="waitlist-join__rules">
+      <li>Estar en la lista no te reserva packs.</li>
+      <li>Puedes recibir una oferta por menos packs de los que pediste.</li>
+      <li>Si recibes una oferta, tienes unos minutos para aceptarla. Si no aceptas a tiempo, pierdes tu lugar en la lista.</li>
+    </ul>
+    <form className="reserve-form" onSubmit={submit}><FormField label="Cantidad de packs" required>{control => <Input {...control} type="number" min="1" max="2147483647" step="1" value={quantity} disabled={sending || uncertain} onChange={e => { setQuantity(e.target.value); key.current = crypto.randomUUID() }} />}</FormField>
+      {uncertain && <Alert tone="warning">No pudimos confirmar si quedaste en la lista. Compruébalo antes de intentarlo de nuevo.</Alert>}
       {error && <Alert role="alert" tone="warning">{error}</Alert>}
-      <Button type="submit" loading={sending} disabled={!csrfToken}>{uncertain ? 'Comprobar el mismo ingreso' : 'Entrar voluntariamente a la espera'}</Button>
-      <Link to="/espera">Ver mis solicitudes</Link><Link to="/reservas">Ver mis reservas</Link>
+      <Button type="submit" loading={sending} disabled={!csrfToken}>{uncertain ? 'Comprobar si quedé en la lista' : 'Unirme a la lista de espera'}</Button>
     </form></Card>
 }
 export function WaitlistPage() {
-  return <main className="page-content"><div className="reservations"><h1>Mis solicitudes de espera</h1><p>Estar en espera o recibir una oferta requiere aceptación explícita para crear una reserva.</p><Gate><History /></Gate></div></main>
+  return <main className="page-content"><div className="reservations"><h1>Mis esperas</h1><p>Las listas de espera a las que te uniste y sus ofertas.</p><Gate><History /></Gate></div></main>
 }
 function History() {
   const [params, setParams] = useSearchParams()
@@ -84,15 +100,24 @@ function History() {
     listWaitlist(page, controller.signal).then(v => { if (!controller.signal.aborted) { setData(v); setError(null) } }).catch(e => { if (!controller.signal.aborted) { setData(null); setError(waitlistError(e)) } }).finally(() => { if (!controller.signal.aborted) setLoaded(query) })
     return () => controller.abort()
   }, [page, query])
-  return <section>{loaded !== query ? <Alert role="status">Consultando solicitudes…</Alert> : error ? <Alert role="alert">{error}<Button onClick={() => setRetry(v => v + 1)}>Reintentar</Button></Alert> : data && <>
-    {!data.items.length && <p>No hay solicitudes en esta página. <Link to="/lotes">Explorar lotes</Link></p>}
-    <ul className="reservations__list">{data.items.map(entry => <li key={entry.id}><Card><Badge>{labels[entry.status]}</Badge><h2><Link to={`/espera/${encodeURIComponent(entry.id)}`}>{lotTitle(entry.lot.description)}</Link></h2><p>{entry.requestedQuantity} packs solicitados</p>{entry.position && <p>Tu posición en la cola: {entry.position}</p>}<p>Consulta el detalle para comprobar el estado vigente.</p></Card></li>)}</ul>
-    <nav className="explore-pagination" aria-label="Páginas de espera">{page > 1 && <Button onClick={() => setParams({ pagina: String(page - 1) })}>Página anterior</Button>}<span>Página {page}</span>{data.hasNextPage && page < 1000 && <Button onClick={() => setParams({ pagina: String(page + 1) })}>Página siguiente</Button>}</nav>
+  return <section aria-label="Historial de esperas" aria-busy={loaded !== query}>{loaded !== query ? <RecordSkeleton label="Cargando tus esperas…" lines={3} /> : error ? <Alert role="alert">{error}<Button onClick={() => setRetry(v => v + 1)}>Reintentar</Button></Alert> : data && <>
+    {!data.items.length && (page === 1 ? <Card className="empty-state">
+      <span className="empty-state__icon"><Icon name="clock" /></span>
+      <h2>No estás en ninguna lista de espera</h2>
+      <p>Si un lote no tiene packs libres, únete a su lista y te avisamos cuando se liberen.</p>
+      <Link className="ui-button ui-button--primary" to="/lotes">Explorar lotes</Link>
+    </Card> : <Card className="reservations__end">No hay más esperas. <Button variant="secondary" onClick={() => setParams({})}>Ir a la primera página</Button></Card>)}
+    {data.items.length > 0 && <ul className="reservations__list">{data.items.map(entry => <li key={entry.id}><Card><Badge tone={tones[entry.status]}>{labels[entry.status]}</Badge><h2><Link to={`/espera/${encodeURIComponent(entry.id)}`}>{lotTitle(entry.lot.description)}</Link></h2>
+      <p>Pediste {packs(entry.requestedQuantity)}</p>
+      {entry.status === 'offered' && entry.offeredQuantity !== null && <p>Tienes una oferta por {packs(entry.offeredQuantity)}</p>}
+      {entry.position && <p>Tu lugar en la lista: {entry.position}</p>}
+    </Card></li>)}</ul>}
+    {(page > 1 || data.hasNextPage) && <nav className="explore-pagination" aria-label="Páginas de espera">{page > 1 && <Button onClick={() => setParams({ pagina: String(page - 1) })}>Página anterior</Button>}<span>Página {page}</span>{data.hasNextPage && page < 1000 && <Button onClick={() => setParams({ pagina: String(page + 1) })}>Página siguiente</Button>}</nav>}
   </>}</section>
 }
 export function WaitlistDetailPage() {
   const { id = '' } = useParams()
-  return <main className="page-content"><div className="reservations"><Link to="/espera">Volver a mis solicitudes</Link><h1>Estado de mi solicitud</h1><Gate><Detail key={id} id={id} /></Gate></div></main>
+  return <main className="page-content"><div className="reservations reservation-detail-view"><Link className="back-link" to="/espera"><Icon name="arrowLeft" />Volver a mis esperas</Link><h1>Tu espera</h1><Gate><Detail key={id} id={id} /></Gate></div></main>
 }
 function Detail({ id }: { id: string }) {
   const { csrfToken, refreshSession } = useAuth()
@@ -101,6 +126,7 @@ function Detail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [uncertain, setUncertain] = useState(false)
+  const [stale, setStale] = useState(false)
   const [now, setNow] = useState(Date.now)
   const busy = useRef(false)
   const generation = useRef({ value: 0 })
@@ -111,10 +137,11 @@ function Detail({ id }: { id: string }) {
     try {
       const value = await getWaitlistEntry(id)
       if (version !== generation.current.value) return
-      setEntry(value); setUncertain(false); setNow(Date.now()); setMessage(null)
+      setEntry(value); setUncertain(false); setStale(false); setNow(Date.now()); setMessage(null)
     } catch (e) {
       if (version !== generation.current.value) return
-      setEntry(null); setMessage(waitlistError(e))
+      setStale(true); setMessage(waitlistError(e))
+      if (e instanceof HttpError && [401, 403, 404].includes(e.status)) setEntry(null)
       if (e instanceof HttpError && e.status === 401) void refreshSession()
     } finally { if (version === generation.current.value) setLoading(false) }
   }, [id, refreshSession])
@@ -125,21 +152,21 @@ function Detail({ id }: { id: string }) {
     const tick = window.setInterval(() => setNow(Date.now()), 1000)
     const refresh = () => { if (document.visibilityState === 'visible') void load() }
     const poll = window.setInterval(refresh, 15000)
-    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh)
-    return () => { active = false; ++requests.value; clearInterval(tick); clearInterval(poll); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
+    window.addEventListener('online', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh)
+    return () => { active = false; ++requests.value; clearInterval(tick); clearInterval(poll); window.removeEventListener('online', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
   }, [load])
   const deadline = entry ? Math.min(Date.parse(entry.lot.pickupEndsAt), entry.offerExpiresAt ? Date.parse(entry.offerExpiresAt) : Infinity) : 0
   const closed = deadline <= now
   const outcomeRef = useRef<HTMLDivElement>(null)
   async function command(action: 'accept' | 'decline' | 'leave') {
-    if (busy.current || loading || uncertain || !csrfToken || !entry || Date.now() >= deadline) return
+    if (busy.current || loading || stale || uncertain || !csrfToken || !entry || Date.now() >= deadline) return
     if (action === 'leave' ? entry.status !== 'waiting' : entry.status !== 'offered') return
     busy.current = true; const version = ++generation.current.value; setSending(true); setMessage(null); setUncertain(true)
     try {
       const result = await commandWaitlist(id, action, csrfToken)
       if (version === generation.current.value) { setEntry(result); setUncertain(false) }
     } catch (e) {
-      if (version === generation.current.value) setMessage(`${waitlistError(e)} La acción pudo haberse aplicado; comprueba el resultado.`)
+      if (version === generation.current.value) setMessage(`${waitlistError(e)} Actualiza para ver si se aplicó.`)
       if (e instanceof HttpError && e.status === 401) void refreshSession()
     } finally {
       busy.current = false
@@ -150,21 +177,50 @@ function Detail({ id }: { id: string }) {
     }
   }
   const offered = entry?.status === 'offered' && !closed
+  const blocked = loading || sending || stale || uncertain || !csrfToken
+  const refresh = <Button className="reservation-detail__refresh" variant="ghost" disabled={loading || sending} onClick={() => void load()}>Actualizar</Button>
   return <section className="reservation-detail-content" aria-busy={loading || sending}>
-    {loading && <Alert role="status">Consultando estado vigente…</Alert>}
+    {loading && !entry && <DetailSkeleton label="Cargando tu espera…" />}
     {message && <Alert role="alert" tone="warning">{message}</Alert>}
-    {entry && <Card className="reservation-detail"><div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
-      <h2>{lotTitle(entry.lot.description)}</h2><p>{entry.lot.description}</p>
-      <dl className="reservation-detail__facts"><div><dt>Cantidad solicitada</dt><dd>{entry.requestedQuantity} packs</dd></div>{entry.offeredQuantity !== null && <div><dt>Cantidad ofrecida</dt><dd>{entry.offeredQuantity} packs</dd></div>}<div><dt>Lugar de retiro</dt><dd>{entry.lot.address}</dd></div><div><dt>Ventana de retiro</dt><dd>{formatWindow(entry.lot.pickupStartsAt, entry.lot.pickupEndsAt, entry.lot.timeZone)} ({entry.lot.timeZone})</dd></div></dl>
-      <p>{entry.lot.conditions ?? 'Sin condiciones adicionales.'}</p>
-      {entry.status === 'waiting' && !closed && <><p>Tu posición en la cola: {entry.position}. Esperar no retiene packs ni crea una reserva.</p><Button variant="danger" disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('leave')}>Salir de la espera y perder mi posición</Button></>}
-      {offered && <><Alert tone="warning">Tienes una oferta por {entry.offeredQuantity} de los {entry.requestedQuantity} packs solicitados. Aún no tienes una reserva. Al aceptar se cierra la solicitud sin saldo ni prioridad por los packs restantes.</Alert>
-        <p>Vence: {formatInstant(entry.offerExpiresAt!, entry.lot.timeZone)}. Tiempo orientativo: {Math.max(0, Math.ceil((deadline - now) / 1000))} s. El servidor comprueba la vigencia al aceptar.</p>
-        <div className="reservation-cancel__actions"><Button disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('accept')}>Aceptar explícitamente {entry.offeredQuantity} packs</Button><Button variant="danger" disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('decline')}>Rechazar oferta y salir de la cola</Button></div></>}
-      {entry.status === 'accepted' && <Alert tone="success">La oferta fue aceptada por {entry.offeredQuantity} packs y la solicitud se cerró. <Link to={`/reservas/${encodeURIComponent(entry.reservationId!)}`}>Consultar mi reserva y código de retiro</Link></Alert>}
-      {(entry.status === 'expired' || entry.status === 'declined' || entry.status === 'left' || (closed && ['waiting', 'offered'].includes(entry.status))) && <Alert>Esta solicitud terminó o su plazo finalizó. No puedes aceptar una oferta vencida. No conserva posición ni reingresa automáticamente. <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}`}>Volver al lote para una nueva solicitud voluntaria</Link></Alert>}
+    {entry && <Card className="reservation-detail">
+      <div className="reservation-detail__status">
+        <div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={uncertain || stale ? 'warning' : closed && ['waiting', 'offered'].includes(entry.status) ? 'neutral' : tones[entry.status]}>{uncertain ? 'Resultado por comprobar' : stale ? 'Estado sin actualizar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
+        {refresh}
+      </div>
+      <header className="reservation-detail__heading">
+        <h2>{lotTitle(entry.lot.description)}</h2>
+        {entry.lot.description !== lotTitle(entry.lot.description) && <p>{entry.lot.description}</p>}
+      </header>
+      {entry.status === 'waiting' && !closed && <div className="waitlist-highlight">
+        <p className="waitlist-highlight__lead">Tu lugar en la lista: <strong>{entry.position}</strong></p>
+        <p>Te avisaremos en Avisos si se liberan packs para ti.</p>
+      </div>}
+      {offered && <div className="waitlist-highlight waitlist-highlight--offer">
+        <h3>Tienes una oferta por {packs(entry.offeredQuantity!)}</h3>
+        <p className="waitlist-highlight__lead">Te quedan <strong>{countdown(deadline - now)}</strong> para aceptar</p>
+        <p>Vence el <time dateTime={new Date(deadline).toISOString()}>{formatInstant(new Date(deadline).toISOString(), entry.lot.timeZone)}</time>.</p>
+        {entry.offeredQuantity! < entry.requestedQuantity && <p>Te ofrecemos {entry.offeredQuantity} de los {entry.requestedQuantity} packs que pediste. Si aceptas, tu espera termina aquí.</p>}
+        <div className="reservation-cancel__actions">
+          <Button disabled={blocked} onClick={() => void command('accept')}>Aceptar {packs(entry.offeredQuantity!)}</Button>
+          <Button variant="secondary" disabled={blocked} onClick={() => void command('decline')}>Rechazar oferta</Button>
+        </div>
+      </div>}
+      {entry.status === 'accepted' && <Alert tone="success">Aceptaste la oferta y reservaste {packs(entry.offeredQuantity!)}. <Link to={`/reservas/${encodeURIComponent(entry.reservationId!)}`}>Ver mi código de retiro</Link></Alert>}
+      {entry.status === 'declined' && <Alert tone="neutral">Rechazaste la oferta y tu espera terminó. <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}`}>Ver el lote</Link></Alert>}
+      {entry.status === 'left' && <Alert tone="neutral">Saliste de la lista de espera. <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}`}>Ver el lote</Link></Alert>}
+      {(entry.status === 'expired' || (closed && ['waiting', 'offered'].includes(entry.status))) && <Alert tone="neutral">Se acabó el plazo de esta espera y ya no puedes aceptar ofertas. Si aún quieres packs, vuelve a unirte desde el lote. <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}`}>Ver el lote</Link></Alert>}
+      <dl className="reservation-detail__facts">
+        <div><dt>Packs que pediste</dt><dd>{packs(entry.requestedQuantity)}</dd></div>
+        {entry.offeredQuantity !== null && <div><dt>Packs ofrecidos</dt><dd>{packs(entry.offeredQuantity)}</dd></div>}
+        <div><dt>Lugar de retiro</dt><dd>{entry.lot.address}</dd></div>
+        <div className="reservation-detail__window"><dt>Ventana de retiro</dt><dd>{formatWindow(entry.lot.pickupStartsAt, entry.lot.pickupEndsAt, entry.lot.timeZone)}<span className="reservation-detail__zone">{entry.lot.timeZone}</span></dd></div>
+      </dl>
+      <div className="reservation-detail__conditions"><h3>Condiciones de retiro</h3><p>{entry.lot.conditions ?? 'Sin condiciones adicionales.'}</p></div>
+      <nav className="reservation-detail__links" aria-label="Más opciones de la espera">
+        <Link className="ui-button ui-button--secondary" to={`/lotes/${encodeURIComponent(entry.lot.id)}/reportar`} state={{ lotDescription: entry.lot.description }}>Reportar un problema</Link>
+      </nav>
+      {entry.status === 'waiting' && !closed && <div className="waitlist-leave"><p>Si sales, pierdes tu lugar en la lista.</p><Button variant="danger" disabled={blocked} onClick={() => void command('leave')}>Salir de la lista de espera</Button></div>}
     </Card>}
-    {uncertain && <Alert tone="warning">Comprueba el estado para saber si la acción se aplicó. No se anuncia una reserva hasta recibir la aceptación confirmada.</Alert>}
-    <Button variant="secondary" disabled={loading || sending} onClick={() => void load()}>Consultar estado actualizado</Button>
+    {!entry && !loading && refresh}
   </section>
 }

@@ -70,7 +70,7 @@ export async function reserveLot(lotId: string, body: ReserveLotRequest, csrfTok
         { method: 'POST', body, csrfToken, signal: AbortSignal.timeout(10000) })
     } catch (error) {
       if (!uncertainReservation(error) && attempt > 0) {
-        throw new UnexpectedResponseError('Un intento anterior pudo confirmar la reserva. Comprueba la misma solicitud.', error)
+        throw new UnexpectedResponseError('Puede que tu reserva ya se haya hecho. Comprueba tu reserva antes de intentar otra vez.', error)
       }
       if (attempt === 3 || !uncertainReservation(error)) throw error
       await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt))

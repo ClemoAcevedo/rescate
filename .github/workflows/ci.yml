@@ -48,8 +48,8 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
-      - name: Verify lint file selection after dependency updates
-        run: npm run test:tooling
+      - name: Date/time conventions and lint guardrails
+        run: npm test
       - name: Build
         run: npm run build
 
@@ -182,6 +182,16 @@ jobs:
         run: npm --prefix api run db:test:photos:compose
       - name: E2 stock adjustments, pause, withdrawal and configurable photos on PostgreSQL
         run: npm --prefix api run db:test:lot-management:compose
+      - name: K043 incident reports, versions and recipients under the lot lock on PostgreSQL
+        run: npm --prefix api run db:test:incidents:compose
+      - name: Cierre por incidencia y avisos recuperables (K044)
+        run: npm --prefix api run db:test:incident-delivery:compose
+      - name: K049 pickup codes after review, old codes and two operators against every closure
+        run: npm --prefix api run db:test:pickup-codes:compose
+      - name: K047 incident follow-up with mixed recipients, worker kill mid-delivery and races
+        run: npm --prefix api run db:test:incident-followup:compose
+      - name: K046 operator incident management, publisher and notice states on PostgreSQL
+        run: npm --prefix api run db:test:incident-management:compose
       - name: K025 reservation races and pickup deadlines with worker running and stopped
         run: npm --prefix api run db:test:reservations:compose
       - name: K027 waitlist, partial offers and expiry on empty PostgreSQL
@@ -243,7 +253,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             mcr.microsoft.com/playwright:v1.63.0-noble \
-            bash -lc "node api/scripts/test-web-coverage-collector.mjs && npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose && node api/scripts/web-coverage-report.mjs"
+            bash -lc "node api/scripts/test-web-coverage-collector.mjs && npm --prefix api run db:test:auth:compose && npm --prefix api run test:web:compose && WEB_SCRIPTS=test:web:incident-management npm --prefix api run test:web:compose && node api/scripts/web-coverage-report.mjs"
       - name: Frontend coverage by module
         if: always()
         uses: actions/upload-artifact@v4

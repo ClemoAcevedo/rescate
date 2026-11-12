@@ -92,17 +92,17 @@ try {
   await Promise.all([ana.page.goto(`${baseUrl}/reservas/${reservation.body.id}`), bea.page.goto(`${baseUrl}/espera/${beaEntry.id}`),
     cata.page.goto(`${baseUrl}/espera/${cataEntry.id}`)])
   await ana.page.locator('.pickup-code').waitFor()
-  await bea.page.getByText('Tu posición en la cola: 1.', { exact: false }).waitFor()
-  await cata.page.getByText('Tu posición en la cola: 2.', { exact: false }).waitFor()
+  await bea.page.getByText('Tu lugar en la lista: 1', { exact: false }).waitFor()
+  await cata.page.getByText('Tu lugar en la lista: 2', { exact: false }).waitFor()
   ok('Ana tiene la reserva con código; Bea espera primera y Cata segunda, cada una en su navegador')
 
   // Ana cancela en su navegador: los packs se ofrecen a Bea y el worker le genera el aviso.
   await ana.page.getByRole('button', { name: 'Cancelar reserva' }).click()
   await ana.page.getByRole('button', { name: 'Confirmar cancelación' }).click()
-  await ana.page.getByText('Cancelación confirmada.', { exact: false }).waitFor()
-  await bea.page.getByRole('button', { name: 'Aceptar explícitamente 2 packs' }).waitFor({ timeout: 25_000 })
+  await ana.page.getByText('Cancelaste tu reserva.', { exact: false }).waitFor()
+  await bea.page.getByRole('button', { name: 'Aceptar 2 packs' }).waitFor({ timeout: 25_000 })
   await unread(bea.page, 1)
-  await cata.page.getByText('Tu posición en la cola: 1.', { exact: false }).waitFor({ timeout: 25_000 })
+  await cata.page.getByText('Tu lugar en la lista: 1', { exact: false }).waitFor({ timeout: 25_000 })
   assert.deepEqual(await counters(), { f: 0, o: 2, r: 0, x: 0 })
   ok('Ana cancela: la oferta llega a Bea (FIFO) con su aviso; Cata pasa a ser la primera sin oferta')
 
@@ -117,8 +117,8 @@ try {
     WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%waitlist_entries%'`)).rowCount > 0)
   assert.equal(await stopWorker(worker, 'SIGKILL'), 'SIGKILL')
   await db.query('COMMIT')
-  await bea.page.getByText('No puedes aceptar una oferta vencida', { exact: false }).waitFor({ timeout: 25_000 })
-  assert.equal(await bea.page.getByRole('button', { name: /Aceptar explícitamente/ }).count(), 0)
+  await bea.page.getByText('ya no puedes aceptar ofertas', { exact: false }).waitFor({ timeout: 25_000 })
+  assert.equal(await bea.page.getByRole('button', { name: /^Aceptar / }).count(), 0)
   assert.deepEqual((await db.query('SELECT status FROM waitlist_entries WHERE public_id = ANY($1) ORDER BY id',
     [[beaEntry.id, cataEntry.id]])).rows.map((row) => row.status), ['offered', 'waiting'])
   ok('worker muerto tras reclamar: Bea ve su oferta vencida y no puede aceptarla; nada quedó a medias y Cata sigue sin oferta')
@@ -126,7 +126,7 @@ try {
   // Reiniciado al vencer la concesión, el worker registra el vencimiento y ofrece a Cata.
   await db.query('UPDATE lots SET expiry_claimed_until = now() WHERE public_id = $1', [lotId])
   worker = startWorker()
-  await cata.page.getByRole('button', { name: 'Aceptar explícitamente 2 packs' }).waitFor({ timeout: 25_000 })
+  await cata.page.getByRole('button', { name: 'Aceptar 2 packs' }).waitFor({ timeout: 25_000 })
   await unread(cata.page, 1)
   await unread(bea.page, 2)
   assert.deepEqual(await counters(), { f: 0, o: 2, r: 0, x: 0 })
@@ -135,13 +135,13 @@ try {
   // Cata entra por su aviso, acepta y ve su código de retiro.
   await openNotifications(cata.page)
   await cata.page.getByRole('article', { name: 'Tienes una oferta por 2 packs' }).getByRole('button', { name: 'Ver oferta' }).click()
-  await cata.page.getByRole('button', { name: 'Aceptar explícitamente 2 packs' }).click()
+  await cata.page.getByRole('button', { name: 'Aceptar 2 packs' }).click()
   await cata.page.getByText('Oferta aceptada', { exact: true }).waitFor()
-  await cata.page.getByRole('link', { name: 'Consultar mi reserva y código de retiro' }).click()
+  await cata.page.getByRole('link', { name: 'Ver mi código de retiro' }).click()
   await cata.page.locator('.pickup-code').waitFor()
   await openNotifications(bea.page)
-  await bea.page.getByRole('article', { name: 'Tu oferta venció' }).getByRole('button', { name: 'Ver solicitud' }).click()
-  await bea.page.getByText('No puedes aceptar una oferta vencida', { exact: false }).waitFor()
+  await bea.page.getByRole('article', { name: 'Tu oferta venció' }).getByRole('button', { name: 'Ver tu espera' }).click()
+  await bea.page.getByText('ya no puedes aceptar ofertas', { exact: false }).waitFor()
   assert.deepEqual(await counters(), { f: 0, o: 0, r: 2, x: 0 })
   ok('Cata acepta desde su aviso y obtiene el código; Bea abre el suyo y la oferta sigue vencida')
 

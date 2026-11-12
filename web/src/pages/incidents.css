@@ -1,0 +1,51 @@
+/* Presentación exclusiva de las incidencias del operador y del reporte (K046). */
+.incidents { display: grid; gap: var(--sp-6); width: min(100%, var(--layout-max)); margin: 0 auto; }
+.incidents--narrow { width: min(100%, 44rem); }
+.incidents > div { display: grid; gap: var(--sp-6); min-width: 0; }
+.incidents .page-header, .incidents .my-lots__toolbar { margin-bottom: 0; }
+.incidents h2 { font-size: var(--fs-title-lg); }
+.incidents h3 { font-size: 1.0625rem; }
+.incidents h4 { margin: 0; color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.incidents .segmented__item { white-space: nowrap; }
+.incidents__tabs { flex-wrap: wrap; }
+.incidents__hint, .incident__empty, .incident__final, .incident-form__note { margin: 0; color: var(--text-muted); }
+.incidents__links { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.incidents__list { display: grid; gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }
+
+/* Tarjeta de una incidencia: reporte, versiones y acciones. */
+.incident, .incident-summary, .incident-lot, .incident-report { display: grid; gap: var(--sp-3); min-width: 0; padding: var(--sp-4); }
+.incident p, .incident-summary p, .incident-lot p, .incident-report p { margin: 0; }
+.incident-summary__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.incident-summary__head h2, .incident-summary__head h3 { min-width: 0; overflow-wrap: anywhere; }
+.incident-summary__head a { color: inherit; text-decoration: none; }
+.incident-summary__head a:hover { color: var(--text-link-hover); text-decoration: underline; }
+.incident-summary__reason { color: var(--text-strong); overflow-wrap: anywhere; white-space: pre-line; }
+.incident-summary__meta { color: var(--text-muted); font-size: var(--fs-meta); overflow-wrap: anywhere; }
+.incident-summary > .ui-button { justify-self: start; text-decoration: none; }
+.incident-lot p { display: flex; align-items: flex-start; gap: var(--sp-2); color: var(--text-body); }
+.incident-lot .icon { margin-top: 0.15em; color: var(--text-brand); }
+.incident-report__lot { color: var(--text-strong); font-weight: var(--fw-semibold); }
+.incident-report .incidents__links { margin-top: var(--sp-2); }
+
+/* Versiones: la más reciente primero, cada una con su responsable y sus avisos. */
+.incident-versions { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.incident-version { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: var(--border-width) solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-sunken); }
+.incident-version p { margin: 0; }
+.incident-version__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); color: var(--text-muted); font-size: var(--fs-meta); }
+.incident-version__meta, .incident-version__recipients { color: var(--text-muted); font-size: var(--fs-meta); overflow-wrap: anywhere; }
+.incident-version__meta strong { color: var(--text-strong); }
+.incident-version__texts { display: grid; gap: var(--sp-2); margin: 0; }
+.incident-version__texts dt { color: var(--text-muted); font-size: var(--fs-meta); font-weight: var(--fw-semibold); }
+.incident-version__texts dd { margin: 0; color: var(--text-body); overflow-wrap: anywhere; white-space: pre-line; }
+.incident-version__closure { color: var(--text-warning); font-weight: var(--fw-semibold); }
+.incident-notices { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: 0; font-size: var(--fs-meta); }
+.incident-notices div { display: flex; gap: var(--sp-1); }
+.incident-notices dt { color: var(--text-muted); }
+.incident-notices dd { margin: 0; color: var(--text-strong); font-weight: var(--fw-semibold); }
+
+/* Formularios de reporte y de versión. */
+.incident-form { display: grid; gap: var(--sp-3); max-width: 44rem; }
+.incident-form > .ui-button { justify-self: start; }
+.incident-form__close { align-items: flex-start; }
+.incident-form__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.incident-form .ui-alert p { margin: 0; }

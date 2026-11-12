@@ -36,6 +36,11 @@ de mostrarlo aunque el borrado no haya corrido. Una vez al día el worker borra 
 conversaciones y conserva la fila sin texto como resultado del envío, para que un reintento
 tardío siga respondiendo lo mismo. Borrar otra vez no cambia nada.
 
+El borrado solo quita el texto. El compromiso, la entrega, los avisos de mensajes y los
+destinatarios de incidencias se conservan durante el piloto (anexos H p. 21), así que una
+incidencia publicada después del borrado igual avisa a quien retiró y sus instrucciones se
+leen sin el chat.
+
 ## Contrato HTTP
 
 | Método | Ruta | Resultado |
@@ -51,20 +56,37 @@ El envío exige sesión, `Origin` y CSRF.
 operador y los avisos de mensajes. Consulta cada 5 s únicamente con la pestaña visible
 y conexión; al volver o reconectar consulta de inmediato desde la última secuencia
 recibida. Agota páginas de 50 antes de esperar el siguiente ciclo y conserva el historial
-si falla la red. El resultado de un envío no adelanta ese cursor.
+si falla la red. Sin conexión muestra un aviso incluso al abrir una conversación
+que todavía no tiene historial local; al reconectar recupera sus mensajes. Un
+historial vacío se indica explícitamente. La región de mensajes anuncia nuevas
+incorporaciones sin desplazar el foco del editor. El resultado de un envío no adelanta ese cursor.
 
-El envío aparece pendiente hasta recibir confirmación. Un fallo conserva texto y clave
-en la vista para reintentar la misma intención sin duplicarla. Las intenciones locales
-se conservan mientras la conversación permanece montada. «Enviado al servidor» confirma
-persistencia, sin afirmar entrega ni lectura. El historial identifica titular y
-establecimiento, sin revelar al operador. El cierre deshabilita el editor y los reintentos;
-la API vuelve a comprobarlo bajo bloqueo al enviar.
+La vista se lee como conversación: burbujas propias a la derecha con el color de marca
+suave y las de la otra parte a la izquierda, con autor y hora discretos. Los autores se
+nombran desde quien mira: «Tú», «Establecimiento» y, para el operador, «Persona que
+reservó», sin revelar qué operador escribió. El encabezado muestra el lote y con quién se
+conversa cuando el link que abrió el chat lo entrega en el estado de navegación (avisos y
+compromisos del panel); la API del chat no trae esos datos, así que sin ese estado el
+encabezado queda genérico. Quien no opera ningún establecimiento solo puede ser quien
+reservó, así que su link de volver lleva siempre al detalle de la reserva. El operador
+vuelve al panel o a avisos según desde dónde llegó, y al panel si no se sabe.
+«Actualizar» consulta de inmediato y el compositor, abajo, muestra un contador de
+caracteres.
+
+Un envío muestra «Enviando…» hasta recibir confirmación y luego «Enviado», que confirma
+persistencia sin afirmar entrega ni lectura. Un fallo muestra «No se pudo enviar» y conserva
+texto y clave en la vista para «Reintentar» la misma intención sin duplicarla. Las
+intenciones locales se conservan mientras la conversación permanece montada. Tras confirmar
+un reintento se devuelve el foco al editor si la persona sigue en el botón o el navegador lo
+perdió al deshabilitarlo; se respeta el foco movido a otro control. El cierre deshabilita el
+editor y los reintentos; la API vuelve a comprobarlo bajo bloqueo al enviar.
 
 ## Cómo probar
 
 `npm --prefix api run db:test:chat:compose` crea una base aislada, la migra y recorre por la API
 real la conversación, los reintentos, el acceso ajeno, el límite, los envíos simultáneos, la
-carrera con cancelar, los cierres por vencimiento, retiro del lote y entrega, y la retención.
+carrera con cancelar, los cierres por vencimiento, retiro del lote y entrega, la retención y
+el aviso de una incidencia publicada después del borrado.
 
 Con Vite iniciado, `npm --prefix api run test:web:chat` comprueba con HTTP controlado
 dos contextos de navegador, respuesta perdida, reintento con la misma clave,

@@ -13,6 +13,8 @@ const validators = new Map<string, ReturnType<typeof ajv.compile>>()
 export function assertContract(method: string, path: string, response: Response, body: unknown): void {
   path = path.split("?")[0]!
   const route = path === "/public/lots" ? path
+    : /^\/lots\/[^/]+\/incidents$/.test(path) ? "/lots/{lotId}/incidents"
+    : /^\/incidents\/[^/]+\/versions$/.test(path) ? "/incidents/{incidentId}/versions"
     : path.startsWith("/public/lots/") ? (path.endsWith("/reservations") ? "/public/lots/{lotId}/reservations"
       : path.endsWith("/waitlist") ? "/public/lots/{lotId}/waitlist" : "/public/lots/{lotId}")
     : path === "/waitlist" ? path
@@ -20,6 +22,7 @@ export function assertContract(method: string, path: string, response: Response,
     : path.startsWith("/waitlist/") ? "/waitlist/{entryId}"
     : path === "/notifications" ? path
     : /^\/notifications\/[^/]+\/read$/.test(path) ? "/notifications/{notificationId}/read"
+    : /^\/notifications\/[^/]+$/.test(path) ? "/notifications/{notificationId}"
     : path === "/reservations" ? path
     : /^\/reservations\/[^/]+\/cancel$/.test(path) ? "/reservations/{reservationId}/cancel"
     : /^\/reservations\/[^/]+\/messages$/.test(path) ? "/reservations/{reservationId}/messages"

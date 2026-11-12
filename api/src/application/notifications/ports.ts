@@ -22,7 +22,9 @@ export interface ClaimedEvent {
 
 export interface NotificationRepository {
   /** Avisos del usuario, más recientes primero, páginas de 20, con el total sin leer. */
-  listByUser(userId: string, page: number): Promise<{ items: StoredNotification[]; hasNextPage: boolean; unreadCount: number }>
+  listByUser(userId: string, page: number, kind?: 'incident_version'): Promise<{ items: StoredNotification[]; hasNextPage: boolean; unreadCount: number }>
+  /** Detalle propio sin registrar lectura; ajeno e inexistente devuelven null. */
+  findByUser(userId: string, notificationId: string): Promise<StoredNotification | null>
   /**
    * Marca la lectura de un aviso propio y devuelve su estado; conserva la primera lectura.
    * Otro usuario o un id inexistente recibe `null`. No toca compromisos ni ofertas.

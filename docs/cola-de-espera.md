@@ -49,28 +49,35 @@ clave de ingreso devuelve la solicitud existente con su estado vigente.
 
 ## Vista del titular
 
-El detalle del lote ofrece «Unirme a la lista de espera» y enlaza a `/lotes/:id/espera`. La persona elige cantidad y pulsa
-«Entrar voluntariamente a la espera»; navegar a la pantalla no crea solicitudes.
+Cuando el lote no tiene packs libres, el detalle muestra «Unirme a la lista de espera» como acción
+principal y enlaza a `/lotes/:id/espera`; con packs libres solo ofrece reservar. El formulario
+explica una sola vez las reglas (no reserva packs, la oferta puede ser por menos packs y quien
+no acepta a tiempo pierde su lugar). La persona elige cantidad y pulsa «Unirme a la lista de
+espera»; navegar a la pantalla no crea solicitudes.
 El ingreso conserva cantidad y clave por actor y lote en `sessionStorage` antes de
 enviar. Ante una respuesta perdida, incluso tras recargar, el reintento usa la
 misma intención. Si el almacenamiento falla, no se envía. La API decide si corresponde
 esperar o reservar directamente.
 
-`/espera` muestra solicitudes propias e historial paginado; `/espera/:id` consulta
-posición («Tu posición en la cola»), cantidad solicitada, cantidad ofrecida, condiciones
-y ventana de retiro.
-La espera no retiene packs; la oferta los retiene pero exige aceptación explícita;
-solo una aceptación confirmada enlaza a la reserva y su código de retiro.
-Una oferta parcial explica que aceptar cierra la solicitud sin saldo prioritario.
-Rechazar o salir explica la pérdida de posición; volver exige un ingreso voluntario.
+`/espera` («Mis esperas») muestra solicitudes propias e historial paginado, con badge de
+estado por tono; `/espera/:id` destaca el lugar en la lista («Tu lugar en la lista») o la
+oferta, y luego cantidad pedida, cantidad ofrecida, condiciones y ventana de retiro.
+La espera no retiene packs; la oferta los retiene, pero solo «Aceptar N packs» crea la
+reserva. La oferta muestra una cuenta regresiva m:ss («Te quedan 9:53 para aceptar») y la
+hora de vencimiento. Una oferta parcial dice cuántos de los packs pedidos se ofrecen y que
+aceptar termina la espera. Salir advierte que se pierde el lugar; volver exige unirse de nuevo.
+Solo una aceptación confirmada enlaza a «Ver mi código de retiro».
 
 El detalle actualiza el reloj cada segundo, consulta cada quince segundos mientras
-la pestaña está visible y vuelve a consultar al regresar. El reloj es orientativo:
+la pestaña está visible y vuelve a consultar al regresar («Actualizar» lo hace a pedido). El reloj es orientativo:
 el vencimiento local bloquea acciones y la API verifica nuevamente la vigencia al
 aceptar con el reloj de la base. Un aviso antiguo nunca confirma una reserva.
 Los envíos simultáneos se bloquean; una respuesta perdida o un conflicto deshabilita
 acciones hasta consultar el estado vigente. Consultar puede recuperar una aceptación
-ya aplicada sin volver a enviar el comando. No hay aceptación ni reingreso automático.
+ya aplicada sin volver a enviar el comando. Una consulta fallida conserva los datos y señala el estado sin actualizar, con
+las acciones bloqueadas hasta consultar con éxito. Recuperar conexión inicia una
+nueva consulta; un rechazo de acceso retira los datos.
+No hay aceptación ni reingreso automático.
 
 ## Backend
 
@@ -95,7 +102,7 @@ bloquea ingresar, reservar y ofrecer ([ADR 0006](adr/0006-inventario-del-lote.md
 | --- | --- |
 | `npm --prefix api run test:web:waitlist` | Navegador con HTTP controlado: ingreso voluntario y recuperación tras recarga, posición, oferta parcial, doble envío, respuesta perdida, rechazo, salida, vencimiento local y rechazo del servidor con reloj desactualizado, privacidad, validación y páginas. Requiere Vite sin mocks de identidad. |
 | `npm --prefix api test` | Plan de ofertas (caso Ana 10, Pedro 3, Juan 1 con 4 libres), plazos, estado vigente y transiciones. |
-| `npm --prefix api run db:test:waitlist:compose` | PostgreSQL real vía API y contrato: oferta parcial, aceptar, rechazar, vencer sin trabajador, registro de vencimientos, cierre del lote con todo F, O y R en X, plazos, idempotencia, propiedad, ingresos y aceptaciones simultáneos y conciliación de Q, R y O. |
+| `npm --prefix api run db:test:waitlist:compose` | PostgreSQL real vía API y contrato: oferta parcial, aceptar, rechazar, vencer sin trabajador, registro de vencimientos, cierre del lote con todo F, O y R en X, plazos, idempotencia, propiedad, ingresos y aceptaciones simultáneos, orden FIFO numérico con ids de distinta cantidad de dígitos y conciliación de Q, R y O. |
 | `npm --prefix api run db:test:compose` | Restricciones de `waitlist_entries` y rollback de la migración. |
 | `npm --prefix api run db:test:queue-worker:compose` | Flujo integrado con API, sesiones separadas y procesos reales del worker: cancelar → oferta FIFO → aviso → vencimiento → oferta a la siguiente → aceptar → cierre del lote. Mata el worker con `kill -9` tras reclamar el vencimiento y tras reclamar la tanda de avisos; al reiniciar no duplica ofertas ni avisos y Q, R, O e historial cuadran. Imprime la traza de cada paso. |
 | `npm --prefix api run test:web:queue-worker` | El mismo flujo en tres navegadores (Ana, Bea y Cata) con worker propio, `kill -9` y reinicio. Abre el menú cuando la navegación está contraída para entrar a los avisos. Corre al final de `test:web:compose`. |

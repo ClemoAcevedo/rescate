@@ -9,9 +9,15 @@ import type { Log } from '../logging.js'
 
 export function createNotificationUseCases(repository: NotificationRepository, now: () => Date) {
   return {
-    async list(actor: Actor, page: number) {
-      const result = await repository.listByUser(actor.userId, page)
+    async list(actor: Actor, page: number, kind?: 'incident_version') {
+      const result = await repository.listByUser(actor.userId, page, kind)
       return { ...result, page }
+    },
+
+    async get(actor: Actor, notificationId: string) {
+      const notification = await repository.findByUser(actor.userId, notificationId.toLowerCase())
+      if (!notification) throw notificationNotFound()
+      return notification
     },
 
     /** Idempotente: la primera lectura se conserva. Un aviso ajeno responde igual que uno inexistente. */

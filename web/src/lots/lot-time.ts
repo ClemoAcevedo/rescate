@@ -17,9 +17,6 @@ export function supportedTimeZones(): string[] {
   return typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
 }
 
-/** Zona por defecto de un lote nuevo: la del lugar de retiro, no la del navegador del operador. */
-export const DEFAULT_TIME_ZONE = 'America/Santiago'
-
 function wallClock(instant: number, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
@@ -61,24 +58,4 @@ export function localInputToInstant(local: string, timeZone: string): string | n
   if (corrected !== instant) instant = corrected
   if (instantToLocalInput(new Date(instant).toISOString(), timeZone) !== local) return null
   return `${local}:00${formatOffset(offsetMinutes(instant, timeZone))}`
-}
-
-export function formatInstant(instant: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(Date.parse(instant))
-}
-
-function dayKey(instant: number, timeZone: string): string {
-  const wall = wallClock(instant, timeZone)
-  return `${wall.year}-${wall.month}-${wall.day}`
-}
-
-/** Ventana compacta en la zona del lote: «mié, 7 oct · 09:00 – 21:00» o con ambos días si cambia. */
-export function formatWindow(startsAt: string, endsAt: string, timeZone: string): string {
-  const start = Date.parse(startsAt)
-  const end = Date.parse(endsAt)
-  const day = new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', month: 'short', timeZone })
-  const time = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone })
-  return dayKey(start, timeZone) === dayKey(end, timeZone)
-    ? `${day.format(start)} · ${time.format(start)} – ${time.format(end)}`
-    : `${day.format(start)} ${time.format(start)} – ${day.format(end)} ${time.format(end)}`
 }

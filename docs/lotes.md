@@ -112,8 +112,11 @@ Código principal: [lots-service.ts](../web/src/services/lots-service.ts),
 
 ## Búsqueda y reserva directa
 
-`/lotes` consulta la API sin sesión. Permite categoría, ubicación manual o del
-navegador, radio y comienzo de la ventana de retiro. PostGIS usa `geography` WGS84:
+`/lotes` consulta la API sin sesión. Permite categoría, ubicación del navegador
+(«Usar mi ubicación») o coordenadas manuales dentro de «Ingresar coordenadas», una
+distancia máxima de 2, 5, 10 o 25 km y comienzo de la ventana de retiro. La categoría es
+texto libre en el contrato, así que la web solo sugiere las comunes con un `datalist`.
+En móvil la portada se reduce al título para dejar a la vista filtros y resultados. PostGIS usa `geography` WGS84:
 `ST_DWithin` filtra el radio con índice GiST y `ST_Distance` ordena por distancia
 geográfica, no tiempo de viaje. Cada página tiene hasta 12 lotes. Sin coordenadas
 se ordena por publicación; fecha e ID desempatan. La disponibilidad puede cambiar
@@ -256,10 +259,9 @@ reservas, pausa, cola, retiro contra entrega, invalidación, avisos y vencimient
 lote pausado en PostgreSQL real. `test:web:lot-management` recorre la interfaz a 360 px,
 incluida una respuesta perdida después del commit; forma parte de `test:web:compose`.
 
-Los reportes, versiones, instrucciones y seguimiento de incidencias siguen en
-[K043](https://github.com/ClemoAcevedo/rescate/issues/46) (Felipe Arnolds),
-[K044](https://github.com/ClemoAcevedo/rescate/issues/49) (Clemente Acevedo),
-[K045](https://github.com/ClemoAcevedo/rescate/issues/47) (Jorge Molina),
-[K046](https://github.com/ClemoAcevedo/rescate/issues/48) (Felipe Espinoza) y
-[K047](https://github.com/ClemoAcevedo/rescate/issues/51) (Vicente Reñasco).
-El cierre voluntario no implementa ese circuito de incidencias.
+Los reportes, versiones, instrucciones, destinatarios y el cierre por incidencia están en
+[incidencias](incidencias.md). El cierre usa el mismo protocolo que el retiro voluntario,
+pero confirma también la versión y sus destinatarios; sus avisos se generan por tandas.
+El historial y el detalle del destinatario conservan las versiones publicadas y su lectura.
+La gestión del operador corresponde a [K046](https://github.com/ClemoAcevedo/rescate/issues/48);
+la regresión de seguimiento está en las [pruebas de incidencias](incidencias.md#pruebas).

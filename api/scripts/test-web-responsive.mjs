@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
 import { chromium } from './support/browser.mjs'
 
 // Distribución con sesión de operador (cabecera completa) y HTTP controlado.
 const base = process.env.WEB_URL ?? 'http://localhost:5173'
+const screenshots = process.env.UX_SCREENSHOT_DIR
+if (screenshots) await mkdir(screenshots, { recursive: true })
 const browser = await chromium.launch()
 const lot = { id: 'lot_test', description: 'Pack de panes surtidos para compartir', category: 'Panadería', quantity: 10, availableQuantity: 10, conditions: 'Traer bolsa.', address: 'Calle ficticia 123', latitude: -33.45, longitude: -70.66, timeZone: 'America/Santiago', pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z', photos: [], photoUrl: null, distanceKm: null }
 const session = { user: { id: 'usr_layout', email: 'operador.con.correo.largo.para.probar@example.test' }, operableEstablishments: [{ id: 'est_layout', name: 'Almacén ficticio' }], expiresAt: '2030-01-15T22:00:00Z' }
@@ -28,6 +31,7 @@ try {
       return { overflow: document.documentElement.scrollWidth > innerWidth, height: header.height,
         cardWidths: cards.map(rect => rect.width), columns: cards.filter(rect => Math.abs(rect.top - cards[0].top) < 1).length }
     })
+    if (screenshots) await page.screenshot({ path: `${screenshots}/${width}-responsive.png`, fullPage: true })
     assert.equal(layout.overflow, false, `${width}: desborde horizontal`)
     assert.ok(layout.height <= 80, `${width}: cabecera ocupa varias filas con menú cerrado`)
     assert.equal(layout.columns, width <= 768 ? 1 : width < 936 ? 2 : 3, `${width}: columnas legibles`)
@@ -37,7 +41,7 @@ try {
     if (width <= 1280) {
       await menu.click()
       const links = page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link')
-      // Explorar, esperas, reservas, avisos, Mi establecimiento, Mis lotes y Publicar lote.
+      // Rescatar (explorar, esperas, reservas), Mi establecimiento (panel, Mis lotes, Publicar lote) y avisos en la cuenta.
       assert.equal(await links.count(), 7)
       const boxes = await links.evaluateAll(elements => elements.map(el => { const r = el.getBoundingClientRect(); return { x: r.x, right: r.right, y: r.y, bottom: r.bottom, height: r.height } }))
       for (let i = 0; i < boxes.length; i++) {
@@ -57,6 +61,7 @@ try {
       const controls = [...document.querySelectorAll('.reserve-quantity > *, .reserve-form > button')].map(el => el.getBoundingClientRect())
       return { overflow: document.documentElement.scrollWidth > innerWidth, panel: { x: panel.x, right: panel.right, width: panel.width, top: panel.top }, gallery: { bottom: gallery.bottom, right: gallery.right }, controls: controls.map(r => ({ x: r.x, right: r.right, width: r.width })) }
     })
+    if (screenshots) await page.screenshot({ path: `${screenshots}/${width}-responsive.png`, fullPage: true })
     assert.equal(layout.overflow, false, `${width}: desborde del detalle`)
     assert.ok(layout.panel.width >= Math.min(352, width - 32), `${width}: panel comprimido`)
     assert.ok(layout.controls.every(r => r.width > 0 && r.x >= layout.panel.x && r.right <= layout.panel.right), `${width}: controles fuera del panel`)

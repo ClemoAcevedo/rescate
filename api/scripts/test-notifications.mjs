@@ -199,19 +199,28 @@ try {
 
   // --- Caída a mitad de una tanda: el reclamo vence y otro ciclo la retoma sin omitir ni duplicar.
   await database.query('DELETE FROM notifications'); await database.query('DELETE FROM outbox_events')
+  // Un mismo reloj para los eventos sintéticos y los workers: PostgreSQL conserva
+  // microsegundos, mientras Date solo tiene milisegundos. now() puede dejar la
+  // disponibilidad después del instante que consulta un worker inmediato.
+  const batchAt = new Date('2030-01-15T18:00:00.123Z')
+  const leaseUntil = new Date(batchAt.getTime() + 120_000)
   const insertEvents = async (count, userId) => database.query(
     `INSERT INTO outbox_events (event_type, subject_id, recipient_user_id, payload, created_at, available_at)
-     SELECT 'offer_issued', 1000000 + g, $2, $3::jsonb, now(), now() FROM generate_series(1, $1) AS g`,
+     SELECT 'offer_issued', 1000000 + g, $2, $3::jsonb, $4, $4 FROM generate_series(1, $1) AS g`,
     [count, userId, JSON.stringify({ lot: { id: lot, description: 'Carga K030' }, quantity: 1,
-      waitlistEntryId: randomUUID(), reservationId: null, offerExpiresAt: null })])
+      waitlistEntryId: randomUUID(), reservationId: null, offerExpiresAt: null }), batchAt])
   await insertEvents(60, cata.userId)
-  const claimed = await outboxRepository.claim(50, new Date(), new Date(Date.now() + 120_000))
+  assert.equal(await worker(() => new Date(batchAt.getTime() - 1)).processNext(), 0,
+    'los eventos aún no disponibles no se reclaman')
+  const claimed = await outboxRepository.claim(50, batchAt, leaseUntil)
   assert.equal(claimed.length, 50, 'una tanda reclama hasta 50 eventos')
   // El proceso cae sin entregar: los 50 quedan reclamados y otro ciclo solo ve los 10 restantes.
-  assert.equal(await worker().processNext(), 10)
+  assert.equal(await worker(() => batchAt).processNext(), 10)
   assert.equal(await notificationCount(cata.userId), 10)
   // Al vencer el reclamo, otro ciclo retoma la tanda.
-  assert.equal(await drain(worker(() => new Date(Date.now() + 121_000))), 50)
+  assert.equal(await worker(() => new Date(leaseUntil.getTime() - 1)).processNext(), 0,
+    'el reclamo se conserva hasta su vencimiento')
+  assert.equal(await drain(worker(() => leaseUntil)), 50)
   assert.equal(await notificationCount(cata.userId), 60)
   assert.deepEqual((await events()).map(row => row.status).filter(status => status !== 'processed'), [])
   ok('un reclamo vencido se retoma: 60 eventos, 60 avisos, ninguno omitido ni duplicado')
@@ -220,18 +229,21 @@ try {
   await database.query('DELETE FROM notifications'); await database.query('DELETE FROM outbox_events')
   await insertEvents(100, ana.userId)
   const started = Date.now()
-  const taken = await Promise.all([drain(), drain()])
+  const taken = await Promise.all([drain(worker(() => batchAt)), drain(worker(() => batchAt))])
   const elapsed = Date.now() - started
   assert.equal(taken[0] + taken[1], 100)
   assert.equal(await notificationCount(ana.userId), 100)
+  assert.equal((await database.query(`SELECT count(*)::int AS n FROM outbox_events
+    WHERE status = 'processed' AND attempts = 1`)).rows[0].n, 100,
+    'cada evento se reclama una sola vez entre ambos workers')
   assert.ok(elapsed < 30_000, `100 avisos en ${elapsed} ms`)
   ok(`dos workers en paralelo: 100 eventos, 100 avisos sin duplicar (${elapsed} ms; meta E1 ≤ 30 s)`)
 
   // --- Un evento que agota sus intentos tras caídas queda visible como fallido.
   await database.query('DELETE FROM notifications'); await database.query('DELETE FROM outbox_events')
   await insertEvents(1, ana.userId)
-  await database.query(`UPDATE outbox_events SET attempts = 5, claimed_until = now() - interval '1 second'`)
-  assert.equal(await worker().processNext(), 0)
+  await database.query(`UPDATE outbox_events SET attempts = 5, claimed_until = $1`, [batchAt])
+  assert.equal(await worker(() => batchAt).processNext(), 0)
   assert.deepEqual((await events()).map(row => row.status), ['failed'])
   ok('tras agotar los intentos el evento queda failed, visible para revisión')
 

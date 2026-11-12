@@ -3,6 +3,7 @@
 import assert from "node:assert/strict"
 import { once } from "node:events"
 import type { Server } from "node:http"
+import { connect } from "node:net"
 import type { AddressInfo } from "node:net"
 import test from "node:test"
 import { createApp } from "../src/app.js"
@@ -35,6 +36,7 @@ async function start(cases: Partial<PhotoUseCases>) {
   await once(server, "listening")
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   return {
+    port: (server.address() as AddressInfo).port,
     async call(method: string, path: string, init: { body?: BodyInit; headers?: Record<string, string>; actor?: string | null } = {}) {
       const headers: Record<string, string> = { "x-test-csrf": "ok", ...init.headers }
       if (init.actor !== null) headers["x-test-actor"] = init.actor ?? "1"
@@ -100,6 +102,46 @@ test("carga: más de 5 MiB responde 413, declarado o por streaming", async () =>
     assert.equal(chunked.status, 413)
     assert.equal(calls, 1)
     assert.ok(streamed, "Application recibe el error y libera la carga")
+  } finally { await api.close() }
+})
+
+/** Envía `size` bytes declarados por un socket propio para ver si la API corta la conexión mientras llegan. */
+async function sendRaw(port: number, size: number) {
+  const socket = connect(port, "127.0.0.1")
+  await once(socket, "connect")
+  let received = ""
+  let error: string | null = null
+  socket.on("data", (chunk) => { received += chunk })
+  socket.on("error", (cause: NodeJS.ErrnoException) => { error = cause.code ?? cause.message })
+  socket.write(`POST /lots/${LOT}/photos HTTP/1.1\r\nHost: rescate.test\r\nx-test-actor: 1\r\nx-test-csrf: ok\r\n`
+    + `Content-Type: image/png\r\nContent-Length: ${size}\r\n\r\n`)
+  const chunk = Buffer.alloc(64 * 1024)
+  let sent = 0
+  while (sent < size && error === null && !socket.destroyed) {
+    const flushed = socket.write(chunk)
+    sent += chunk.length
+    if (!flushed) await Promise.race([once(socket, "drain"), once(socket, "close")]).catch(() => {})
+  }
+  // Esperar la respuesta completa o el cierre del servidor.
+  for (let i = 0; i < 100 && !received.includes("}") && error === null && !socket.destroyed; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  const status = received.split("\r\n")[0]
+  socket.destroy()
+  return { sent, error, status }
+}
+
+test("carga: tras el 413 la API descarta el resto sin cortar la conexión, hasta un tope (#171)", async () => {
+  const api = await start({ async upload() { throw new Error("no esperado") } })
+  try {
+    // Antes de #171 el servidor cerraba con bytes sin leer y el cliente recibía EPIPE o ECONNRESET.
+    const declared = await sendRaw(api.port, 8 * 1024 * 1024)
+    assert.deepEqual([declared.error, declared.status, declared.sent], [null, "HTTP/1.1 413 Payload Too Large", 8 * 1024 * 1024])
+    // Sobre cuatro veces el límite se deja de leer y se corta.
+    const abusive = await sendRaw(api.port, 40 * 1024 * 1024)
+    assert.equal(abusive.status, "HTTP/1.1 413 Payload Too Large")
+    assert.notEqual(abusive.error, null)
+    assert.ok(abusive.sent < 40 * 1024 * 1024)
   } finally { await api.close() }
 })
 

@@ -111,6 +111,9 @@ export type NotificationKind =
   | "reservation_cancelled"
   | "message_from_holder"
   | "message_from_establishment"
+  | "incident_version"
+export type PublishedIncidentStatus = "open" | "following" | "resolved"
+export type IncidentText = string
 /**
  * Fecha calendario en la zona del establecimiento, sin hora.
  */
@@ -138,6 +141,10 @@ export type ActivityKind =
   | "offer_expired"
   | "waitlist_left"
   | "waitlist_expired"
+/**
+ * reported: pendiente de revisión; open: publicada; following: en seguimiento; resolved: resuelta.
+ */
+export type IncidentStatus = "reported" | "open" | "following" | "resolved"
 
 export interface HttpSchemas {
   LotManagementRequest: LotManagementRequest
@@ -188,6 +195,16 @@ export interface HttpSchemas {
   SentMessage: SentMessage
   ChatMessage: ChatMessage
   ChatMessagePage: ChatMessagePage
+  IncidentReportRequest: IncidentReportRequest
+  IncidentReport: IncidentReport
+  IncidentVersionRequest: IncidentVersionRequest
+  IncidentVersionResult: IncidentVersionResult
+  IncidentVersionSummary: IncidentVersionSummary
+  Incident: Incident
+  IncidentList: IncidentList
+  IncidentNoticeCounts: IncidentNoticeCounts
+  EstablishmentIncident: EstablishmentIncident
+  EstablishmentIncidentPage: EstablishmentIncidentPage
 }
 export interface LotManagementRequest {
   action: "reduce_stock" | "pause" | "resume" | "withdraw"
@@ -660,7 +677,7 @@ export interface Notification {
     description: string
   }
   /**
-   * Packs ofrecidos, confirmados o cancelados según el tipo.
+   * Packs ofrecidos, confirmados o cancelados; 0 en avisos de incidencia, que afectan al lote completo.
    */
   quantity: number
   /**
@@ -675,6 +692,22 @@ export interface Notification {
    * Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo.
    */
   offerExpiresAt: string | null
+  incident?: IncidentNotice
+}
+/**
+ * Solo en incident_version. Conserva motivo e instrucciones de la versión avisada.
+ */
+export interface IncidentNotice {
+  id: PublicId
+  version: number
+  status: PublishedIncidentStatus
+  reason: IncidentText
+  instructions: IncidentText
+  /**
+   * Vínculo al fijar el destinatario; sin identidades ajenas.
+   */
+  relation: "received" | "committed" | "operator"
+  lotClosed: boolean
 }
 export interface NotificationPage {
   /**
@@ -902,4 +935,116 @@ export interface ChatMessagePage {
    * true mientras se puede escribir. Cancelar, vencer o retirar la reserva o cerrar el lote lo dejan en false para siempre.
    */
   open: boolean
+}
+export interface IncidentReportRequest {
+  reason: IncidentText
+  idempotencyKey: string
+}
+export interface IncidentReport {
+  id: PublicId
+  lotId: PublicId
+  reason: IncidentText
+  createdAt: Instant
+}
+export interface IncidentVersionRequest {
+  action: "publish" | "update" | "resolve"
+  /**
+   * Versión vigente de la incidencia; 0 antes de publicar.
+   */
+  version: number
+  reason: IncidentText
+  instructions: IncidentText
+  idempotencyKey: string
+  /**
+   * Decisión explícita de cerrar el lote junto con la versión. Un cierre previo se conserva.
+   */
+  closeLot?: boolean
+}
+export interface IncidentVersionResult {
+  incidentId: PublicId
+  version: number
+  status: PublishedIncidentStatus
+  reason: IncidentText
+  instructions: IncidentText
+  publishedAt: Instant
+  /**
+   * Decisión de cierre de este comando.
+   */
+  closeLot: boolean
+  /**
+   * El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores.
+   */
+  lotClosed: boolean
+}
+export interface IncidentVersionSummary {
+  version: number
+  status: PublishedIncidentStatus
+  reason: IncidentText
+  instructions: IncidentText
+  publishedAt: Instant
+  /**
+   * Decisión de cierre de este comando.
+   */
+  closeLot: boolean
+  /**
+   * El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores.
+   */
+  lotClosed: boolean
+  /**
+   * Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores.
+   */
+  recipientCount: number
+  /**
+   * Correo normalizado en minúsculas, sin espacios exteriores; no afirma verificación ni elimina puntos o sufijos +.
+   */
+  publishedBy: string
+  notices: IncidentNoticeCounts
+}
+/**
+ * Avisos de la versión por destinatario; suman recipientCount. Sin identificar a nadie.
+ */
+export interface IncidentNoticeCounts {
+  /**
+   * Aún sin aviso: en cola, reintentando o con un fallo que ve Operación.
+   */
+  pending: number
+  /**
+   * Aviso creado y todavía sin leer.
+   */
+  generated: number
+  /**
+   * Aviso con lectura registrada por su destinatario.
+   */
+  read: number
+}
+export interface Incident {
+  id: PublicId
+  status: IncidentStatus
+  version: number
+  reportReason: IncidentText
+  reportedAt: Instant
+  versions: IncidentVersionSummary[]
+}
+export interface IncidentList {
+  /**
+   * @maxItems 50
+   */
+  items: Incident[]
+}
+export interface EstablishmentIncident {
+  id: PublicId
+  status: IncidentStatus
+  version: number
+  reportReason: IncidentText
+  reportedAt: Instant
+  versions: IncidentVersionSummary[]
+  lot: PanelLotRef
+}
+export interface EstablishmentIncidentPage {
+  /**
+   * @maxItems 20
+   */
+  items: EstablishmentIncident[]
+  page: number
+  hasNextPage: boolean
 }

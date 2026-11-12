@@ -11,12 +11,11 @@ de espera, oferta y reserva y registrar obstáculos.
 ## Verificación exclusiva de K033
 
 Con las dependencias de `api/` y `web/` y Chromium de Playwright instalados,
-iniciar Vite sin mocks de identidad y ejecutar:
+ejecutar (inicia Vite sin mocks de identidad):
 
 ```bash
-# Terminal 1, desde la raíz:
-npm --prefix web run dev
-# Terminal 2, desde la raíz:
+npm --prefix api run test:web:k033
+# Contra un Vite ya iniciado:
 WEB_URL=http://localhost:5173 npm --prefix api run test:web:k033
 ```
 
@@ -24,7 +23,7 @@ Usar en `WEB_URL` el esquema y puerto que indique Vite; por ejemplo,
 `https://localhost:5174` si se inició con HTTPS en ese puerto.
 
 El comando ejecuta únicamente `test:web:accessibility`, con HTTP controlado;
-requiere Vite, sin API, PostgreSQL ni worker. Recorre exploración, reserva y
+usa Vite, sin API, PostgreSQL ni worker. Recorre exploración, reserva y
 cancelación con teclado a 360 × 900 y 1366 × 900 px. Comprueba etiquetas de filtros
 y cantidad, foco visible y destino del foco al navegar y recibir resultados,
 conservar/cancelar, ausencia de desborde y Escape del menú móvil. También presenta
@@ -48,7 +47,12 @@ participantes ni exige ejecutar las sesiones para cerrar la tarjeta.
 
 ## Distribución y regresiones independientes
 
-La cabecera usa menú hasta 1280 px. Las tarjetas ajustan columnas al espacio y el
+La cabecera usa menú hasta 1280 px y mantiene marca y botón en una fila desde
+320 px con el menú cerrado. Con sesión, el menú agrupa los enlaces en «Rescatar»,
+«Mi establecimiento» (solo operadores, con «Panel», «Mis lotes» y «Publicar lote») y
+«Tu cuenta» (avisos, correo y cerrar sesión), cada grupo con `role="group"` y su título.
+En escritorio los títulos quedan para lectores de pantalla y el correo se ve en el
+`title` del avatar para que la fila no se desborde. Las tarjetas ajustan columnas al espacio y el
 panel del lote se apila bajo la galería hasta 1024 px; en escritorio va a su lado.
 `test:web:responsive` conserva la regresión ampliada de 320 a 1920 px.
 `test:web:compose` conserva la suite general, incluidos backend, fotos, reservas,
@@ -105,3 +109,25 @@ incorrectas. Guardar las fichas anonimizadas fuera de `docs/` y enlazarlas desde
 El cierre de K033 reúne la revisión de teclado, foco, etiquetas y pantallas a ambos
 anchos, cero bloqueos en explorar, reservar y cancelar y este protocolo preparado
 con cinco recorridos, medición de comprensión y registro de obstáculos.
+
+## Regresión de experiencia y recuperación
+
+`npm --prefix api run test:web:k050` inicia Vite si no se indica `WEB_URL` y
+recorre con HTTP controlado los flujos críticos a 360 y 1366 px: explorar,
+reservar, conservar/cancelar, consultar espera y aceptar oferta, abrir un aviso
+y conversar. Usa Tab y Enter para alcanzar y activar controles, sin mover el foco
+desde el test. Comprueba contenido largo, ausencia de desborde y recuperación de
+consultas y envíos tras errores de transporte.
+
+En reserva y espera, una consulta fallida conserva los datos anteriores y bloquea
+las acciones que necesitan vigencia hasta consultar con éxito. El código de retiro
+permanece oculto durante esa comprobación. Al recuperar conexión se consulta de
+nuevo. El chat distingue historial vacío y desconexión, anuncia incorporaciones
+mediante una región `log` y devuelve el foco al editor al confirmar un reintento,
+si la persona sigue en ese control.
+
+Para recoger capturas de los obstáculos, ejecutar
+`UX_SCREENSHOT_DIR=/tmp/k050 npm --prefix api run test:web:k050`. Adjuntar al PR
+las capturas y salidas antes/después de cada corrección, con el mismo ancho y paso.
+La evidencia se guarda fuera de `docs/`. La regresión automatizada no sustituye
+las sesiones de comprensión ni una revisión con lector de pantalla.

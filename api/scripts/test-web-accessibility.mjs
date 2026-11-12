@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
+import { createServer } from '../../web/node_modules/vite/dist/node/index.js'
 import { chromium } from './support/browser.mjs'
 
 // Recorrido de teclado con HTTP controlado; no sustituye sesiones con personas.
-const base = process.env.WEB_URL ?? 'http://localhost:5173'
+const root = fileURLToPath(new URL('../../web/', import.meta.url))
+const vite = process.env.WEB_URL ? null : await createServer({ root, server: { host: '127.0.0.1', port: 0 } })
+await vite?.listen()
+const base = (process.env.WEB_URL ?? vite.resolvedUrls.local[0]).replace(/\/$/, '')
 const browser = await chromium.launch()
 const session = { user: { id: 'usr_a11y', email: 'teclado@example.test' }, operableEstablishments: [], expiresAt: '2030-01-15T22:00:00Z' }
 const lot = { id: 'lot_test', description: 'Pack de panes.', category: 'Panadería', quantity: 10, availableQuantity: 10, conditions: 'Traer bolsa.', address: 'Calle 123', latitude: -33.45, longitude: -70.66, timeZone: 'America/Santiago', pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z', photos: [], photoUrl: null, distanceKm: null }
@@ -72,10 +77,10 @@ try {
     await page.getByLabel('Cantidad de packs (obligatorio)', { exact: true }).waitFor()
     await expectFocus(page.locator('main'))
     await fits()
-    await activate('button', 'Confirmar reserva')
-    await page.getByRole('heading', { name: 'Solicitud registrada por 1 pack' }).waitFor()
+    await activate('button', 'Reservar 1 pack')
+    await page.getByRole('heading', { name: 'Reservaste 1 pack' }).waitFor()
     await expectFocus(page.locator('.reservation-confirmation'))
-    await activate('link', 'Ver mi reserva')
+    await activate('link', 'Ver mi código de retiro')
     await page.getByText(current.pickupCode, { exact: true }).waitFor()
     await fits()
     await activate('button', 'Cancelar reserva')
@@ -91,16 +96,16 @@ try {
     assert.equal(await page.locator('.pickup-code').count(), 0)
     await fits()
     await page.goto(base + '/espera/w_test')
-    await page.getByText(/Esperar no retiene packs ni crea una reserva/).waitFor()
+    await page.getByText(/Tu lugar en la lista: 2/).waitFor()
     await fits()
     wait = { ...wait, status: 'offered', position: null, offeredQuantity: 4, offerExpiresAt: '2030-01-15T20:00:00Z' }
-    await activate('button', 'Consultar estado actualizado')
-    await page.getByText(/Aún no tienes una reserva/).waitFor()
+    await activate('button', 'Actualizar')
+    await page.getByText(/Te quedan .* para aceptar/).waitFor()
     await fits()
-    await activate('button', 'Aceptar explícitamente 4 packs')
+    await activate('button', 'Aceptar 4 packs')
     await page.getByText('Oferta aceptada', { exact: true }).waitFor()
     await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'status')
-    await activate('link', 'Consultar mi reserva y código de retiro')
+    await activate('link', 'Ver mi código de retiro')
     await page.getByText('Confirmada', { exact: true }).waitFor()
     await page.getByText(reservation.pickupCode, { exact: true }).waitFor()
     if (width === 360) {
@@ -114,4 +119,4 @@ try {
     await context.close()
     console.log(`OK K033: explorar, reservar, conservar/cancelar, espera y oferta; teclado y foco; ${width}px`)
   }
-} finally { await browser.close() }
+} finally { await browser.close(); await vite?.close() }

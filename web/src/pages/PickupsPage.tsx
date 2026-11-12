@@ -1,3 +1,4 @@
+import { RecordSkeleton } from '../components/RecordSkeleton'
 import './pickups.css'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -8,7 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
-import { formatInstant, formatWindow } from '../lots/lot-time'
+import { formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import { HttpError } from '../services/http-client'
 import { LotRequestError, getLot, type LotResponse } from '../services/lots-service'
@@ -48,7 +49,7 @@ function ReviewOutcome({ review, lot }: { review: Review; lot: LotResponse }) {
   if (!canConfirm) {
     return <Alert tone="warning" role="status">La ventana de retiro aún no comienza. Podrás confirmar desde {formatInstant(lot.pickupStartsAt, lot.timeZone)}.</Alert>
   }
-  return <Alert tone="info" role="status">La reserva está vigente. Entrega {packs(reservation.quantity)} completos y confirma el retiro.</Alert>
+  return <Alert tone="info" role="status">La reserva está vigente. Entrega {packs(reservation.quantity)} y confirma el retiro.</Alert>
 }
 
 function PickupDesk({ lot, csrfToken }: { lot: LotResponse; csrfToken: string }) {
@@ -178,7 +179,7 @@ function PickupDesk({ lot, csrfToken }: { lot: LotResponse; csrfToken: string })
                 {phase === 'confirming' ? 'Confirmando…' : unknownOutcome ? 'Reintentar confirmación' : `Confirmar retiro de ${packs(review.reservation.quantity)}`}
               </Button>
             )}
-            <Button variant="ghost" disabled={locked} onClick={reset}>Revisar otro código</Button>
+            <Button variant="secondary" disabled={locked} onClick={reset}>Revisar otro código</Button>
           </div>
         </Card>
       )}
@@ -230,7 +231,7 @@ function Pickups({ lotId, csrfToken }: { lotId: string; csrfToken: string }) {
       </>
     )
   }
-  if (!lot) return <><h1 id="pickups-title">Validar retiros</h1><Alert role="status">Cargando lote…</Alert></>
+  if (!lot) return <><h1 id="pickups-title">Validar retiros</h1><RecordSkeleton label="Cargando lote…" count={1} lines={5} /></>
   return (
     <>
       <LotHeader lot={lot} now={openedAt} />

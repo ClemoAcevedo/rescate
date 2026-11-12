@@ -3,7 +3,7 @@ openapi: "3.1.0"
 info:
   title: "Rescate — contrato HTTP S02"
   version: "0.1.0"
-  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, chat de la reserva, panel del establecimiento, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
+  description: "Fuente de verdad HTTP S02 para identidad, lotes del operador y sus fotos, búsqueda pública, reserva directa, cancelación y retiro con código, chat de la reserva, panel del establecimiento, incidencias, además de /health. No define SQL ni arquitectura interna. Rutas relativas a la base API: el proxy web /api elimina ese prefijo al reenviar. Cuerpos JSON de hasta 16 KiB; las fotos usan su propia ruta binaria de hasta 5 MiB. Seguridad y decisiones en docs/api/README.md; sesión opaca, sin JWT/refresh tokens. Todos los comandos exigen origen permitido y CSRF. Categoría como texto provisional; no catálogo inventado."
 servers:
   -
     url: "/api"
@@ -39,6 +39,9 @@ tags:
   -
     name: "Panel"
     description: "RF10/RF12: panel del establecimiento para su operador, historial y resultados básicos."
+  -
+    name: "Incidents"
+    description: "RF11: reporte de un problema sobre un lote, publicación con motivo e instrucciones, seguimiento y resolución por versiones."
 paths:
   "/health":
     get:
@@ -547,6 +550,10 @@ paths:
         - name: page
           in: query
           schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+        - name: kind
+          in: query
+          description: "Historial de versiones de incidencias del destinatario, incluidas las leídas. unreadCount conserva el total global de la bandeja."
+          schema: { type: string, enum: [incident_version] }
       responses:
         "200":
           description: "Página de avisos propios."
@@ -558,13 +565,34 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/Unavailable" }
+  "/notifications/{notificationId}":
+    parameters:
+      - $ref: "#/components/parameters/NotificationId"
+    get:
+      operationId: "getNotification"
+      summary: "Consultar un aviso propio y su versión publicada"
+      description: "No registra lectura. Conserva motivo e instrucciones tras cerrar lote y chat y después de borrar el texto del chat por retención. Solo devuelve la instantánea de su destinatario, sin identidades ajenas. Un aviso ajeno responde el mismo 404 que uno inexistente."
+      tags: ["Notifications"]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: "Aviso propio."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notification" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
   "/notifications/{notificationId}/read":
     parameters:
       - $ref: "#/components/parameters/NotificationId"
     post:
       operationId: "markNotificationRead"
       summary: "Marcar un aviso propio como leído"
-      description: "Registra la lectura y devuelve el aviso. Repetir conserva el instante de la primera lectura. Leer no cambia ofertas, solicitudes ni reservas: una oferta vencida sigue vencida. 404 si el aviso es ajeno o no existe. Cuerpo: objeto vacío."
+      description: "Registra la lectura y devuelve el aviso. Repetir conserva el instante de la primera lectura. Leer no acredita cumplimiento de instrucciones ni cambia ofertas, solicitudes o reservas: una oferta vencida sigue vencida. 404 si el aviso es ajeno o no existe. Cuerpo: objeto vacío."
       tags: ["Notifications"]
       security: [{ SessionCookie: [] }]
       parameters:
@@ -1463,6 +1491,132 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/Unavailable" }
+  "/lots/{lotId}/incidents":
+    parameters:
+      - { $ref: "#/components/parameters/LotId" }
+    get:
+      operationId: listLotIncidents
+      summary: Consultar las incidencias del lote
+      description: Solo operadores miembros actuales. Devuelve las últimas cincuenta, de más reciente a más antigua, con sus versiones, el correo del operador que publicó cada una y el total y el estado de sus avisos, sin identificar a los destinatarios.
+      tags: [Incidents]
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: Incidencias del lote autorizado.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncidentList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    post:
+      operationId: reportLotIncident
+      summary: Reportar un problema sobre un lote
+      description: "Quien tiene o tuvo un compromiso con el lote, incluida la espera, o un operador miembro. No exige lote abierto ni entrega previa. El reporte queda pendiente de revisión: no cancela, no cierra el lote ni avisa. Sin acceso responde 404, igual que un lote inexistente. idempotencyKey es un UUID por persona: la misma clave y parámetros reproducen 201 y el cuerpo original; otros parámetros responden 409."
+      tags: [Incidents]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Origin" }
+        - { $ref: "#/components/parameters/CsrfHeader" }
+        - { $ref: "#/components/parameters/CsrfCookie" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncidentReportRequest" }
+      responses:
+        "201":
+          description: Reporte registrado o resultado original de su reintento.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncidentReport" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/establishments/{establishmentId}/incidents":
+    parameters:
+      - { $ref: "#/components/parameters/EstablishmentId" }
+    get:
+      operationId: listEstablishmentIncidents
+      summary: Listar las incidencias de los lotes del establecimiento
+      description: "K046. Solo operador con membership actual; otro establecimiento recibe 403 y uno inexistente 404. Incidencias de todos los lotes del establecimiento, del reporte más reciente al más antiguo, en páginas de 20, con su lote, sus versiones y el estado de los avisos de cada una. No identifica a quien reportó ni a los destinatarios. Se rechazan filtros desconocidos."
+      tags: [Incidents]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: status
+          in: query
+          description: "Solo las incidencias en este estado. Sin valor, todas."
+          schema: { $ref: "#/components/schemas/IncidentStatus" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        "200":
+          description: Página de incidencias del establecimiento.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstablishmentIncidentPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  "/incidents/{incidentId}/versions":
+    parameters:
+      - { $ref: "#/components/parameters/IncidentId" }
+    post:
+      operationId: createIncidentVersion
+      summary: Publicar, actualizar o resolver una incidencia
+      description: "Solo operadores miembros actuales; una incidencia inexistente o de otro establecimiento responde 404. Requiere la versión vigente (0 antes de publicar), motivo, instrucciones y UUID de intención. Publicar pasa de reportada a abierta; actualizar, de abierta o en seguimiento a en seguimiento; resolver, a resuelta, sin reabrir el lote ni rehabilitar códigos. Bajo el bloqueo del lote fija un destinatario por persona y persiste el trabajo de aviso. closeLot (false por defecto) decide explícitamente cerrar: cancela pendientes, invalida códigos y mueve F/O/R a X, conservando E. No extiende un cierre vencido. Los avisos se generan por tandas recuperables de hasta 50. La misma clave y parámetros reproducen 201 y el cuerpo original, que puede ser histórico; otros parámetros responden 409."
+      tags: [Incidents]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Origin" }
+        - { $ref: "#/components/parameters/CsrfHeader" }
+        - { $ref: "#/components/parameters/CsrfCookie" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncidentVersionRequest" }
+      responses:
+        "201":
+          description: Versión creada o resultado original de su reintento.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncidentVersionResult" }
+        "400": { $ref: "#/components/responses/MalformedRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
 components:
   securitySchemes:
     SessionCookie:
@@ -1517,6 +1671,13 @@ components:
       schema:
         $ref: "#/components/schemas/PublicId"
       example: "lot_demo_R4q"
+    IncidentId:
+      name: "incidentId"
+      in: "path"
+      required: true
+      description: "Identificador público de la incidencia."
+      schema:
+        $ref: "#/components/schemas/PublicId"
     NotificationId:
       name: "notificationId"
       in: "path"
@@ -1783,6 +1944,125 @@ components:
           type: array
           maxItems: 20
           items: { $ref: "#/components/schemas/LotOperation" }
+    IncidentText:
+      type: string
+      minLength: 1
+      maxLength: 2000
+    IncidentStatus:
+      type: string
+      enum: [reported, open, following, resolved]
+      description: "reported: pendiente de revisión; open: publicada; following: en seguimiento; resolved: resuelta."
+    PublishedIncidentStatus:
+      type: string
+      enum: [open, following, resolved]
+    IncidentReportRequest:
+      type: object
+      additionalProperties: false
+      required: [reason, idempotencyKey]
+      properties:
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        idempotencyKey: { type: string, format: uuid }
+    IncidentReport:
+      type: object
+      additionalProperties: false
+      required: [id, lotId, reason, createdAt]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        lotId: { $ref: "#/components/schemas/PublicId" }
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        createdAt: { $ref: "#/components/schemas/Instant" }
+    IncidentVersionRequest:
+      type: object
+      additionalProperties: false
+      required: [action, version, reason, instructions, idempotencyKey]
+      properties:
+        action: { type: string, enum: [publish, update, resolve] }
+        version: { type: integer, minimum: 0, maximum: 2147483647, description: "Versión vigente de la incidencia; 0 antes de publicar." }
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        instructions: { $ref: "#/components/schemas/IncidentText" }
+        idempotencyKey: { type: string, format: uuid }
+        closeLot: { type: boolean, default: false, description: "Decisión explícita de cerrar el lote junto con la versión. Un cierre previo se conserva." }
+    IncidentVersionResult:
+      type: object
+      additionalProperties: false
+      required: [incidentId, version, status, reason, instructions, publishedAt, closeLot, lotClosed]
+      properties:
+        incidentId: { $ref: "#/components/schemas/PublicId" }
+        version: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/PublishedIncidentStatus" }
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        instructions: { $ref: "#/components/schemas/IncidentText" }
+        publishedAt: { $ref: "#/components/schemas/Instant" }
+        closeLot: { type: boolean, description: "Decisión de cierre de este comando." }
+        lotClosed: { type: boolean, description: "El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores." }
+    IncidentVersionSummary:
+      type: object
+      additionalProperties: false
+      required: [version, status, reason, instructions, publishedAt, recipientCount, closeLot, lotClosed, publishedBy, notices]
+      properties:
+        version: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/PublishedIncidentStatus" }
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        instructions: { $ref: "#/components/schemas/IncidentText" }
+        publishedAt: { $ref: "#/components/schemas/Instant" }
+        closeLot: { type: boolean, description: "Decisión de cierre de este comando." }
+        lotClosed: { type: boolean, description: "El lote estaba cerrado al crear esta versión; no cambia al consultar versiones posteriores." }
+        recipientCount: { type: integer, minimum: 0, description: "Personas fijadas para esta versión, incluidas las incorporadas por compromisos posteriores." }
+        publishedBy: { $ref: "#/components/schemas/Email", description: "Correo del operador que publicó la versión, aunque ya no sea miembro." }
+        notices: { $ref: "#/components/schemas/IncidentNoticeCounts" }
+    IncidentNoticeCounts:
+      type: object
+      additionalProperties: false
+      required: [pending, generated, read]
+      description: "Avisos de la versión por destinatario; suman recipientCount. Sin identificar a nadie."
+      properties:
+        pending: { type: integer, minimum: 0, description: "Aún sin aviso: en cola, reintentando o con un fallo que ve Operación." }
+        generated: { type: integer, minimum: 0, description: "Aviso creado y todavía sin leer." }
+        read: { type: integer, minimum: 0, description: "Aviso con lectura registrada por su destinatario." }
+    Incident:
+      type: object
+      additionalProperties: false
+      required: [id, status, version, reportReason, reportedAt, versions]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        status: { $ref: "#/components/schemas/IncidentStatus" }
+        version: { type: integer, minimum: 0 }
+        reportReason: { $ref: "#/components/schemas/IncidentText" }
+        reportedAt: { $ref: "#/components/schemas/Instant" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/IncidentVersionSummary" }
+    IncidentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/Incident" }
+    EstablishmentIncident:
+      type: object
+      additionalProperties: false
+      required: [id, status, version, reportReason, reportedAt, versions, lot]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        status: { $ref: "#/components/schemas/IncidentStatus" }
+        version: { type: integer, minimum: 0 }
+        reportReason: { $ref: "#/components/schemas/IncidentText" }
+        reportedAt: { $ref: "#/components/schemas/Instant" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/IncidentVersionSummary" }
+        lot: { $ref: "#/components/schemas/PanelLotRef" }
+    EstablishmentIncidentPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/EstablishmentIncident" } }
+        page: { type: integer, minimum: 1 }
+        hasNextPage: { type: boolean }
     PublicLot:
       type: object
       additionalProperties: false
@@ -2061,8 +2341,20 @@ components:
         deliveredAt: { $ref: "#/components/schemas/Instant" }
     NotificationKind:
       type: string
-      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled, message_from_holder, message_from_establishment]
+      enum: [offer_issued, offer_expired, reservation_confirmed, reservation_cancelled, message_from_holder, message_from_establishment, incident_version]
       description: "offer_issued: oferta por aceptar; offer_expired: la oferta venció sin aceptarse; reservation_confirmed: la oferta aceptada creó la reserva; reservation_cancelled: el titular canceló su reserva. message_from_holder llega a los operadores del local y message_from_establishment al titular cuando la otra parte escribe en el chat de la reserva. No traen el texto, que se lee en la conversación."
+    IncidentNotice:
+      type: object
+      additionalProperties: false
+      required: [id, version, status, reason, instructions, relation, lotClosed]
+      properties:
+        id: { $ref: "#/components/schemas/PublicId" }
+        version: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/PublishedIncidentStatus" }
+        reason: { $ref: "#/components/schemas/IncidentText" }
+        instructions: { $ref: "#/components/schemas/IncidentText" }
+        relation: { type: string, enum: [received, committed, operator], description: "Vínculo al fijar el destinatario; sin identidades ajenas." }
+        lotClosed: { type: boolean }
     Notification:
       type: object
       additionalProperties: false
@@ -2080,10 +2372,11 @@ components:
           properties:
             id: { $ref: "#/components/schemas/PublicId" }
             description: { type: string }
-        quantity: { type: integer, minimum: 1, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados según el tipo." }
+        quantity: { type: integer, minimum: 0, maximum: 2147483647, description: "Packs ofrecidos, confirmados o cancelados; 0 en avisos de incidencia, que afectan al lote completo." }
         waitlistEntryId: { type: [string, "null"], description: "Solicitud de espera relacionada; null en una cancelación." }
         reservationId: { type: [string, "null"], description: "Reserva relacionada; null en avisos de oferta. En los avisos de mensaje es la reserva de la conversación." }
         offerExpiresAt: { type: [string, "null"], format: date-time, description: "Plazo informado al emitir la oferta; solo en offer_issued. Aceptar vuelve a comprobarlo." }
+        incident: { $ref: "#/components/schemas/IncidentNotice", description: "Solo en incident_version. Conserva motivo e instrucciones de la versión avisada." }
     NotificationPage:
       type: object
       additionalProperties: false

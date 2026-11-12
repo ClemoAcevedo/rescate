@@ -57,16 +57,16 @@ try {
       await page.getByText('Inicia sesión para gestionar tu espera.').waitFor()
       assert.equal(attempts, 0)
     } else if (['join', 'lost-join'].includes(scenario)) {
-      await page.getByLabel('Cantidad solicitada').fill('10')
+      await page.getByLabel('Cantidad de packs').fill('10')
       assert.equal(joins.length, 0)
-      await page.getByRole('button', { name: 'Entrar voluntariamente a la espera' }).click()
+      await page.getByRole('button', { name: 'Unirme a la lista de espera' }).click()
       if (scenario === 'lost-join') {
-        await page.getByRole('button', { name: 'Comprobar el mismo ingreso' }).waitFor()
+        await page.getByRole('button', { name: 'Comprobar si quedé en la lista' }).waitFor()
         await page.reload()
-        await page.getByRole('button', { name: 'Comprobar el mismo ingreso' }).click()
+        await page.getByRole('button', { name: 'Comprobar si quedé en la lista' }).click()
         assert.deepEqual(joins[0], joins[1])
       }
-      await page.getByText('Tu posición en la cola: 2.', { exact: false }).waitFor()
+      await page.getByText('Tu lugar en la lista: 2', { exact: false }).waitFor()
       assert.equal(joins[0].quantity, 10)
       assert.match(joins[0].idempotencyKey, /^[0-9a-f-]{36}$/)
     } else if (scenario === 'pagination') {
@@ -74,31 +74,31 @@ try {
       await page.getByText('Página 2', { exact: true }).waitFor()
     } else if (scenario === 'invalid' || scenario === 'missing') {
       await page.getByRole('alert').waitFor()
-      assert.equal(await page.getByRole('button', { name: /Aceptar explícitamente/ }).count(), 0)
+      assert.equal(await page.getByRole('button', { name: /^Aceptar / }).count(), 0)
     } else if (scenario === 'waiting') {
-      await page.getByText('Tu posición en la cola: 2.', { exact: false }).waitFor()
-      assert.equal(await page.getByRole('button', { name: /Aceptar explícitamente/ }).count(), 0)
+      await page.getByText('Tu lugar en la lista: 2', { exact: false }).waitFor()
+      assert.equal(await page.getByRole('button', { name: /^Aceptar / }).count(), 0)
       assert.equal(attempts, 0)
     } else if (scenario === 'leave') {
-      await page.getByRole('button', { name: 'Salir de la espera y perder mi posición' }).click()
-      await page.getByText('Fuera de la cola', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Salir de la lista de espera' }).click()
+      await page.getByText('Saliste de la lista', { exact: true }).waitFor()
     } else if (scenario === 'waiting-expiry') {
-      await page.getByRole('button', { name: 'Salir de la espera y perder mi posición' }).waitFor()
+      await page.getByRole('button', { name: 'Salir de la lista de espera' }).waitFor()
       await page.getByText('Plazo finalizado', { exact: true }).waitFor()
-      assert.equal(await page.getByRole('button', { name: 'Salir de la espera y perder mi posición' }).count(), 0)
+      assert.equal(await page.getByRole('button', { name: 'Salir de la lista de espera' }).count(), 0)
       assert.equal(attempts, 0)
     } else if (scenario === 'expiry') {
-      await page.getByRole('button', { name: 'Aceptar explícitamente 4 packs' }).waitFor()
+      await page.getByRole('button', { name: 'Aceptar 4 packs' }).waitFor()
       await page.getByText('Plazo finalizado', { exact: true }).waitFor()
-      assert.equal(await page.getByRole('button', { name: /Aceptar explícitamente/ }).count(), 0)
+      assert.equal(await page.getByRole('button', { name: /^Aceptar / }).count(), 0)
       assert.equal(attempts, 0)
     } else {
-      const accept = page.getByRole('button', { name: 'Aceptar explícitamente 4 packs' })
+      const accept = page.getByRole('button', { name: 'Aceptar 4 packs' })
       await accept.waitFor()
       assert.equal(attempts, 0)
-      assert.equal(await page.getByRole('link', { name: 'Consultar mi reserva y código de retiro' }).count(), 0)
+      assert.equal(await page.getByRole('link', { name: 'Ver mi código de retiro' }).count(), 0)
       if (scenario === 'decline') {
-        await page.getByRole('button', { name: 'Rechazar oferta y salir de la cola' }).click()
+        await page.getByRole('button', { name: 'Rechazar oferta' }).click()
         await page.getByText('Oferta rechazada', { exact: true }).waitFor()
       } else {
         // El reloj local conserva una oferta "vigente", pero la API rechaza el vencimiento real.
@@ -111,14 +111,14 @@ try {
         if (scenario === 'forbidden') {
           await page.getByText('Resultado por comprobar', { exact: true }).waitFor()
           assert.equal(await accept.isDisabled(), true)
-          assert.equal(await page.getByRole('link', { name: 'Consultar mi reserva y código de retiro' }).count(), 0)
+          assert.equal(await page.getByRole('link', { name: 'Ver mi código de retiro' }).count(), 0)
         } else if (scenario === 'lost-accept' || scenario === 'stale-clock') {
           await page.getByText('Resultado por comprobar', { exact: true }).waitFor()
           assert.equal(await accept.isDisabled(), true)
-          await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
-          await page.getByText(scenario === 'lost-accept' ? 'Oferta aceptada' : 'Solicitud vencida', { exact: true }).waitFor()
+          await page.getByRole('button', { name: 'Actualizar', exact: true }).click()
+          await page.getByText(scenario === 'lost-accept' ? 'Oferta aceptada' : 'Espera vencida', { exact: true }).waitFor()
         } else await page.getByText('Oferta aceptada', { exact: true }).waitFor()
-        const link = page.getByRole('link', { name: 'Consultar mi reserva y código de retiro' })
+        const link = page.getByRole('link', { name: 'Ver mi código de retiro' })
         if (scenario === 'stale-clock' || scenario === 'forbidden') assert.equal(await link.count(), 0)
         else assert.equal(await link.getAttribute('href'), '/reservas/res_test')
       }

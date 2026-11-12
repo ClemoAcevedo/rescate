@@ -1,12 +1,12 @@
 import { Link, type To } from 'react-router-dom'
 import type { PublicLot } from '../../services/discovery-service'
-import { formatWindow } from '../../lots/lot-time'
+import { formatWindow } from '../../format/date-time'
 import { lotTitle } from '../../lots/lot-title'
 import { Icon } from '../Icon'
 import { LotPhoto } from './LotPhoto'
 
 function availabilityLabel(available: number) {
-  return available > 0 ? `${available} ${available === 1 ? 'pack libre' : 'packs libres'}` : 'Sin stock'
+  return available > 0 ? `${available} ${available === 1 ? 'pack libre' : 'packs libres'}` : 'Sin packs libres'
 }
 
 /** Tarjeta de exploración. No es clicable completa: el título es el enlace real al detalle. */
@@ -23,7 +23,7 @@ export function LotCard({ lot, to }: { lot: PublicLot; to: To }) {
       <div className="lot-card-public__body">
         <span className="lot-card-public__category">{lot.category}</span>
         <h3><Link to={to}>{title}</Link></h3>
-        {title !== lot.description.trim() && <p className="lot-card-public__description">{lot.description}</p>}
+        <p className="lot-card-public__description">{title !== lot.description.trim() ? lot.description : null}</p>
         <ul className="lot-meta">
           <li><Icon name="pin" /><span>{lot.address}{lot.distanceKm !== null && <span className="lot-meta__extra"> · a {lot.distanceKm} km</span>}</span></li>
           <li><Icon name="clock" /><time dateTime={lot.pickupStartsAt}>{formatWindow(lot.pickupStartsAt, lot.pickupEndsAt, lot.timeZone)}</time></li>
