@@ -153,6 +153,7 @@ function Pagination({ label, page, hasNextPage, onChange }: { label: string; pag
 function Commitments({ establishmentId, lotId, state, refresh, timeZone }: {
   establishmentId: string; lotId?: string; state?: 'active' | 'ended'; refresh: number; timeZone: string
 }) {
+  const location = useLocation()
   const [page, setPage] = useState(1)
   const filters = `${establishmentId}:${lotId ?? ''}:${state ?? ''}:${refresh}`
   const [pageFilters, setPageFilters] = useState(filters)
@@ -160,7 +161,7 @@ function Commitments({ establishmentId, lotId, state, refresh, timeZone }: {
   const load = useCallback((signal: AbortSignal) => listCommitments(establishmentId, { lotId, state, page }, signal),
     [establishmentId, lotId, state, page])
   const { value, error, loading } = useLoad<OperatorCommitmentPage>(`${filters}:${page}`, load)
-  const empty = state === 'active' ? 'No hay reservas ni solicitudes vigentes.' : state === 'ended' ? 'Aún no hay compromisos terminados.' : 'Aún no hay compromisos.'
+  const empty = state === 'active' ? 'No hay reservas ni esperas vigentes.' : state === 'ended' ? 'Aún no hay compromisos terminados.' : 'Aún no hay compromisos.'
   return (
     <div aria-busy={loading}>
       {loading && !value && <CommitmentsSkeleton />}
@@ -174,13 +175,13 @@ function Commitments({ establishmentId, lotId, state, refresh, timeZone }: {
               <li key={item.id} className="panel-commitment">
                 <div className="panel-commitment__head">
                   <Badge tone={badge.tone}>{badge.label}</Badge>
-                  <span className="panel-commitment__kind">{item.kind === 'reservation' ? 'Reserva' : 'Solicitud de espera'}</span>
+                  <span className="panel-commitment__kind">{item.kind === 'reservation' ? 'Reserva' : 'Lista de espera'}</span>
                 </div>
                 <p className="panel-commitment__quantity">
                   {item.kind === 'reservation' ? packs(item.quantity)
                     : item.offeredQuantity === null ? `Pide ${packs(item.quantity)}` : `Pide ${packs(item.quantity)} · ofrecidos ${item.offeredQuantity}`}
                 </p>
-                {item.kind === 'reservation' && <Link to={`/reservas/${encodeURIComponent(item.id)}/chat`}>Abrir chat de la reserva</Link>}
+                {item.kind === 'reservation' && <Link to={`/reservas/${encodeURIComponent(item.id)}/chat`} state={{ lotDescription: item.lot.description, viewer: 'operator', from: `${location.pathname}${location.search}` }}>Abrir chat de la reserva</Link>}
                 <p className="panel-commitment__lot">{lotTitle(item.lot.description)}</p>
                 <p className="panel-commitment__time">
                   Desde {formatInstant(item.createdAt, timeZone)}

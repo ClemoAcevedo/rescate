@@ -10,8 +10,7 @@ export function NotificationsSkeleton({ label = 'Cargando avisos…', incidentsO
       <p><Skeleton /><Skeleton /><Skeleton width="80%" /></p>
       {incidentsOnly && <div className="notification__incident-meta">
         <p><Skeleton width="5rem" /></p><span><Skeleton width="8rem" /></span>
-        <p className="notification__reading-note"><Skeleton /><Skeleton width="70%" /></p>
-        <p className="notification__read-state"><Skeleton width="16rem" /></p>
+        <p className="notification__read-state"><Skeleton /><Skeleton width="40%" /></p>
       </div>}
       <div className="notification__footer"><time><Skeleton width="10rem" /></time><Skeleton className="skeleton-control notification__action-skeleton" width="8rem" /></div>
     </Card></li>)}</ul>
