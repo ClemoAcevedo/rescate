@@ -44,8 +44,9 @@ try {
   const soldOutCard = page.locator('article').filter({ hasText: soldOutTitle })
   await soldOutCard.getByText('Sin packs libres', { exact: true }).waitFor()
   await soldOutCard.getByRole('link', { name: soldOutTitle }).click()
-  await page.getByRole('heading', { name: soldOutTitle }).waitFor()
-  await page.getByText('Sin packs libres', { exact: true }).waitFor()
+  // La tarjeta de la lista tiene el mismo título y badge, así que se espera el h1 del detalle
+  await page.getByRole('heading', { level: 1, name: soldOutTitle }).waitFor()
+  await page.locator('.reservation-panel').getByText('Sin packs libres', { exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: /^Reservar/ }).count(), 0)
   await page.getByRole('link', { name: 'Unirme a la lista de espera' }).waitFor()
   await page.getByRole('link', { name: 'Explorar otros lotes' }).waitFor()
@@ -97,7 +98,7 @@ try {
 
   await page.locator('article').filter({ hasText: title })
     .getByRole('link', { name: title }).click()
-  await page.getByRole('heading', { name: title }).waitFor()
+  await page.getByRole('heading', { level: 1, name: title }).waitFor()
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   await page.setViewportSize({ width: 1366, height: 768 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
