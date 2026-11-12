@@ -333,7 +333,7 @@ try {
   await photoInput.setInputFiles({ name: 'grande.jpg', mimeType: 'image/jpeg', buffer: tooLarge })
   await page.getByRole('alert').filter({ hasText: 'La imagen supera el máximo de 5 MiB.' }).waitFor()
   assert.equal(commands.length, commandsBeforePhotos)
-  const fake =await waitForApiResponse(photoPath, 'POST', () => photoInput.setInputFiles({ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('esto no es una imagen, aunque se llame foto.jpg') }))
+  const fake = await waitForApiResponse(photoPath, 'POST', () => photoInput.setInputFiles({ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('esto no es una imagen, aunque se llame foto.jpg') }))
   assert.equal(fake.status(), 422)
   await page.getByRole('alert').filter({ hasText: 'no es una imagen JPEG, PNG o WebP válida' }).waitFor()
   await page.getByText('0 de 3').waitFor()
