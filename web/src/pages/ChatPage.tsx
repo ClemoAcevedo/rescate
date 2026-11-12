@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Alert } from '../components/ui/Alert'
@@ -12,6 +12,13 @@ import { chatError, listMessages, sendMessage, type ChatMessage, type SendMessag
 import './chat.css'
 import { DEFAULT_TIME_ZONE, formatInstant } from '../format/date-time'
 
+function subscribeConnection(update: () => void) {
+  window.addEventListener('online', update)
+  window.addEventListener('offline', update)
+  return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+}
+const isOnline = () => navigator.onLine
+
 type Outgoing = SendMessageRequest & { status: 'pending' | 'failed' | 'sent'; messageId?: string; error?: string }
 function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -19,6 +26,8 @@ function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
   const [open, setOpen] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [text, setText] = useState('')
+  const online = useSyncExternalStore(subscribeConnection, isOnline)
+  const editor = useRef<HTMLTextAreaElement>(null)
   const cursor = useRef(0)
   const fetching = useRef(false)
   const sending = useRef(false)
@@ -51,7 +60,8 @@ function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
     finally { fetching.current = false }
   }, [id])
   useVisiblePolling(() => { void load() }, 5000)
-  const send = async (intent: Outgoing) => {
+  const send = async (intent: Outgoing, restoreFocus = false) => {
+    const trigger = restoreFocus ? document.activeElement : null
     if (sending.current || open !== true) return
     sending.current = true
     const life = lifecycle.current
@@ -60,17 +70,20 @@ function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
       const result = await sendMessage(id, { text: intent.text, idempotencyKey: intent.idempotencyKey }, csrfToken)
       if (!life.active) return
       setOutgoing(current => current.map(item => item.idempotencyKey === intent.idempotencyKey ? { ...item, status: 'sent', messageId: result.id } : item))
+      if (trigger && (document.activeElement === trigger || document.activeElement === document.body)) editor.current?.focus()
     } catch (reason) {
       if (life.active) setOutgoing(current => current.map(item => item.idempotencyKey === intent.idempotencyKey ? { ...item, status: 'failed', error: chatError(reason) } : item))
     } finally { sending.current = false; if (life.active) void load() }
   }
   return <section aria-label="Conversación" className="chat">
     <p>Coordina el retiro con texto de hasta 1000 caracteres. Los mensajes no confirman lectura ni acreditan el retiro. Horarios en {DEFAULT_TIME_ZONE}.</p>
-    {open === null && !error && <span className="visually-hidden" role="status">Cargando conversación…</span>}
+    {!online && <Alert tone="warning" role="status">Sin conexión. El historial y los mensajes pendientes se conservan en esta vista; se actualizarán al reconectar.</Alert>}
+    {online && open === null && !error && <span className="visually-hidden" role="status">Cargando conversación…</span>}
     {error && <Alert tone="warning" role="status">{error}</Alert>}
     {open === false && <Alert role="status">Conversación cerrada. Puedes consultar el historial, pero ya no escribir.</Alert>}
-    <ol className="chat__messages" aria-label="Mensajes" aria-busy={open === null && !error}>
-      {open === null && !error && [0, 1].map(index => <li key={index} aria-hidden="true"><strong><Skeleton width="40%" /></strong><p><Skeleton /></p><Skeleton width="50%" /></li>)}
+    <ol className="chat__messages" role="log" aria-label="Mensajes" aria-relevant="additions" aria-busy={online && open === null && !error}>
+      {online && open === null && !error && [0, 1].map(index => <li key={index} aria-hidden="true"><strong><Skeleton width="40%" /></strong><p><Skeleton /></p><Skeleton width="50%" /></li>)}
+      {open !== null && messages.length === 0 && <li>Aún no hay mensajes.</li>}
       {messages.map(item => <li key={item.id} className={item.mine ? 'chat__mine' : ''}>
       <strong>{item.author === 'holder' ? 'Titular' : 'Establecimiento'}{item.mine ? ' (tú)' : ''}</strong>
       <p>{item.text}</p><time dateTime={item.createdAt}>{formatInstant(item.createdAt, DEFAULT_TIME_ZONE)}</time>
@@ -78,7 +91,7 @@ function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
     <div aria-live="polite">{outgoing.filter(item => !messages.some(message => message.id === item.messageId)).map(item => <div className="chat__outgoing" key={item.idempotencyKey}>
       <p>{item.text}</p><p>{item.status === 'pending' ? 'Pendiente de confirmación…' : item.status === 'sent' ? 'Enviado al servidor' : 'Envío fallido o sin confirmar.'}</p>
       {item.error && <p>{item.error}</p>}
-      {item.status === 'failed' && <Button variant="secondary" disabled={open !== true || outgoing.some(item => item.status === 'pending')} onClick={() => { void send(item) }}>Reintentar el mismo mensaje</Button>}
+      {item.status === 'failed' && <Button variant="secondary" disabled={open !== true || outgoing.some(item => item.status === 'pending')} onClick={() => { void send(item, true) }}>Reintentar el mismo mensaje</Button>}
     </div>)}</div>
     <form onSubmit={event => {
       event.preventDefault()
@@ -86,7 +99,7 @@ function Conversation({ id, csrfToken }: { id: string; csrfToken: string }) {
       const intent: Outgoing = { text: text.trim(), idempotencyKey: crypto.randomUUID(), status: 'pending' }
       setOutgoing(current => [...current, intent]); setText(''); void send(intent)
     }}>
-      <FormField label="Mensaje" hint="Entre 1 y 1000 caracteres." required>{control => <Textarea {...control} value={text} disabled={open !== true} onChange={event => setText(event.target.value)} />}</FormField>
+      <FormField label="Mensaje" hint="Entre 1 y 1000 caracteres." required>{control => <Textarea {...control} ref={editor} value={text} disabled={open !== true} onChange={event => setText(event.target.value)} />}</FormField>
       <Button type="submit" disabled={open !== true || !text.trim() || [...text.trim()].length > 1000 || outgoing.some(item => item.status === 'pending')}>Enviar mensaje</Button>
     </form>
     <Button variant="secondary" onClick={() => { void load() }}>Consultar conversación</Button>

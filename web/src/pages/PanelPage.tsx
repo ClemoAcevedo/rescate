@@ -324,7 +324,7 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
           )}</FormField>
           : <p className="my-lots__establishment"><Icon name="pin" />{establishment.name}</p>}
         <div className="panel__refresh">
-          {data && <p className="panel__as-of" role="status">Actualizado {formatInstant(data.asOf, timeZone)}</p>}
+          <p className="panel__as-of" role={data ? 'status' : undefined}>{data ? `Actualizado ${formatInstant(data.asOf, timeZone)}` : <Skeleton>Actualizado 00/00/0000 · 00:00</Skeleton>}</p>
           <Button variant="secondary" loading={panel.loading && data !== null} onClick={() => setRefresh(value => value + 1)}>Actualizar</Button>
         </div>
       </div>

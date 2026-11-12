@@ -76,6 +76,12 @@ Es una tarea más del ciclo del worker, junto a [vencimientos](vencimientos.md) 
 
 ## Pruebas
 
+Los casos de tandas, concesiones y workers simultáneos usan un reloj fijo compartido
+con los eventos sintéticos. Comprueban la disponibilidad y el vencimiento justo
+antes y en su límite, sin depender de diferencias entre la precisión de PostgreSQL
+y la de JavaScript. La concurrencia conserva dos procesadores y PostgreSQL reales;
+cada evento de esa prueba se reclama una sola vez.
+
 La prueba de integración consulta el código de retiro real y comprueba que no aparezca
 en los eventos. La descripción del lote termina en ocho dígitos para cubrir el falso
 positivo de una búsqueda por patrón.

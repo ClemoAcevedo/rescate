@@ -70,7 +70,10 @@ el vencimiento local bloquea acciones y la API verifica nuevamente la vigencia a
 aceptar con el reloj de la base. Un aviso antiguo nunca confirma una reserva.
 Los envíos simultáneos se bloquean; una respuesta perdida o un conflicto deshabilita
 acciones hasta consultar el estado vigente. Consultar puede recuperar una aceptación
-ya aplicada sin volver a enviar el comando. No hay aceptación ni reingreso automático.
+ya aplicada sin volver a enviar el comando. Una consulta fallida conserva los datos y señala el estado sin actualizar, con
+las acciones bloqueadas hasta consultar con éxito. Recuperar conexión inicia una
+nueva consulta; un rechazo de acceso retira los datos.
+No hay aceptación ni reingreso automático.
 
 ## Backend
 

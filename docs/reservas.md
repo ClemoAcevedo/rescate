@@ -75,7 +75,10 @@ se separan y se apilan en móvil. No anuncia cancelación
 hasta recibir el estado `cancelled`. Ante una respuesta perdida oculta el código
 y permite consultar el estado o repetir la cancelación de la misma reserva. Un
 conflicto conserva el aviso hasta consultar el resultado vigente. El registro
-terminado sigue accesible desde el historial.
+terminado sigue accesible desde el historial. Una consulta fallida conserva los
+datos de retiro, indica que el estado no está actualizado y oculta el código sin
+quitar su espacio. Bloquea la cancelación hasta consultar con éxito; recuperar
+la conexión inicia una nueva consulta. Un rechazo de acceso retira los datos.
 
 La reserva directa guarda clave y cantidad por actor y lote en `sessionStorage`
 antes de enviar. Navegar o recargar la misma pestaña recupera esa intención, incluso
