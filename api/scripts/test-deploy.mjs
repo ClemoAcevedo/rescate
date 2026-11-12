@@ -68,6 +68,23 @@ try {
   assert.ok(Array.isArray(search.body.items))
   console.log('PASS: búsqueda pública → PostgreSQL/PostGIS')
 
+  // K051: después de desplegar, cada foto de un lote publicado sigue en el bucket. Solo lectura.
+  let images = 0
+  for (let number = 1, more = true; more && number <= 20; number++) {
+    const listing = await context.request.get(`${origin}/api/public/lots?page=${number}`)
+    assert.equal(listing.status(), 200)
+    const body = await listing.json()
+    more = body.hasNextPage
+    for (const path of body.items.flatMap(lot => lot.photos.flatMap(photo => [photo.thumbnailUrl, photo.displayUrl]))) {
+      const image = await context.request.get(`${origin}/api${path}`)
+      assert.equal(image.status(), 200, `imagen publicada ausente después del deploy: ${path}`)
+      assert.equal(image.headers()['content-type'], 'image/webp')
+      images++
+    }
+  }
+  console.log(images ? `PASS: ${images} imágenes de lotes publicados siguen disponibles después del deploy`
+    : 'PASS: no hay lotes publicados con fotos que comprobar')
+
   if (email && password) {
     await page.goto(`${origin}/login`)
     await page.locator('input[name="email"]').fill(email)

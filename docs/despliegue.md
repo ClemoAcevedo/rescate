@@ -109,7 +109,8 @@ cd api && npx playwright install chromium && cd ..
 WEB_URL=https://rescate-rescate1.vercel.app npm --prefix api run test:deploy
 ```
 
-Sin credenciales se comprueban solo conexión, PostGIS y sesión anónima. Con
+Sin credenciales se comprueban solo conexión, PostGIS, sesión anónima y que cada
+imagen de los lotes publicados siga disponible ([fotos](fotos.md#respaldo)). Con
 `DEPLOY_SHA` se exige además que el dominio sirva ese commit. `/health` debe
 informar la base y el worker disponibles; la búsqueda pública verifica PostGIS.
 

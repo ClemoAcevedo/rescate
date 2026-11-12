@@ -330,6 +330,12 @@ lo cambia.
 - **Pruebas de seguridad:** accesos cruzados de usuarios y operadores ajenos, límite de
   códigos que sigue tras reiniciar la API, protección de sesión y salida de la API sin
   secretos, con PostgreSQL real ([seguridad](docs/seguridad.md), K034).
+- **Pruebas de imágenes y retención:** HTML con firma de imagen, PNG de más de 20 MP,
+  temporal escrito por una API detenida, worker detenido 25 h y membership revocada no
+  publican ni dejan objetos; en producción las fotos solo van al bucket. Borrar el texto
+  del chat conserva compromiso, entrega y avisos, y una incidencia posterior llega a quien
+  retiró. Cada deploy comprueba que las imágenes publicadas siguen disponibles
+  ([fotos](docs/fotos.md#pruebas), [chat](docs/chat.md#retención), K051).
 - **Calidad para E3:** SAST con Semgrep y SCA de ambos lockfiles en CI; cobertura de
   API por capa y frontend por módulo, estrategia Testing Trophy y mock HTTP del chat
   validado contra OpenAPI ([pruebas y cobertura](docs/desarrollo-local.md#estrategia-de-pruebas-testing-trophy)).

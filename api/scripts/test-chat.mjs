@@ -10,6 +10,8 @@ import { createChatRepository } from '../dist/infrastructure/postgres/chat-repos
 import { createChatRetention } from '../dist/application/chat/use-cases.js'
 import { createOutboxRepository } from '../dist/infrastructure/postgres/notification-repository.js'
 import { createOutboxProcessor } from '../dist/application/notifications/use-cases.js'
+import { createIncidentDispatchRepository } from '../dist/infrastructure/postgres/incident-repository.js'
+import { createIncidentDispatcher } from '../dist/application/incidents/use-cases.js'
 
 const connectionString = process.env.DATABASE_URL
 assert.ok(connectionString && /^rescate_k037_test_/.test(new URL(connectionString).pathname.slice(1)),
@@ -74,6 +76,7 @@ const notices = async reservation => (await database.query(
 const pool = createPool({ connectionString })
 const retention = createChatRetention(createChatRepository(pool), () => {})
 const outbox = createOutboxProcessor(createOutboxRepository(pool), () => new Date(), () => 0.5)
+const dispatcher = createIncidentDispatcher(createIncidentDispatchRepository(pool))
 
 try {
   await database.connect()
@@ -249,6 +252,44 @@ try {
   assert.deepEqual((await send(ana, reservation, '¿Traigo bolsa?', key)).body, sent.body)
   assert.equal(await retention.eraseExpired(), 0, 'borrar otra vez no cambia nada')
   ok('el borrado diario quita el texto vencido, conserva el reintento y repetirlo no hace nada')
+
+  // K051 · Borrar el texto no corta los vínculos que permiten avisar después (anexos H p. 21):
+  // compromiso, entrega, avisos del chat y resultado idempotente quedan iguales, y una incidencia
+  // posterior llega a quien retiró y se lee sin el chat.
+  const links = async reservation => (await database.query(`SELECT
+      (SELECT to_jsonb(c) FROM commitments c WHERE c.public_id = $1) AS commitment,
+      (SELECT jsonb_agg(to_jsonb(d)) FROM deliveries d JOIN commitments c ON c.id = d.commitment_id WHERE c.public_id = $1) AS deliveries,
+      (SELECT jsonb_agg(to_jsonb(m) - 'body' ORDER BY m.sequence) FROM chat_messages m
+         JOIN commitments c ON c.id = m.commitment_id WHERE c.public_id = $1) AS messages,
+      (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM outbox_events e JOIN chat_messages m ON m.id = e.subject_id
+         JOIN commitments c ON c.id = m.commitment_id WHERE e.event_type LIKE 'message_from_%' AND c.public_id = $1) AS notices`,
+    [reservation])).rows[0]
+  await database.query(`UPDATE commitments SET ended_at = now() - interval '31 days', created_at = now() - interval '32 days'
+    WHERE public_id = $1`, [picking.reservation])
+  const kept = await links(picking.reservation)
+  assert.equal(kept.deliveries.length, 1)
+  assert.equal(await retention.eraseExpired(), 1)
+  assert.ok((await stored(picking.reservation)).every(row => row.body === null))
+  assert.deepEqual(await links(picking.reservation), kept)
+  assert.equal((await gabi.call('GET', `/reservations/${picking.reservation}`)).body.status, 'delivered')
+  ok('borrar el texto conserva compromiso, entrega, mensajes sin texto y sus avisos')
+
+  const instructions = 'No consumir el pan y conservar la bolsa'
+  const reported = await operator.call('POST', `/lots/${picking.lotId}/incidents`,
+    { reason: 'Harina contaminada', idempotencyKey: randomUUID() })
+  assert.equal(reported.status, 201)
+  const version = await operator.call('POST', `/incidents/${reported.body.id}/versions`, { action: 'publish', version: 0,
+    reason: 'Harina contaminada', instructions, idempotencyKey: randomUUID() })
+  assert.equal(version.status, 201)
+  while (await dispatcher.processNext()) { /* fija un evento por destinatario */ }
+  while (await outbox.processNext() > 0) { /* el worker genera los avisos */ }
+  const incidentNotice = (await gabi.call('GET', '/notifications')).body.items.find(item => item.kind === 'incident_version')
+  assert.equal(incidentNotice.incident.relation, 'received')
+  const opened = await gabi.call('GET', `/notifications/${incidentNotice.id}`)
+  assert.equal(opened.status, 200)
+  assert.equal(opened.body.incident.instructions, instructions)
+  assert.deepEqual((await read(gabi, picking.reservation)).body, { items: [], hasMore: false, open: false })
+  ok('una incidencia posterior al borrado avisa a quien retiró y sus instrucciones se leen sin el chat')
 
   // Leer el chat no cambia la reserva ni el inventario
   const lot = (await database.query(`SELECT reserved_quantity, delivered_quantity FROM lots WHERE public_id = $1`, [lotId])).rows[0]

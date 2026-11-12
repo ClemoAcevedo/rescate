@@ -168,6 +168,16 @@ try {
   await rejects('operador ajeno lee foto de borrador', photos.read(outsider, lot.publicId, first.publicId, 'display'), 'photo_not_found')
   await rejects('foto de otro lote', photos.read(operator, second.publicId, first.publicId, 'display'), 'photo_not_found')
 
+  // K051 · Quien deja de ser operador del local pierde de inmediato carga, listado, lectura y retiro.
+  await query('INSERT INTO memberships(user_id, establishment_id) VALUES ($1, $2)', [visitor.userId, establishments[0].id])
+  assert.equal((await photos.read(visitor, lot.publicId, first.publicId, 'display')).published, false)
+  await query('DELETE FROM memberships WHERE user_id = $1', [visitor.userId])
+  await rejects('carga sin membership', photos.upload(visitor, { lotId: lot.publicId, ...content(jpeg) }), 'not_authorized')
+  await rejects('listado sin membership', photos.list(visitor, lot.publicId), 'not_authorized')
+  await rejects('lectura de borrador sin membership', photos.read(visitor, lot.publicId, first.publicId, 'display'), 'photo_not_found')
+  await rejects('retiro sin membership', photos.remove(visitor, lot.publicId, first.publicId), 'not_authorized')
+  ok('membership revocada: sin carga, listado, lectura ni retiro de fotos del borrador')
+
   // Reinicio: una validación interrumpida se retoma al vencer el reclamo, sin duplicar.
   let repository = createPhotoRepository(pool)
   const claim = await repository.claimNextPending(now(), new Date(now().getTime() + PROCESSING_LEASE_MS))
@@ -266,6 +276,63 @@ try {
   assert.equal((await listObjects()).some(key => key.includes(racing.publicId)), false)
   ok('foto quitada durante la validación: sin imagen ni miniatura huérfanas')
 
+  // K051 · Archivos que pasan la firma de la API y el worker rechaza: HTML con firma JPEG y un
+  // PNG liso de 5000 × 4100 (20,5 MP) que pesa pocos KiB. Ninguno se publica ni deja objetos.
+  const disguised = await photos.upload(operator, { lotId: lot.publicId,
+    ...content(Buffer.concat([jpeg.subarray(0, 3), Buffer.from('<html><script>alert(1)</script></html>')])) })
+  const bomb = await pngOf(5000, 4100)
+  assert.ok(bomb.length < 512 * 1024, `PNG de 20,5 MP en ${bomb.length} bytes`)
+  const wide = await photos.upload(operator, { lotId: lot.publicId, ...content(bomb) })
+  while (await photos.processNext()) { /* el worker valida ambos */ }
+  assert.deepEqual(await query(`SELECT status, rejection_reason, upload_deleted_at IS NOT NULL AS upload_deleted FROM lot_photos
+    WHERE public_id = ANY($1::uuid[]) ORDER BY position`, [[disguised.publicId, wide.publicId]]), [
+    { status: 'rejected', rejection_reason: 'undecodable', upload_deleted: true },
+    { status: 'rejected', rejection_reason: 'too_many_pixels', upload_deleted: true }])
+  assert.equal((await listObjects()).some(key => key.includes(disguised.publicId) || key.includes(wide.publicId)), false)
+  await rejects('leer foto rechazada', photos.read(operator, lot.publicId, wide.publicId, 'display'), 'photo_not_found')
+  await rejects('publicar con archivos rechazados', lots.publish(operator, { publicId: lot.publicId, expectedVersion: 1 }), 'photo_not_ready')
+  await photos.remove(operator, lot.publicId, disguised.publicId)
+  await photos.remove(operator, lot.publicId, wide.publicId)
+  ok('HTML con firma JPEG y PNG de 20,5 MP: rechazados por el worker, sin publicar ni dejar original')
+
+  // K051 · La API se detiene después de escribir el temporal y antes de confirmar: el objeto
+  // queda con su fila en carga y la limpieza lo borra al vencer la reserva, sin esperar 24 h.
+  const crashing = createPhotoUseCases({ repository: createPhotoRepository(pool), images: createSharpImageProcessor(), now,
+    objects: { ...objects, async put(key, bytes, type) { await objects.put(key, bytes, type); return new Promise(() => {}) } } })
+  void crashing.upload(operator, { lotId: lot.publicId, ...content(jpeg) })
+  let stranded
+  for (let wait = 0; !stranded && wait < 50; wait++) {
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const written = await listObjects()
+    ;[stranded] = (await query("SELECT public_id::text FROM lot_photos WHERE status = 'uploading'"))
+      .filter(row => written.includes(photoObjectKeys(row.public_id).upload))
+  }
+  assert.ok(stranded, 'el temporal quedó escrito con su fila en carga')
+  await photos.cleanup()
+  assert.ok((await listObjects()).includes(photoObjectKeys(stranded.public_id).upload), 'dentro de la reserva no se borra')
+  advance(5 * 60 * 1000 + 61 * 1000)
+  await photos.cleanup()
+  assert.deepEqual((await query(`SELECT status, objects_deleted_at IS NOT NULL AS cleaned FROM lot_photos WHERE public_id = $1`,
+    [stranded.public_id]))[0], { status: 'removed', cleaned: true })
+  assert.equal((await listObjects()).some(key => key.includes(stranded.public_id)), false)
+  ok('API detenida tras escribir el temporal: la limpieza lo borra al vencer la reserva de 5 minutos')
+
+  // K051 · Con el worker detenido el original espera privado: no se sirve, no se publica y
+  // 25 h después sigue sin variantes. Al volver el worker se valida y el original se borra.
+  const waiting = await photos.upload(operator, { lotId: lot.publicId, ...content(await pngOf(640, 480)) })
+  advance(25 * 60 * 60 * 1000)
+  assert.deepEqual((await query('SELECT status FROM lot_photos WHERE public_id = $1', [waiting.publicId]))[0], { status: 'pending' })
+  assert.deepEqual((await listObjects()).filter(key => key.includes(waiting.publicId)), [photoObjectKeys(waiting.publicId).upload])
+  for (const [actor, variant] of [[operator, 'display'], [operator, 'thumbnail'], [null, 'display']]) {
+    await rejects(`${actor ? 'operador' : 'visitante'} lee ${variant} de foto en validación`,photos.read(actor, lot.publicId, waiting.publicId, variant), 'photo_not_found')
+  }
+  await rejects('publicar con el worker detenido', lots.publish(operator, { publicId: lot.publicId, expectedVersion: 1 }), 'photo_not_ready')
+  assert.equal(await photos.processNext(), true)
+  assert.deepEqual((await listObjects()).filter(key => key.includes(waiting.publicId)),
+    [photoObjectKeys(waiting.publicId).display, photoObjectKeys(waiting.publicId).thumbnail].sort())
+  await photos.remove(operator, lot.publicId, waiting.publicId)
+  ok('worker detenido 25 h: el original queda privado y sin servir; al volver se valida y se borra')
+
   // HTTP real: sesión K008, Origin/CSRF, cuerpo binario y respuestas contra OpenAPI.
   const origin = 'https://localhost:3443'
   const api = createApi({ DATABASE_URL: process.env.DATABASE_URL, RESCATE_ALLOWED_ORIGINS: origin,
@@ -316,6 +383,11 @@ try {
     assert.equal(accepted.status, 202)
     assert.equal(accepted.body.status, 'pending')
     ok('HTTP: 415 SVG, 422 firma falsa, 413 sobre 5 MiB, 403 sin CSRF, 401 sin sesión y 202 válido según OpenAPI')
+    // K051 · El original en validación no tiene ruta: ni sus variantes ni la clave temporal se sirven.
+    for (const variant of ['display', 'thumbnail', 'upload']) {
+      assert.equal((await call('GET', `${photosPath}/${accepted.body.id}/${variant}`, { json: variant !== 'upload' })).status, 404)
+    }
+    ok('HTTP: una foto en validación responde 404 a su operador en display, thumbnail y upload')
 
     assert.equal((await call('POST', `/lots/${lotId}/publish`, { body: { version: 1 }, type: 'application/json' })).status, 422)
     const worker = createPhotoUseCases({ repository: createPhotoRepository(pool), objects, images: createSharpImageProcessor(), now: () => new Date() })
