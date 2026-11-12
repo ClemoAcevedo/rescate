@@ -25,7 +25,7 @@ export function LotDetailSkeleton() {
   return <LoadingState label="Cargando el lote…">
     <header className="public-lot__header">
       <span className="ui-badge"><Skeleton width="6rem" /></span>
-      <h1><Skeleton width="18rem" /></h1>
+      <h1><Skeleton>Pack de alimentos surtidos para compartir</Skeleton></h1>
       <p className="public-lot__address"><Skeleton width="15rem" /></p>
     </header>
     <div className="public-lot__layout">
@@ -51,7 +51,7 @@ export function MyLotsSkeleton() {
       <div className="my-lot__media"><Skeleton className="lot-photo" /></div>
       <div className="my-lot__body">
         <div className="my-lot__labels"><span className="ui-badge"><Skeleton>Publicado</Skeleton></span><span className="my-lot__category"><Skeleton>Panadería</Skeleton></span></div>
-        <h2><Skeleton /><Skeleton width="70%" /></h2>
+        <h2><Skeleton>Pack de alimentos surtidos para compartir</Skeleton></h2>
         <ul className="lot-meta"><li><Icon name="clock" /><span><Skeleton /><Skeleton width="75%" /></span></li><li><Icon name="box" /><span><Skeleton /><Skeleton width="75%" /></span></li></ul>
       </div>
       <div className="my-lot__actions">{['Ver lote', 'Validar retiros', 'Incidencias', 'Vista pública'].map((label, index) => <span className="ui-button ui-button--secondary" key={label}>

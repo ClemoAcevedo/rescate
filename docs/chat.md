@@ -51,12 +51,17 @@ El envío exige sesión, `Origin` y CSRF.
 operador y los avisos de mensajes. Consulta cada 5 s únicamente con la pestaña visible
 y conexión; al volver o reconectar consulta de inmediato desde la última secuencia
 recibida. Agota páginas de 50 antes de esperar el siguiente ciclo y conserva el historial
-si falla la red. El resultado de un envío no adelanta ese cursor.
+si falla la red. Sin conexión muestra un aviso incluso al abrir una conversación
+que todavía no tiene historial local; al reconectar recupera sus mensajes. Un
+historial vacío se indica explícitamente. La región de mensajes anuncia nuevas
+incorporaciones sin desplazar el foco del editor. El resultado de un envío no adelanta ese cursor.
 
 El envío aparece pendiente hasta recibir confirmación. Un fallo conserva texto y clave
 en la vista para reintentar la misma intención sin duplicarla. Las intenciones locales
 se conservan mientras la conversación permanece montada. «Enviado al servidor» confirma
-persistencia, sin afirmar entrega ni lectura. El historial identifica titular y
+persistencia, sin afirmar entrega ni lectura. Tras confirmar un reintento se
+devuelve el foco al editor si la persona sigue en el botón o el navegador lo
+perdió al deshabilitarlo; se respeta el foco movido a otro control. El historial identifica titular y
 establecimiento, sin revelar al operador. El cierre deshabilita el editor y los reintentos;
 la API vuelve a comprobarlo bajo bloqueo al enviar.
 

@@ -188,39 +188,61 @@ try {
         if (screen.path === '/operador/panel') assert.match(await page.locator('.panel-period__scope').innerText(), /01\/01\/2030 y el 15\/01\/2030/)
         console.log(`OK ${width}: ${screen.path}, geometría de carga → datos`)
       } catch (error) {
+        if (screenshots) await page.screenshot({ path: `${screenshots}/${width}-${screen.path.replaceAll('/', '_')}-failed.png`, fullPage: true })
         console.error(screen.path, errors, await page.locator('body').innerText())
         throw error
       } finally { pending = false; release(); await context.close() }
     }
   }
 
-  // Consultar una reserva ya visible conserva los espacios; el código se oculta
-  // hasta comprobar vigencia y vuelve a aparecer sin mover el botón inferior.
-  const context = await browser.newContext({ viewport: { width: 360, height: 900 }, ignoreHTTPSErrors: true })
-  const page = await context.newPage()
-  let hold = false, release
-  const held = new Promise(resolve => { release = resolve })
-  await page.route('**/api/**', async route => {
-    const path = new URL(route.request().url()).pathname
-    if (path === '/api/auth/session') return route.fulfill({ json: { session, csrfToken: 'controlled' } })
-    if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
-    if (path === '/api/reservations/res_ux') { if (hold) await held; return route.fulfill({ json: reservation }) }
-    throw new Error(`Ruta inesperada: ${path}`)
-  })
-  try {
-    await page.goto(base + '/reservas/res_ux')
-    await page.getByText(reservation.pickupCode, { exact: true }).waitFor()
-    const before = await boxes(page, '.reservation-detail__refresh')
-    hold = true
-    await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
-    await page.locator('.pickup-code .ui-skeleton').waitFor()
-    assert.equal(await page.getByText(reservation.pickupCode, { exact: true }).count(), 0)
-    sameGeometry(before, await boxes(page, '.reservation-detail__refresh'), ['x', 'y', 'width', 'height'], 'recarga pendiente')
-    hold = false; release()
-    await page.getByText(reservation.pickupCode, { exact: true }).waitFor()
-    sameGeometry(before, await boxes(page, '.reservation-detail__refresh'), ['x', 'y', 'width', 'height'], 'recarga finalizada')
-    console.log('OK recarga sin desplazamiento, código oculto mientras se comprueba vigencia')
-  } finally { release(); await context.close() }
+  // Reconsulta lenta y fallida: conserva datos y dimensiones de retiro en ambos anchos.
+  for (const width of [360, 1366]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true })
+    const page = await context.newPage()
+    let hold = false, fail = false, release
+    const held = new Promise(resolve => { release = resolve })
+    const wait = { id: 'wait_ux', lot, requestedQuantity: 10, offeredQuantity: 4,
+      offerExpiresAt: '2030-01-15T20:00:00Z', position: null, reservationId: null,
+      status: 'offered', createdAt: instant, endedAt: null }
+    await page.route('**/api/**', async route => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/auth/session') return route.fulfill({ json: { session, csrfToken: 'controlled' } })
+      if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
+      if (hold) await held
+      if (fail) return route.abort('internetdisconnected')
+      if (path === '/api/reservations/res_ux') return route.fulfill({ json: reservation })
+      if (path === '/api/waitlist/wait_ux') return route.fulfill({ json: wait })
+      throw new Error(`Ruta inesperada: ${path}`)
+    })
+    try {
+      await page.goto(base + '/reservas/res_ux')
+      await page.getByText(reservation.pickupCode, { exact: true }).waitFor()
+      const before = await boxes(page, '.reservation-detail__refresh')
+      hold = true
+      await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+      await page.locator('.pickup-code .ui-skeleton').waitFor()
+      assert.equal(await page.getByText(reservation.pickupCode, { exact: true }).count(), 0)
+      sameGeometry(before, await boxes(page, '.reservation-detail__refresh'), ['x', 'y', 'width', 'height'], 'recarga pendiente')
+      hold = false; release()
+      await page.getByText(reservation.pickupCode, { exact: true }).waitFor()
+      sameGeometry(before, await boxes(page, '.reservation-detail__refresh'), ['x', 'y', 'width', 'height'], 'recarga finalizada')
+      const facts = await boxes(page, '.reservation-detail__facts, .pickup-code')
+      fail = true
+      await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+      await page.getByText('Estado sin actualizar', { exact: true }).waitFor()
+      sameGeometry(facts, await boxes(page, '.reservation-detail__facts, .pickup-code'), ['x', 'width', 'height'], 'reserva con error')
+      assert.equal(await page.locator('.pickup-code .ui-skeleton').count(), 0, 'El error no deja una carga perpetua')
+      fail = false
+      await page.goto(base + '/espera/wait_ux')
+      await page.getByText('Oferta pendiente de aceptación', { exact: true }).waitFor()
+      const waitFacts = await boxes(page, '.reservation-detail__facts')
+      fail = true
+      await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+      await page.getByText('Estado sin actualizar', { exact: true }).waitFor()
+      sameGeometry(waitFacts, await boxes(page, '.reservation-detail__facts'), ['x', 'width', 'height'], 'espera con error')
+      console.log(`OK ${width}px: recarga lenta/fallida conserva datos y dimensiones; código oculto`)
+    } finally { release(); await context.close() }
+  }
 
   const states = await browser.newContext({ viewport: { width: 360, height: 900 }, ignoreHTTPSErrors: true })
   const statePage = await states.newPage()

@@ -102,6 +102,7 @@ function Detail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [uncertain, setUncertain] = useState(false)
+  const [stale, setStale] = useState(false)
   const [now, setNow] = useState(Date.now)
   const busy = useRef(false)
   const generation = useRef({ value: 0 })
@@ -112,10 +113,11 @@ function Detail({ id }: { id: string }) {
     try {
       const value = await getWaitlistEntry(id)
       if (version !== generation.current.value) return
-      setEntry(value); setUncertain(false); setNow(Date.now()); setMessage(null)
+      setEntry(value); setUncertain(false); setStale(false); setNow(Date.now()); setMessage(null)
     } catch (e) {
       if (version !== generation.current.value) return
-      setEntry(null); setMessage(waitlistError(e))
+      setStale(true); setMessage(waitlistError(e))
+      if (e instanceof HttpError && [401, 403, 404].includes(e.status)) setEntry(null)
       if (e instanceof HttpError && e.status === 401) void refreshSession()
     } finally { if (version === generation.current.value) setLoading(false) }
   }, [id, refreshSession])
@@ -126,14 +128,14 @@ function Detail({ id }: { id: string }) {
     const tick = window.setInterval(() => setNow(Date.now()), 1000)
     const refresh = () => { if (document.visibilityState === 'visible') void load() }
     const poll = window.setInterval(refresh, 15000)
-    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh)
-    return () => { active = false; ++requests.value; clearInterval(tick); clearInterval(poll); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
+    window.addEventListener('online', refresh); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh)
+    return () => { active = false; ++requests.value; clearInterval(tick); clearInterval(poll); window.removeEventListener('online', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
   }, [load])
   const deadline = entry ? Math.min(Date.parse(entry.lot.pickupEndsAt), entry.offerExpiresAt ? Date.parse(entry.offerExpiresAt) : Infinity) : 0
   const closed = deadline <= now
   const outcomeRef = useRef<HTMLDivElement>(null)
   async function command(action: 'accept' | 'decline' | 'leave') {
-    if (busy.current || loading || uncertain || !csrfToken || !entry || Date.now() >= deadline) return
+    if (busy.current || loading || stale || uncertain || !csrfToken || !entry || Date.now() >= deadline) return
     if (action === 'leave' ? entry.status !== 'waiting' : entry.status !== 'offered') return
     busy.current = true; const version = ++generation.current.value; setSending(true); setMessage(null); setUncertain(true)
     try {
@@ -154,15 +156,15 @@ function Detail({ id }: { id: string }) {
   return <section className="reservation-detail-content" aria-busy={loading || sending}>
     {loading && !entry && <DetailSkeleton label="Consultando estado vigente…" />}
     {message && <Alert role="alert" tone="warning">{message}</Alert>}
-    {entry && <Card className="reservation-detail"><div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
+    {entry && <Card className="reservation-detail"><div ref={outcomeRef} tabIndex={-1} role="status"><Badge tone={offered ? 'warning' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : stale ? 'Estado sin actualizar' : closed && ['waiting', 'offered'].includes(entry.status) ? 'Plazo finalizado' : labels[entry.status]}</Badge></div>
       <h2>{lotTitle(entry.lot.description)}</h2><p>{entry.lot.description}</p>
       <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}/reportar`} state={{ lotDescription: entry.lot.description }}>Reportar un problema con este lote</Link>
       <dl className="reservation-detail__facts"><div><dt>Cantidad solicitada</dt><dd>{entry.requestedQuantity} packs</dd></div>{entry.offeredQuantity !== null && <div><dt>Cantidad ofrecida</dt><dd>{entry.offeredQuantity} packs</dd></div>}<div><dt>Lugar de retiro</dt><dd>{entry.lot.address}</dd></div><div><dt>Ventana de retiro</dt><dd>{formatWindow(entry.lot.pickupStartsAt, entry.lot.pickupEndsAt, entry.lot.timeZone)} ({entry.lot.timeZone})</dd></div></dl>
       <p>{entry.lot.conditions ?? 'Sin condiciones adicionales.'}</p>
-      {entry.status === 'waiting' && !closed && <><p>Tu posición en la cola: {entry.position}. Esperar no retiene packs ni crea una reserva.</p><Button variant="danger" disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('leave')}>Salir de la espera y perder mi posición</Button></>}
+      {entry.status === 'waiting' && !closed && <><p>Tu posición en la cola: {entry.position}. Esperar no retiene packs ni crea una reserva.</p><Button variant="danger" disabled={loading || sending || stale || uncertain || !csrfToken} onClick={() => void command('leave')}>Salir de la espera y perder mi posición</Button></>}
       {offered && <><Alert tone="warning">Tienes una oferta por {entry.offeredQuantity} de los {entry.requestedQuantity} packs solicitados. Aún no tienes una reserva. Al aceptar se cierra la solicitud sin saldo ni prioridad por los packs restantes.</Alert>
         <p>Vence: {formatInstant(entry.offerExpiresAt!, entry.lot.timeZone)}. Tiempo orientativo: {Math.max(0, Math.ceil((deadline - now) / 1000))} s. El servidor comprueba la vigencia al aceptar.</p>
-        <div className="reservation-cancel__actions"><Button disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('accept')}>Aceptar explícitamente {entry.offeredQuantity} packs</Button><Button variant="danger" disabled={loading || sending || uncertain || !csrfToken} onClick={() => void command('decline')}>Rechazar oferta y salir de la cola</Button></div></>}
+        <div className="reservation-cancel__actions"><Button disabled={loading || sending || stale || uncertain || !csrfToken} onClick={() => void command('accept')}>Aceptar explícitamente {entry.offeredQuantity} packs</Button><Button variant="danger" disabled={loading || sending || stale || uncertain || !csrfToken} onClick={() => void command('decline')}>Rechazar oferta y salir de la cola</Button></div></>}
       {entry.status === 'accepted' && <Alert tone="success">La oferta fue aceptada por {entry.offeredQuantity} packs y la solicitud se cerró. <Link to={`/reservas/${encodeURIComponent(entry.reservationId!)}`}>Consultar mi reserva y código de retiro</Link></Alert>}
       {(entry.status === 'expired' || entry.status === 'declined' || entry.status === 'left' || (closed && ['waiting', 'offered'].includes(entry.status))) && <Alert>Esta solicitud terminó o su plazo finalizó. No puedes aceptar una oferta vencida. No conserva posición ni reingresa automáticamente. <Link to={`/lotes/${encodeURIComponent(entry.lot.id)}`}>Volver al lote para una nueva solicitud voluntaria</Link></Alert>}
     </Card>}

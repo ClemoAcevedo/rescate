@@ -75,6 +75,7 @@ function Detail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
   const [uncertain, setUncertain] = useState(false)
+  const [stale, setStale] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [now, setNow] = useState(Date.now)
   const busy = useRef(false)
@@ -91,10 +92,11 @@ function Detail({ id }: { id: string }) {
     try {
       const value = await getReservation(id)
       if (version !== generation.current.value) return
-      setReservation(value); setUncertain(false); if (value.status !== 'confirmed') setConfirming(false); setNow(Date.now())
+      setReservation(value); setUncertain(false); setStale(false); if (value.status !== 'confirmed') setConfirming(false); setNow(Date.now())
     } catch (error) {
       if (version !== generation.current.value) return
-      setReservation(null); setMessage(reservationError(error))
+      setStale(true); setMessage(reservationError(error))
+      if (error instanceof HttpError && [401, 403, 404].includes(error.status)) setReservation(null)
       if (error instanceof HttpError && error.status === 401) void refreshSession()
     } finally { if (version === generation.current.value) setLoading(false) }
   }, [id, refreshSession])
@@ -105,17 +107,18 @@ function Detail({ id }: { id: string }) {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     const refresh = () => { if (document.visibilityState === 'visible') void load() }
     const polling = window.setInterval(refresh, 15000)
+    window.addEventListener('online', refresh)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
-    return () => { active = false; ++requests.value; clearInterval(timer); clearInterval(polling); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
+    return () => { active = false; ++requests.value; clearInterval(timer); clearInterval(polling); window.removeEventListener('online', refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
   }, [load])
   const cancel = async () => {
-    if (busy.current || !csrfToken) return
+    if (busy.current || loading || stale || !csrfToken) return
     busy.current = true; const version = ++generation.current.value; setLoading(false); setCancelling(true); setMessage(null); setUncertain(true)
     try {
       const value = await cancelReservation(id, csrfToken)
       if (version !== generation.current.value) return
-      setReservation(value); setUncertain(false); setConfirming(false); setMessage('Cancelación confirmada. Tu reserva permanece en el historial.')
+      setReservation(value); setUncertain(false); setStale(false); setConfirming(false); setMessage('Cancelación confirmada. Tu reserva permanece en el historial.')
     } catch (error) {
       if (version !== generation.current.value) return
       setMessage(error instanceof HttpError && error.status < 500
@@ -130,7 +133,7 @@ function Detail({ id }: { id: string }) {
     {loading && !reservation && <DetailSkeleton label="Consultando estado vigente…" />}
     <div className="reservation-result" ref={resultRef} tabIndex={-1}>{message && <Alert tone={reservation?.status === 'cancelled' && !uncertain ? 'success' : 'warning'} role="status">{message}</Alert>}</div>
     {reservation && <Card className="reservation-detail">
-      <Badge tone={current && !uncertain ? 'success' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : closed && reservation.status === 'confirmed' ? 'Ventana finalizada' : labels[reservation.status]}</Badge>
+      <Badge tone={current && !uncertain && !stale ? 'success' : 'neutral'}>{uncertain ? 'Resultado por comprobar' : stale ? 'Estado sin actualizar' : closed && reservation.status === 'confirmed' ? 'Ventana finalizada' : labels[reservation.status]}</Badge>
       <header className="reservation-detail__heading">
         <h2>{lotTitle(reservation.lot.description)}</h2><Link to={`/reservas/${encodeURIComponent(id)}/chat`}>Abrir chat de la reserva</Link><Link to="/incidencias">Ver historial de incidencias</Link><Link to={`/lotes/${encodeURIComponent(reservation.lot.id)}/reportar`} state={{ lotDescription: reservation.lot.description }}>Reportar un problema con este lote</Link>
         {reservation.lot.description !== lotTitle(reservation.lot.description) && <p>{reservation.lot.description}</p>}
@@ -143,12 +146,12 @@ function Detail({ id }: { id: string }) {
         {reservation.endedAt && <div><dt>Fecha de término</dt><dd>{formatInstant(reservation.endedAt, reservation.lot.timeZone)}</dd></div>}
       </dl>
       <div className="reservation-detail__conditions"><h3>Condiciones de retiro</h3><p>{reservation.lot.conditions ?? 'Sin condiciones adicionales.'}</p></div>
-      {current && !uncertain && reservation.pickupCode && <div className="pickup-code"><h3>Código de retiro</h3><p>{loading ? <Skeleton width="8ch" /> : reservation.pickupCode}</p><span>Muéstralo al operador durante la ventana de retiro.</span></div>}
+      {current && !uncertain && reservation.pickupCode && <div className="pickup-code"><h3>Código de retiro</h3><p>{loading ? <Skeleton width="8ch" /> : stale ? 'Oculto' : reservation.pickupCode}</p><span>Consulta el estado actualizado antes de mostrarlo al operador.</span></div>}
       {closed && reservation.status === 'confirmed' && <Alert>La ventana terminó. Consulta el estado actualizado; el código ya no se muestra.</Alert>}
-      {current && !uncertain && !confirming && <Button ref={cancelRef} className="reservation-detail__cancel" variant="danger" disabled={!csrfToken || loading} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
+      {current && !uncertain && !confirming && <Button ref={cancelRef} className="reservation-detail__cancel" variant="danger" disabled={!csrfToken || loading || stale} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
       {(confirming || uncertain) && <Alert className="reservation-cancel" tone="warning"><p>{uncertain ? 'El código se oculta hasta comprobar el resultado.' : '¿Cancelar esta reserva? Los packs quedarán disponibles y el código dejará de servir.'}</p>
         <div className="reservation-cancel__actions">
-        <Button ref={confirmRef} className="reservation-cancel__confirm" variant="danger" loading={cancelling} disabled={!csrfToken || loading} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
+        <Button ref={confirmRef} className="reservation-cancel__confirm" variant="danger" loading={cancelling} disabled={!csrfToken || loading || stale} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
         {!uncertain && <Button variant="secondary" onClick={() => { setConfirming(false); requestAnimationFrame(() => cancelRef.current?.focus()) }}>Conservar reserva</Button>}
         </div>
       </Alert>}

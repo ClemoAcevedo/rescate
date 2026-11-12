@@ -274,7 +274,10 @@ lo cambia.
   período (K035); gestión de incidencias del operador con reportes por revisar, publicación,
   actualización, cierre confirmado y resolución, responsable y avisos pendientes, generados y
   leídos por versión, y reporte desde la reserva o la espera (K046).
-- **Accesibilidad:** recorrido automatizado de teclado, foco y etiquetas a 360 y
+- **Accesibilidad:** recuperación ante consultas fallidas de reserva y espera,
+  chat vacío/sin conexión, anuncios de mensajes y foco al reintentar;
+  `test:web:k050` recorre avisos, reserva, espera y chat a ambos anchos (K050).
+  Recorrido automatizado de teclado, foco y etiquetas a 360 y
   1366 px, distribución y menú de operador de 320 a 1920 px y
   [protocolo de cinco recorridos](docs/accesibilidad.md). La verificación exclusiva
   de K033 usa `test:web:k033` a 360 y 1366 px; el protocolo está preparado para

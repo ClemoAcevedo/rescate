@@ -54,7 +54,10 @@ Componer el skeleton con las mismas clases de layout, columnas, tipografía,
 proporciones de fotos y separación de la vista final. Mantener el ancho del
 contenedor desde la carga. Las tarjetas públicas reservan espacio para título,
 descripción y metadatos; galerías conservan su relación de aspecto; el chat reserva
-el espacio del historial para mantener el formulario en su sitio.
+el espacio del historial para mantener el formulario en su sitio. Los títulos
+de lote de las cargas de detalle y listados usan texto decorativo representativo
+que se ajusta al ancho, para reservar también las líneas de títulos extensos
+en móvil.
 
 Cuando existen datos, conservarlos al refrescar y expresar la carga en su región
 y controles. No insertar un aviso encima ni quitar bloques completos durante cada

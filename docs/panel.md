@@ -5,6 +5,9 @@ las reservas y solicitudes de espera, el historial y los resultados de los lotes
 cerraron en un período (anexos A p. 3, informe E1 p. 5 y maqueta M05 del anexo G). El
 contrato HTTP está en [OpenAPI](api/openapi.yaml) (etiqueta `Panel`).
 
+La carga inicial reserva el espacio de la última actualización junto al botón
+«Actualizar», conservando la posición de los indicadores al recibir los datos.
+
 ## Reglas
 
 - **Por establecimiento.** Solo un operador con membership actual consulta el panel. Otro

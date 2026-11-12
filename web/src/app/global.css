@@ -546,7 +546,7 @@ code, kbd, samp { font-family: var(--font-mono); }
 @media (max-width: 80rem) {
   .site-header {
     flex-wrap: wrap;
-    gap: var(--sp-3);
+    gap: var(--sp-2);
     min-height: auto;
     padding-block: var(--sp-3);
   }

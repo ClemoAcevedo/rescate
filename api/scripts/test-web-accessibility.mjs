@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
+import { createServer } from '../../web/node_modules/vite/dist/node/index.js'
 import { chromium } from './support/browser.mjs'
 
 // Recorrido de teclado con HTTP controlado; no sustituye sesiones con personas.
-const base = process.env.WEB_URL ?? 'http://localhost:5173'
+const root = fileURLToPath(new URL('../../web/', import.meta.url))
+const vite = process.env.WEB_URL ? null : await createServer({ root, server: { host: '127.0.0.1', port: 0 } })
+await vite?.listen()
+const base = (process.env.WEB_URL ?? vite.resolvedUrls.local[0]).replace(/\/$/, '')
 const browser = await chromium.launch()
 const session = { user: { id: 'usr_a11y', email: 'teclado@example.test' }, operableEstablishments: [], expiresAt: '2030-01-15T22:00:00Z' }
 const lot = { id: 'lot_test', description: 'Pack de panes.', category: 'Panadería', quantity: 10, availableQuantity: 10, conditions: 'Traer bolsa.', address: 'Calle 123', latitude: -33.45, longitude: -70.66, timeZone: 'America/Santiago', pickupStartsAt: '2030-01-15T18:00:00Z', pickupEndsAt: '2030-01-15T21:00:00Z', photos: [], photoUrl: null, distanceKm: null }
@@ -114,4 +119,4 @@ try {
     await context.close()
     console.log(`OK K033: explorar, reservar, conservar/cancelar, espera y oferta; teclado y foco; ${width}px`)
   }
-} finally { await browser.close() }
+} finally { await browser.close(); await vite?.close() }
