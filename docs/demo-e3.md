@@ -71,10 +71,10 @@ membership en la base local.
 
 | Paso | Quién | Qué se muestra |
 | --- | --- | --- |
-| 1. Reserva | A | «Mis reservas» y el detalle: cantidad, lugar, ventana y código de retiro. |
-| 2. Espera | B | «Explorar lotes»: el lote no tiene packs libres. «Unirme a la lista de espera», 1 pack y «Entrar voluntariamente a la espera»; «Mis esperas» muestra la posición. La espera no retiene packs. |
-| 3. Cancelación y oferta | A, luego B | A elige «Cancelar reserva» y confirma; el código deja de servir. B recibe la oferta por 1 pack en su espera y en «Avisos», con su plazo de diez minutos, y la acepta. Aceptar crea su reserva y cierra la solicitud. |
-| 4. Chat | B y operador | B usa «Abrir chat de la reserva» y escribe al establecimiento. El operador lo ve en «Avisos» o en los compromisos de «Mi establecimiento» y responde. |
+| 1. Reserva | A | «Mis reservas» y el detalle: primero el estado y el código de retiro, luego cantidad, lugar y ventana. |
+| 2. Espera | B | «Explorar lotes»: el lote no tiene packs libres. «Unirme a la lista de espera», 1 pack y de nuevo «Unirme a la lista de espera»; «Mis esperas» muestra su lugar en la lista. La espera no retiene packs. |
+| 3. Cancelación y oferta | A, luego B | A elige «Cancelar reserva» y confirma; el código deja de servir. B recibe la oferta por 1 pack en su espera y en «Avisos», con la cuenta regresiva de diez minutos, y elige «Aceptar 1 pack». Aceptar crea su reserva y cierra su espera. |
+| 4. Chat | B y operador | B usa «Chat de la reserva» en el detalle y escribe al establecimiento. El operador lo ve en «Avisos» o en los compromisos de «Mi establecimiento» y responde. |
 | 5. Retiro | Operador | «Validar retiros» desde «Mis lotes»: escribe el código que muestra B, revisa la reserva y confirma la entrega. El chat queda cerrado. |
 | 6. Panel | Operador | «Mi establecimiento»: el lote en vivo con 1 pack retirado y 1 libre, los compromisos de A y B, el historial de la sesión y los resultados del período. |
 

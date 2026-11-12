@@ -36,9 +36,8 @@ export function LotDetailSkeleton() {
         </section>)}
       </article>
       <Card className="reservation-panel">
-        <div className="reservation-panel__waitlist"><Skeleton /><Skeleton /><Skeleton /></div>
         <span className="ui-badge"><Skeleton width="7rem" /></span>
-        <div className="reservation-panel__intro"><h2>Solicitar packs</h2><p><Skeleton /><Skeleton /></p></div>
+        <div className="reservation-panel__intro"><h2>Reserva tus packs</h2><p><Skeleton /><Skeleton /></p></div>
         <div className="reserve-form"><Skeleton className="skeleton-control" /><Skeleton className="skeleton-control" /></div>
       </Card>
     </div>

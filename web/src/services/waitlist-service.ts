@@ -64,8 +64,8 @@ export function waitlistError(error: unknown) {
   if (error instanceof HttpError) {
     if (error.status === 401) return 'Tu sesión venció. Inicia sesión nuevamente.'
     if (error.status === 403) return 'La solicitud fue rechazada por seguridad. Recarga la página.'
-    if (error.status === 404) return 'La solicitud o el lote no existe o no está disponible para tu cuenta.'
-    if (error.status === 409) return 'El estado cambió o la acción no está disponible. Consulta el estado vigente. Para ingresar, revisa si puedes reservar directamente o si ya tienes una solicitud o reserva del lote.'
+    if (error.status === 404) return 'No encontramos esta espera o el lote ya no está disponible para tu cuenta.'
+    if (error.status === 409) return 'El estado cambió y esta acción ya no está disponible. Actualiza para ver cómo quedó. Si querías unirte, puede que ya quede un pack libre para reservar o que ya tengas una espera o reserva en este lote.'
     if (error.status === 422) return 'Revisa la cantidad solicitada.'
     if (error.status === 429) return 'Hay demasiadas solicitudes. Espera antes de reintentar.'
   }

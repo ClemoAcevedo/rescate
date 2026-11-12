@@ -48,7 +48,11 @@ participantes ni exige ejecutar las sesiones para cerrar la tarjeta.
 ## Distribución y regresiones independientes
 
 La cabecera usa menú hasta 1280 px y mantiene marca y botón en una fila desde
-320 px con el menú cerrado. Las tarjetas ajustan columnas al espacio y el
+320 px con el menú cerrado. Con sesión, el menú agrupa los enlaces en «Rescatar»,
+«Mi establecimiento» (solo operadores, con «Panel», «Mis lotes» y «Publicar lote») y
+«Tu cuenta» (avisos, correo y cerrar sesión), cada grupo con `role="group"` y su título.
+En escritorio los títulos quedan para lectores de pantalla y el correo se ve en el
+`title` del avatar para que la fila no se desborde. Las tarjetas ajustan columnas al espacio y el
 panel del lote se apila bajo la galería hasta 1024 px; en escritorio va a su lado.
 `test:web:responsive` conserva la regresión ampliada de 320 a 1920 px.
 `test:web:compose` conserva la suite general, incluidos backend, fotos, reservas,

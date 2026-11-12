@@ -49,23 +49,27 @@ clave de ingreso devuelve la solicitud existente con su estado vigente.
 
 ## Vista del titular
 
-El detalle del lote ofrece «Unirme a la lista de espera» y enlaza a `/lotes/:id/espera`. La persona elige cantidad y pulsa
-«Entrar voluntariamente a la espera»; navegar a la pantalla no crea solicitudes.
+Cuando el lote no tiene packs libres, el detalle muestra «Unirme a la lista de espera» como acción
+principal y enlaza a `/lotes/:id/espera`; con packs libres solo ofrece reservar. El formulario
+explica una sola vez las reglas (no reserva packs, la oferta puede ser por menos packs y quien
+no acepta a tiempo pierde su lugar). La persona elige cantidad y pulsa «Unirme a la lista de
+espera»; navegar a la pantalla no crea solicitudes.
 El ingreso conserva cantidad y clave por actor y lote en `sessionStorage` antes de
 enviar. Ante una respuesta perdida, incluso tras recargar, el reintento usa la
 misma intención. Si el almacenamiento falla, no se envía. La API decide si corresponde
 esperar o reservar directamente.
 
-`/espera` muestra solicitudes propias e historial paginado; `/espera/:id` consulta
-posición («Tu posición en la cola»), cantidad solicitada, cantidad ofrecida, condiciones
-y ventana de retiro.
-La espera no retiene packs; la oferta los retiene pero exige aceptación explícita;
-solo una aceptación confirmada enlaza a la reserva y su código de retiro.
-Una oferta parcial explica que aceptar cierra la solicitud sin saldo prioritario.
-Rechazar o salir explica la pérdida de posición; volver exige un ingreso voluntario.
+`/espera` («Mis esperas») muestra solicitudes propias e historial paginado, con badge de
+estado por tono; `/espera/:id` destaca el lugar en la lista («Tu lugar en la lista») o la
+oferta, y luego cantidad pedida, cantidad ofrecida, condiciones y ventana de retiro.
+La espera no retiene packs; la oferta los retiene, pero solo «Aceptar N packs» crea la
+reserva. La oferta muestra una cuenta regresiva m:ss («Te quedan 9:53 para aceptar») y la
+hora de vencimiento. Una oferta parcial dice cuántos de los packs pedidos se ofrecen y que
+aceptar termina la espera. Salir advierte que se pierde el lugar; volver exige unirse de nuevo.
+Solo una aceptación confirmada enlaza a «Ver mi código de retiro».
 
 El detalle actualiza el reloj cada segundo, consulta cada quince segundos mientras
-la pestaña está visible y vuelve a consultar al regresar. El reloj es orientativo:
+la pestaña está visible y vuelve a consultar al regresar («Actualizar» lo hace a pedido). El reloj es orientativo:
 el vencimiento local bloquea acciones y la API verifica nuevamente la vigencia al
 aceptar con el reloj de la base. Un aviso antiguo nunca confirma una reserva.
 Los envíos simultáneos se bloquean; una respuesta perdida o un conflicto deshabilita

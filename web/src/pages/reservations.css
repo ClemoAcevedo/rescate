@@ -12,13 +12,7 @@
   text-decoration: none;
   color: var(--text-inverse);
 }
-.reservation-notice .reservation-confirmation__id {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: var(--fs-meta);
-  color: var(--text-muted);
-}
-.reservation-notice .reservation-confirmation__id span { font-family: var(--font-mono); }
+.reservation-notice .reservation-notice__action:hover { color: var(--text-inverse); }
 .reservation-pending { display: grid; gap: var(--sp-3); }
 .reservation-pending > p { margin: 0; }
 .reservation-detail-view { gap: var(--sp-3); }
@@ -30,7 +24,14 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.reservation-detail-view .reservation-detail > .ui-badge { justify-self: start; }
+/* Estado y actualizar en una misma fila, discreta, sobre el dato principal. */
+.reservation-detail__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+}
 .reservation-detail-view .reservation-detail p { margin: 0; }
 .reservation-detail__heading { display: grid; gap: var(--sp-2); }
 .reservation-detail__heading h2 { font-size: var(--fs-title-lg); }
@@ -52,14 +53,28 @@
 .reservation-detail-view .pickup-code {
   display: grid;
   gap: var(--sp-2);
-  border: var(--border-width) solid var(--border-subtle);
+  border: var(--border-width-strong) solid var(--action-primary);
 }
 .reservation-detail-view .pickup-code h3 { font-size: var(--fs-body); }
 .reservation-detail-view .pickup-code p { font-weight: var(--fw-bold); line-height: var(--lh-title); }
 .reservation-detail-view .pickup-code span { font-size: var(--fs-meta); color: var(--text-muted); }
 .reservation-detail-view .pickup-code p .ui-skeleton { font-size: inherit; color: transparent; }
 .reservation-detail-view .reservation-detail__cancel { justify-self: start; }
-.reservation-detail-view .reservation-detail__refresh { justify-self: start; }
+.reservation-detail-view .reservation-detail__refresh { justify-self: start; min-height: var(--control-h); padding-inline: var(--sp-3); color: var(--text-link); font-size: var(--fs-meta); }
+
+/* Acciones secundarias del detalle, juntas y después de los datos. */
+.reservation-detail__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding-top: var(--sp-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+.reservation-detail__links .ui-button { text-decoration: none; }
+.reservation-detail__links .ui-button:hover { color: var(--text-strong); }
+@media (max-width: 47.99rem) {
+  .reservation-detail__links .ui-button { flex: 1 1 100%; }
+}
 @media (min-width: 48rem) {
   .reservation-notice > .ui-alert { grid-template-columns: minmax(0, 1fr) auto; }
   .reservation-detail__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -81,5 +96,34 @@
   .reservation-cancel__actions { flex-direction: row; flex-wrap: wrap; align-items: start; }
 }
 
-.reservation-panel__waitlist { display: grid; gap: var(--sp-2); }
-.reservation-panel__waitlist p { margin: 0; }
+/* Lote sin packs libres: la lista de espera pasa a ser la acción principal. */
+.reservation-panel__actions { display: grid; gap: var(--sp-3); width: 100%; }
+.reservation-panel__actions .ui-button { text-decoration: none; }
+.reservation-panel__actions .ui-button--primary:hover { color: var(--text-inverse); }
+.reservation-panel__actions .ui-button--secondary:hover { color: var(--text-strong); }
+
+/* Listas de reservas y esperas: página posterior vacía. */
+.reservations__end { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+
+/* Espera: reglas al unirse y bloque destacado con lugar u oferta. */
+.waitlist-join { display: grid; gap: var(--sp-4); }
+.waitlist-join > p { margin: 0; }
+.waitlist-join__rules { display: grid; gap: var(--sp-2); margin: 0; padding-inline-start: var(--sp-5); color: var(--text-body); }
+.waitlist-highlight {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-info-soft);
+}
+.waitlist-highlight h3 { font-size: var(--fs-title-lg); }
+.waitlist-highlight__lead { font-size: var(--fs-title-lg); line-height: var(--lh-title); }
+.waitlist-highlight__lead strong { font-variant-numeric: tabular-nums; }
+.waitlist-highlight--offer {
+  gap: var(--sp-3);
+  background: var(--surface-warning-soft);
+  border: var(--border-width-strong) solid var(--text-warning);
+}
+.waitlist-highlight--offer .waitlist-highlight__lead strong { font-size: var(--fs-display-md); color: var(--text-warning); }
+.waitlist-leave { display: grid; justify-items: start; gap: var(--sp-2); }
+.waitlist-leave p { color: var(--text-muted); font-size: var(--fs-meta); }

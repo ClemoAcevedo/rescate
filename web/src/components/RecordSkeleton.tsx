@@ -14,12 +14,13 @@ export function RecordSkeleton({ label, count = 3, lines = 4 }: { label: string;
 
 export function DetailSkeleton({ label }: { label: string }) {
   return <LoadingState label={label}><Card className="reservation-detail">
-    <span className="ui-badge"><Skeleton width="6rem" /></span>
+    <div className="reservation-detail__status"><span className="ui-badge"><Skeleton width="6rem" /></span></div>
     <header className="reservation-detail__heading"><h2><Skeleton>Pack de alimentos surtidos para compartir</Skeleton></h2><Skeleton width="60%" /></header>
+    <Skeleton className="skeleton-code" />
     <dl className="reservation-detail__facts">{Array.from({ length: 4 }, (_, index) => <div key={index}>
       <dt><Skeleton width="60%" /></dt><dd><Skeleton /></dd>
     </div>)}</dl>
     <div className="reservation-detail__conditions"><Skeleton width="50%" /><Skeleton /></div>
-    <Skeleton className="skeleton-code" /><Skeleton className="skeleton-control" width="12rem" />
+    <Skeleton className="skeleton-control" width="12rem" />
   </Card></LoadingState>
 }

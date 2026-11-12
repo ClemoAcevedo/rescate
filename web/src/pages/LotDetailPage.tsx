@@ -18,6 +18,8 @@ import { lotTitle } from '../lots/lot-title'
 import { HttpError, uncertainReservation, discoveryError, getPublicLot, reserveLot,
   type PublicLot, type ReservationResponse } from '../services/discovery-service'
 
+const packs = (n: number) => `${n} ${n === 1 ? 'pack' : 'packs'}`
+
 export function LotDetailPage() {
   const { id = '' } = useParams()
   const { session } = useAuth()
@@ -64,7 +66,7 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
     busy.current = true; setSubmitting(true); setReserveError(null)
     try {
       try { saveIntent(storageKey, { quantity: amount, idempotencyKey: key.current }) }
-      catch { setReserveError('No se pudo conservar la solicitud para reintentar. Habilita el almacenamiento de esta pestaña antes de reservar.'); return }
+      catch { setReserveError('No pudimos guardar tu reserva en esta pestaña para reintentarla. Habilita el almacenamiento del navegador e inténtalo de nuevo.'); return }
       const result = await reserveLot(id, { quantity: amount, idempotencyKey: key.current }, csrfToken)
       setReservation(result)
       clearIntent(storageKey)
@@ -72,7 +74,7 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
       setReload(value => value + 1)
     } catch (error) {
       setReserveError(uncertainReservation(error)
-        ? 'No se recibió una respuesta válida. Reintenta con la misma solicitud para comprobar si la reserva se confirmó.'
+        ? 'No pudimos confirmar si tu reserva quedó hecha. Compruébala antes de intentar otra.'
         : discoveryError(error))
       // Un rechazo de un reintento no resuelve una respuesta perdida anterior.
       setUncertain(uncertain || uncertainReservation(error))
@@ -85,22 +87,24 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
   const changeQuantity = (value: string) => {
     setQuantity(value); setReserveError(null); key.current = crypto.randomUUID()
   }
+  const chosen = Number(quantity)
+  const submitLabel = submitting ? 'Reservando…' : uncertain ? 'Comprobar mi reserva'
+    : Number.isSafeInteger(chosen) && chosen >= 1 ? `Reservar ${packs(chosen)}` : 'Reservar'
 
   return <main className="page-content"><div className="public-lot" aria-busy={loading}>
     <Link className="back-link" to={lotsPath}><Icon name="arrowLeft" />Volver a explorar lotes</Link>
     {loading && !lot && <LotDetailSkeleton />}
     {loadError && <Alert className="form-result" tone="danger" role="alert">{loadError} <Button variant="secondary" onClick={() => { setLoading(true); setReload(value => value + 1) }}>Reintentar</Button></Alert>}
     {reservation && <div ref={confirmationRef} tabIndex={-1} className="reservation-confirmation reservation-notice">
-      <Alert tone="info" role="status">
-        <div className="reservation-notice__copy"><h2>Solicitud registrada por {reservation.quantity} {reservation.quantity === 1 ? 'pack' : 'packs'}</h2>
-        <p>Consulta el estado vigente, el horario y el código de retiro en el detalle.</p></div>
-        <Link className="ui-button ui-button--primary reservation-notice__action" to={`/reservas/${encodeURIComponent(reservation.id)}`}>Ver mi reserva</Link>
-        <p className="reservation-confirmation__id">Identificador de reserva: <span>{reservation.id}</span></p>
+      <Alert tone="success" role="status">
+        <div className="reservation-notice__copy"><h2>Reservaste {packs(reservation.quantity)}</h2>
+        <p>Tu código de retiro y el horario están en el detalle de la reserva.</p></div>
+        <Link className="ui-button ui-button--primary reservation-notice__action" to={`/reservas/${encodeURIComponent(reservation.id)}`}>Ver mi código de retiro</Link>
       </Alert>
     </div>}
-    {!lot && uncertain && <Card className="reservation-pending"><Alert tone="warning">Hay una solicitud pendiente de comprobar, aunque el lote ya no esté disponible.</Alert>
-      <p>Cantidad solicitada: {quantity} packs.</p>{reserveError && <Alert tone="warning" role="alert">{reserveError}</Alert>}
-      {status === 'authenticated' && csrfToken && <form onSubmit={submit}><Button type="submit" loading={submitting}>Comprobar la misma solicitud</Button></form>}
+    {!lot && uncertain && <Card className="reservation-pending"><Alert tone="warning">No pudimos confirmar tu reserva de {quantity} {quantity === '1' ? 'pack' : 'packs'}. Compruébala para saber si quedó hecha.</Alert>
+      {reserveError && <Alert tone="warning" role="alert">{reserveError}</Alert>}
+      {status === 'authenticated' && csrfToken && <form onSubmit={submit}><Button type="submit" loading={submitting}>{submitting ? 'Comprobando…' : 'Comprobar mi reserva'}</Button></form>}
     </Card>}
     {lot && <>
       <header className="public-lot__header">
@@ -131,32 +135,32 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
           </section>
         </article>
         <Card as="section" className="reservation-panel" aria-label="Reserva de packs">
-          <div className="reservation-panel__waitlist">
-          <p><Link to={`/lotes/${encodeURIComponent(id)}/espera`}>Unirme a la lista de espera</Link></p>
-          <p>Estar en la lista no reserva packs. Si recibes una oferta, tendrás que aceptarla antes de que venza para confirmar tu reserva.</p>
-          </div>
-          <Badge tone={lot.availableQuantity > 0 ? 'success' : 'warning'}>{lot.availableQuantity > 0 ? `${lot.availableQuantity} ${lot.availableQuantity === 1 ? 'pack libre' : 'packs libres'}` : 'Sin stock disponible'}</Badge>
+          <Badge tone={lot.availableQuantity > 0 ? 'success' : 'warning'}>{lot.availableQuantity > 0 ? `${lot.availableQuantity} ${lot.availableQuantity === 1 ? 'pack libre' : 'packs libres'}` : 'Sin packs libres'}</Badge>
           {reservation ? <div className="reservation-panel__intro">
-            <h2>Solicitud registrada</h2><p>Solicitaste {reservation.quantity} {reservation.quantity === 1 ? 'pack' : 'packs'} de este lote.</p>
+            <h2>Tu reserva está lista</h2><p>Muestra tu código de retiro en el local dentro del horario de retiro.</p>
             <Link className="text-link" to={lotsPath}>Seguir explorando</Link>
-          </div> : <>
-            <div className="reservation-panel__intro"><h2>Solicitar packs</h2><p>Elige cuántos packs vas a retirar. Confirmaremos el stock al reservar.</p></div>
-            {lot.availableQuantity === 0 && !uncertain ? <Alert tone="warning">No quedan packs libres. <Link to={lotsPath}>Explora otros lotes</Link>.</Alert>
-              : status === 'authenticated' && csrfToken ? <form className="reserve-form" onSubmit={submit}>
-                <FormField label="Cantidad de packs" hint={uncertain ? 'Se conserva la cantidad de tu solicitud pendiente.' : `Puedes solicitar entre 1 y ${lot.availableQuantity}.`} required>{control => <div className="reserve-quantity">
+          </div> : lot.availableQuantity === 0 && !uncertain ? <>
+            <div className="reservation-panel__intro"><h2>Lista de espera</h2><p>Te avisamos si se liberan packs. Tendrás unos minutos para aceptar.</p></div>
+            <div className="reservation-panel__actions">
+              <Link className="ui-button ui-button--primary ui-button--block" to={`/lotes/${encodeURIComponent(id)}/espera`}>Unirme a la lista de espera</Link>
+              <Link className="ui-button ui-button--secondary ui-button--block" to={lotsPath}>Explorar otros lotes</Link>
+            </div>
+          </> : <>
+            <div className="reservation-panel__intro"><h2>Reserva tus packs</h2><p>Elige cuántos packs vas a retirar.</p></div>
+            {status === 'authenticated' && csrfToken ? <form className="reserve-form" onSubmit={submit}>
+                <FormField label="Cantidad de packs" hint={uncertain ? 'Mantenemos la cantidad de tu reserva sin confirmar.' : `Puedes reservar entre 1 y ${lot.availableQuantity}.`} required>{control => <div className="reserve-quantity">
                   <Button variant="secondary" aria-label="Quitar un pack" disabled={submitting || uncertain || Number(quantity) <= 1} onClick={() => changeQuantity(String(Math.max(1, Number(quantity) - 1)))}>−</Button>
                   <Input {...control} type="number" min="1" max={uncertain ? undefined : lot.availableQuantity} step="1" disabled={submitting || uncertain} value={quantity} onChange={event => changeQuantity(event.target.value)} />
                   <Button variant="secondary" aria-label="Agregar un pack" disabled={submitting || uncertain || Number(quantity) >= lot.availableQuantity} onClick={() => changeQuantity(String(Math.min(lot.availableQuantity, Number(quantity) + 1)))}>+</Button>
                 </div>}</FormField>
-                {uncertain && !reserveError && <Alert tone="warning" role="status">Hay una solicitud pendiente de comprobar. Reintenta con la misma cantidad y clave.</Alert>}
+                {uncertain && !reserveError && <Alert tone="warning" role="status">No pudimos confirmar tu reserva. Compruébala antes de intentar otra.</Alert>}
                 {reserveError && <Alert tone={uncertain ? 'warning' : 'danger'} role="alert">{reserveError}</Alert>}
-                <Button type="submit" block loading={submitting}>{submitting ? 'Confirmando…' : uncertain ? 'Comprobar la misma solicitud' : 'Confirmar reserva'}</Button>
-                <p className="public-lot__hint">La reserva se confirma cuando recibes su identificador.</p>
+                <Button type="submit" block loading={submitting}>{submitLabel}</Button>
               </form> : status === 'anonymous' ? <div className="reservation-panel__login">
-                <p>Para solicitar packs, inicia sesión con tu cuenta. Volverás a este lote.</p>
+                <p>Para reservar, inicia sesión con tu cuenta. Volverás a este lote.</p>
                 <Link className="ui-button ui-button--primary ui-button--block" to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Inicia sesión para reservar</Link>
               </div> : status === 'error' ? <Alert tone="danger" role="alert">{sessionError ?? 'No se pudo comprobar la sesión.'} <Button variant="secondary" onClick={() => { void refreshSession() }}>Reintentar</Button></Alert>
-                : <Alert role="status">Comprobando tu sesión para solicitar packs…</Alert>}
+                : <Alert role="status">Comprobando tu sesión…</Alert>}
           </>}
         </Card>
       </div>

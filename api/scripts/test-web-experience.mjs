@@ -73,7 +73,7 @@ try {
     await page.getByText('7KQ2M9XA', { exact: true }).waitFor()
     await check('reserva-red', async () => {
       failReservation = true
-      await activate('button', 'Consultar estado actualizado')
+      await activate('button', 'Actualizar')
       await page.getByText(/No fue posible comprobar la reserva/).waitFor()
       assert.equal(await page.getByRole('heading', { name: lot.description }).count(), 1, 'Conserva los datos de retiro al fallar la consulta')
       assert.equal(await page.getByText('7KQ2M9XA', { exact: true }).count(), 0, 'Oculta el código sin vigencia comprobada')
@@ -85,19 +85,19 @@ try {
     await context.setOffline(false)
     await page.getByText('7KQ2M9XA', { exact: true }).waitFor()
     await page.goto(base + '/espera/w_test')
-    await page.getByText('Oferta pendiente de aceptación', { exact: true }).waitFor()
+    await page.getByText('Oferta por aceptar', { exact: true }).waitFor()
     await check('espera-red', async () => {
       failWait = true
-      await activate('button', 'Consultar estado actualizado')
+      await activate('button', 'Actualizar')
       await page.getByRole('alert').waitFor()
       assert.equal(await page.getByRole('heading', { name: lot.description }).count(), 1, 'Conserva la oferta visible al fallar la consulta')
-      assert.equal(await page.getByRole('button', { name: 'Aceptar explícitamente 4 packs' }).isDisabled(), true)
+      assert.equal(await page.getByRole('button', { name: 'Aceptar 4 packs' }).isDisabled(), true)
       await fits()
     })
     await context.setOffline(true)
     failWait = false
     await context.setOffline(false)
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(el => el.textContent === 'Aceptar explícitamente 4 packs' && !el.disabled))
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(el => el.textContent === 'Aceptar 4 packs' && !el.disabled))
     await check('avisos-vacio-error', async () => {
       notices = 'empty'
       await page.goto(base + '/avisos')
@@ -120,12 +120,12 @@ try {
     })
     await check('chat-reintento', async () => {
       const input = page.getByRole('textbox', { name: 'Mensaje (obligatorio)' })
-      await activate('button', 'Consultar conversación')
+      await activate('button', 'Actualizar')
       for (let i = 0; i < 80 && !(await input.evaluate(el => el === document.activeElement)); i++) await page.keyboard.press('Tab')
       assert.equal(await input.evaluate(el => el === document.activeElement), true)
       await page.keyboard.type('Mensaje de prueba')
       await activate('button', 'Enviar mensaje')
-      await activate('button', 'Reintentar el mismo mensaje')
+      await activate('button', 'Reintentar')
       await page.waitForFunction(() => document.activeElement?.tagName === 'TEXTAREA')
       assert.equal(sends.length, 2)
       assert.deepEqual(sends[0], sends[1], 'Reintenta la misma intención')
@@ -134,9 +134,9 @@ try {
     })
     await check('chat-recibir', async () => {
       messages.push({ id: 'msg_remote', sequence: 2, text: 'Respuesta del establecimiento. '.repeat(30), author: 'operator', mine: false, createdAt: entry.createdAt })
-      await activate('button', 'Consultar conversación')
+      await activate('button', 'Actualizar')
       await page.getByText(messages[1].text.trim(), { exact: true }).waitFor()
-      assert.equal(await page.getByRole('button', { name: 'Consultar conversación' }).evaluate(el => el === document.activeElement), true, 'Recibir mensajes conserva el foco')
+      assert.equal(await page.getByRole('button', { name: 'Actualizar', exact: true }).evaluate(el => el === document.activeElement), true, 'Recibir mensajes conserva el foco')
       await fits()
     })
     await page.goto(base + '/avisos')

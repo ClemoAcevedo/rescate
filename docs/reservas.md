@@ -58,14 +58,18 @@ el estado que provocó un 409 al confirmar.
 `/reservas` muestra las reservas propias, incluidas canceladas, retiradas y vencidas,
 en páginas de 20. `/reservas/:id` consulta el estado vigente y muestra cantidad,
 lugar, condiciones, ventana en la zona del lote e instantes de creación y término.
-El detalle organiza los datos con etiquetas y destaca el código en un bloque propio.
-El aviso de solicitud registrada enlaza al detalle vigente y mantiene el identificador
-como dato secundario. Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
+El detalle pone primero el estado y el código de retiro destacado («Muéstralo en el local
+al retirar»); luego cantidad, lugar y ventana, las condiciones y, agrupadas abajo, las
+acciones secundarias (chat, reportar un problema e historial de incidencias). Cancelar
+queda al final. «Actualizar» consulta el estado a pedido. Tras reservar, el detalle del lote
+muestra «Reservaste N packs» con el enlace «Ver mi código de retiro»; no muestra el
+identificador de la reserva. El botón de envío es «Reservar N packs». Sin packs libres, el
+panel ofrece «Unirme a la lista de espera» como acción principal. Los códigos permanecen solo en memoria del detalle: no aparecen en el listado,
 URLs ni almacenamiento del navegador.
 
 El detalle muestra el código únicamente con una respuesta válida y confirmada,
 antes del cierre y sin una cancelación pendiente de comprobar. Al finalizar la
-ventana lo oculta y ofrece consultar el estado; vuelve a consultar al regresar a
+ventana lo oculta; vuelve a consultar al regresar a
 la pestaña y cada quince segundos mientras está visible. Un resultado de creación
 reproducido por idempotencia lleva al detalle para conocer el estado actual, pues puede corresponder a una reserva ya terminada.
 

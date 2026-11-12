@@ -112,8 +112,11 @@ Código principal: [lots-service.ts](../web/src/services/lots-service.ts),
 
 ## Búsqueda y reserva directa
 
-`/lotes` consulta la API sin sesión. Permite categoría, ubicación manual o del
-navegador, radio y comienzo de la ventana de retiro. PostGIS usa `geography` WGS84:
+`/lotes` consulta la API sin sesión. Permite categoría, ubicación del navegador
+(«Usar mi ubicación») o coordenadas manuales dentro de «Ingresar coordenadas», una
+distancia máxima de 2, 5, 10 o 25 km y comienzo de la ventana de retiro. La categoría es
+texto libre en el contrato, así que la web solo sugiere las comunes con un `datalist`.
+En móvil la portada se reduce al título para dejar a la vista filtros y resultados. PostGIS usa `geography` WGS84:
 `ST_DWithin` filtra el radio con índice GiST y `ST_Distance` ordena por distancia
 geográfica, no tiempo de viaje. Cada página tiene hasta 12 lotes. Sin coordenadas
 se ordena por publicación; fecha e ID desempatan. La disponibilidad puede cambiar

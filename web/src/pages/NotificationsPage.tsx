@@ -8,6 +8,7 @@ import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
+import { Icon } from '../components/Icon'
 import { lotTitle } from '../lots/lot-title'
 import { setUnreadCount } from '../notifications/unread'
 import { NOTIFICATION_POLL_MS, useVisiblePolling } from '../notifications/use-visible-polling'
@@ -19,7 +20,7 @@ const when = (instant: string) => formatInstant(instant, DEFAULT_TIME_ZONE)
 const packs = (quantity: number) => `${quantity} ${quantity === 1 ? 'pack' : 'packs'}`
 
 /** Texto y destino de cada aviso. El destino muestra el estado vigente: un aviso nunca confirma nada. */
-function describe(notification: Notification): { title: string; text: string; action: string; to: string } {
+function describe(notification: Notification): { title: string; text: string; action: string; to: string; state?: object } {
   const entry = `/espera/${encodeURIComponent(notification.waitlistEntryId ?? '')}`
   const reservation = `/reservas/${encodeURIComponent(notification.reservationId ?? '')}`
   switch (notification.kind) {
@@ -33,22 +34,24 @@ function describe(notification: Notification): { title: string; text: string; ac
     }
     case 'offer_issued':
       return { title: `Tienes una oferta por ${packs(notification.quantity)}`, action: 'Ver oferta', to: entry,
-        text: `Puedes aceptarla hasta ${notification.offerExpiresAt ? when(notification.offerExpiresAt) : 'su vencimiento'} (el plazo se vuelve a comprobar al aceptar).` }
+        text: notification.offerExpiresAt ? `Puedes aceptarla hasta ${when(notification.offerExpiresAt)}.` : 'Acéptala antes de que venza.' }
     case 'offer_expired':
-      return { title: 'Tu oferta venció', action: 'Ver solicitud', to: entry,
-        text: `La oferta por ${packs(notification.quantity)} venció sin aceptarse y la solicitud salió de la cola. Para volver a esperar debes ingresar de nuevo.` }
+      return { title: 'Tu oferta venció', action: 'Ver tu espera', to: entry,
+        text: `La oferta por ${packs(notification.quantity)} venció y saliste de la lista. Si aún te interesa, únete de nuevo.` }
     case 'reservation_confirmed':
       return { title: 'Reserva confirmada', action: 'Ver reserva', to: reservation,
-        text: `Aceptaste la oferta por ${packs(notification.quantity)}. Consulta tu código de retiro en el detalle de la reserva.` }
+        text: `Reservaste ${packs(notification.quantity)}. Tu código de retiro está en la reserva.` }
     case 'reservation_cancelled':
       return { title: 'Reserva cancelada', action: 'Ver reserva', to: reservation,
-        text: `Tu reserva de ${packs(notification.quantity)} fue cancelada. Consulta el detalle para comprobar su estado actual.` }
+        text: `Tu reserva de ${packs(notification.quantity)} fue cancelada.` }
     // El aviso no trae el texto del mensaje, que solo se lee dentro de la conversación
     case 'message_from_establishment':
       return { title: 'Mensaje del establecimiento', action: 'Abrir conversación', to: `${reservation}/chat`,
+        state: { lotDescription: notification.lot.description, viewer: 'holder', from: '/avisos' },
         text: `Te escribieron sobre tu reserva de ${packs(notification.quantity)}.` }
     case 'message_from_holder':
-      return { title: 'Mensaje de quien reservó', action: 'Abrir conversación', to: `${reservation}/chat`,
+      return { title: 'Mensaje de la persona que reservó', action: 'Abrir conversación', to: `${reservation}/chat`,
+        state: { lotDescription: notification.lot.description, viewer: 'operator', from: '/avisos' },
         text: `Te escribieron sobre una reserva de ${packs(notification.quantity)}.` }
   }
 }
@@ -76,7 +79,7 @@ function Inbox({ csrfToken, incidentsOnly }: { csrfToken: string; incidentsOnly:
   useVisiblePolling(load, NOTIFICATION_POLL_MS)
 
   /** Abrir registra la lectura y lleva al detalle vigente; si la lectura falla, igual se navega. */
-  const open = async (notification: Notification, to: string) => {
+  const open = async (notification: Notification, to: string, state?: object) => {
     if (mutating.current || (notification.kind === 'incident_version' && loading.current)) return
     mutating.current = true; setError(null)
     setOpening(notification.id)
@@ -92,7 +95,7 @@ function Inbox({ csrfToken, incidentsOnly }: { csrfToken: string; incidentsOnly:
       if (notification.kind === 'incident_version') setError('No se pudo confirmar la lectura. Reintenta; se conserva el primer registro si ya se aplicó.')
     }
     finally { mutating.current = false; setOpening(null) }
-    if (notification.kind !== 'incident_version') navigate(to)
+    if (notification.kind !== 'incident_version') navigate(to, { state })
   }
 
   if (!result) {
@@ -124,13 +127,12 @@ function Inbox({ csrfToken, incidentsOnly }: { csrfToken: string; incidentsOnly:
                 {notification.incident && <div className="notification__incident-meta">
                   <p>Versión {notification.incident.version}</p>
                   <Link to={`/incidencias/${encodeURIComponent(notification.id)}`}>Ver incidencia</Link>
-                  <p className="notification__reading-note">Registrar lectura no acredita haber cumplido las instrucciones.</p>
-                  <p className="notification__read-state">{notification.readAt ? `Lectura registrada: ${when(notification.readAt)}.` : 'Lectura pendiente de registrar.'}</p>
+                  <p className="notification__read-state">{notification.readAt ? `Leído el ${when(notification.readAt)}.` : 'Sin leer. Marcarlo como leído no indica que cumpliste las instrucciones.'}</p>
                 </div>}
                 <div className="notification__footer">
                   <time dateTime={notification.createdAt}>{when(notification.createdAt)}</time>
                   <Button variant={unread ? 'primary' : 'secondary'} loading={opening === notification.id}
-                    disabled={opening !== null || (notification.kind === 'incident_version' && (notification.readAt !== null || refreshing))} onClick={() => { void open(notification, view.to) }}>{view.action}</Button>
+                    disabled={opening !== null || (notification.kind === 'incident_version' && (notification.readAt !== null || refreshing))} onClick={() => { void open(notification, view.to, view.state) }}>{view.action}</Button>
                 </div>
               </Card>
             </li>
@@ -156,9 +158,10 @@ export function NotificationsPage({ incidentsOnly = false }: { incidentsOnly?: b
   return (
     <main className="page-content">
       <div className="notifications">
+        {incidentsOnly && <Link className="back-link" to="/avisos"><Icon name="arrowLeft" />Volver a avisos</Link>}
         <h1>{incidentsOnly ? 'Historial de incidencias' : 'Avisos'}</h1>
-        <p>{incidentsOnly ? 'Versiones publicadas para ti, incluidas las leídas, aunque el lote esté cerrado y el chat terminado.' : 'Ofertas, reservas, mensajes e incidencias. Se guardan aunque no estés conectado.'} Horarios en {DEFAULT_TIME_ZONE}.</p>
-        <Link to={incidentsOnly ? '/avisos' : '/incidencias'}>{incidentsOnly ? 'Volver a avisos' : 'Ver historial de incidencias'}</Link>
+        <p>{incidentsOnly ? 'Todas las incidencias que te avisamos, también las ya leídas.' : 'Ofertas, reservas, mensajes e incidencias.'} Horarios en {DEFAULT_TIME_ZONE}.</p>
+        {!incidentsOnly && <Link to="/incidencias">Ver historial de incidencias</Link>}
         {content}
       </div>
     </main>

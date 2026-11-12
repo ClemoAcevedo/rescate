@@ -219,7 +219,7 @@ try {
       await page.getByText(reservation.pickupCode, { exact: true }).waitFor()
       const before = await boxes(page, '.reservation-detail__refresh')
       hold = true
-      await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+      await page.getByRole('button', { name: 'Actualizar', exact: true }).click()
       await page.locator('.pickup-code .ui-skeleton').waitFor()
       assert.equal(await page.getByText(reservation.pickupCode, { exact: true }).count(), 0)
       sameGeometry(before, await boxes(page, '.reservation-detail__refresh'), ['x', 'y', 'width', 'height'], 'recarga pendiente')
@@ -228,16 +228,16 @@ try {
       sameGeometry(before, await boxes(page, '.reservation-detail__refresh'), ['x', 'y', 'width', 'height'], 'recarga finalizada')
       const facts = await boxes(page, '.reservation-detail__facts, .pickup-code')
       fail = true
-      await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+      await page.getByRole('button', { name: 'Actualizar', exact: true }).click()
       await page.getByText('Estado sin actualizar', { exact: true }).waitFor()
       sameGeometry(facts, await boxes(page, '.reservation-detail__facts, .pickup-code'), ['x', 'width', 'height'], 'reserva con error')
       assert.equal(await page.locator('.pickup-code .ui-skeleton').count(), 0, 'El error no deja una carga perpetua')
       fail = false
       await page.goto(base + '/espera/wait_ux')
-      await page.getByText('Oferta pendiente de aceptación', { exact: true }).waitFor()
+      await page.getByText('Oferta por aceptar', { exact: true }).waitFor()
       const waitFacts = await boxes(page, '.reservation-detail__facts')
       fail = true
-      await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+      await page.getByRole('button', { name: 'Actualizar', exact: true }).click()
       await page.getByText('Estado sin actualizar', { exact: true }).waitFor()
       sameGeometry(waitFacts, await boxes(page, '.reservation-detail__facts'), ['x', 'width', 'height'], 'espera con error')
       console.log(`OK ${width}px: recarga lenta/fallida conserva datos y dimensiones; código oculto`)

@@ -47,7 +47,8 @@ La lectura exige sesión, `Origin` y CSRF.
 
 La cabecera muestra «Avisos» con el total sin leer. `/avisos` lista la bandeja con título y
 texto según el tipo, el lote, la fecha y un indicador «Nuevo». Abrir un aviso lo marca como
-leído y lleva a la solicitud o la reserva. Las incidencias muestran las instrucciones en
+leído y lleva a la espera, la reserva o el chat; al chat le pasa el lote y quién mira
+para su encabezado. Las incidencias muestran las instrucciones en
 la tarjeta y permiten abrir un detalle propio o registrar lectura con confirmación y reintento.
 `/incidencias` conserva todas las versiones propias, también las leídas; consultar el detalle
 no registra lectura ni acredita cumplimiento de instrucciones. La bandeja y el contador consultan cada 15 s con la
