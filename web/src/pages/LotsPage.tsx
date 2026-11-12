@@ -8,9 +8,13 @@ import { LotCard } from '../components/lots/LotCard'
 import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { Input } from '../components/ui/FormControls'
+import { Input, Select } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
 import { discoveryError, searchPublicLots, type PublicLotPage } from '../services/discovery-service'
+
+// La categoría es texto libre en el contrato, así que solo se sugieren las más comunes
+const categorySuggestions = ['Panadería', 'Pastelería', 'Frutas y verduras', 'Almacén', 'Comida preparada', 'Lácteos']
+const radiusOptions = ['2', '5', '10', '25']
 
 type Filters = { category: string; latitude: string; longitude: string; radiusKm: string; pickupBefore: string }
 const emptyFilters: Filters = { category: '', latitude: '', longitude: '', radiusKm: '', pickupBefore: '' }
@@ -37,7 +41,7 @@ function LotsSearch() {
   const [retry, setRetry] = useState(0)
   const [locationMessage, setLocationMessage] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
-  const [locationOpen, setLocationOpen] = useState(Boolean(filters.latitude || filters.longitude || filters.radiusKm))
+  const [locationOpen, setLocationOpen] = useState(false)
   const filterErrorRef = useRef<HTMLDivElement>(null)
   const search = params.toString()
 
@@ -60,10 +64,11 @@ function LotsSearch() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (Boolean(filters.latitude.trim()) !== Boolean(filters.longitude.trim())) {
+      setLocationOpen(true)
       setFilterError('Completa latitud y longitud para buscar por zona, o deja ambas vacías.'); return
     }
     if (filters.radiusKm.trim() && !filters.latitude.trim()) {
-      setFilterError('Ingresa una zona para aplicar el radio.'); return
+      setFilterError('Usa tu ubicación o ingresa coordenadas para buscar por distancia.'); return
     }
     if (filters.pickupBefore && !localInputToInstant(filters.pickupBefore, DEFAULT_TIME_ZONE)) {
       setFilterError('Ingresa una fecha y hora de retiro válidas.'); return
@@ -79,14 +84,14 @@ function LotsSearch() {
     setLoading(true); setError(null); setResult(null); setParams(next); setRetry(value => value + 1)
   }
   const locate = () => {
-    if (!navigator.geolocation) { setLocationMessage('Tu navegador no ofrece geolocalización. Ingresa la zona mediante coordenadas.'); return }
-    setLocating(true); setLocationMessage(null); setLocationOpen(true)
+    if (!navigator.geolocation) { setLocationMessage('Tu navegador no permite usar tu ubicación. Puedes ingresar coordenadas.'); setLocationOpen(true); return }
+    setLocating(true); setLocationMessage(null)
     navigator.geolocation.getCurrentPosition(position => {
       setFilters(current => ({ ...current, latitude: String(position.coords.latitude.toFixed(5)),
         longitude: String(position.coords.longitude.toFixed(5)), radiusKm: current.radiusKm || '10' }))
-      setLocationMessage('Ubicación completada. Pulsa Buscar para aplicarla. La distancia es aproximada.')
+      setLocationMessage('Ubicación lista. Pulsa Buscar lotes para ver los más cercanos.')
       setLocating(false)
-    }, () => { setLocationMessage('No se obtuvo tu ubicación. Puedes buscar sin ella o ingresar las coordenadas manualmente.'); setLocating(false) },
+    }, () => { setLocationMessage('No se obtuvo tu ubicación. Puedes buscar sin ella o ingresar coordenadas.'); setLocating(false) },
     { timeout: 15000, maximumAge: 60000 })
   }
   const change = (key: keyof Filters, value: string) => setFilters(current => ({ ...current, [key]: value }))
@@ -97,6 +102,8 @@ function LotsSearch() {
     return `?${next}`
   }
   const hasFilters = Object.values(filters).some(value => value.trim()) || search !== ''
+  // Un radio que llegó por URL y no está en la lista se conserva como opción
+  const radii = filters.radiusKm && !radiusOptions.includes(filters.radiusKm) ? [...radiusOptions, filters.radiusKm] : radiusOptions
   return <main className="page-content"><div className="explore-page">
     <header className="explore-hero">
       <div className="explore-hero__text">
@@ -113,20 +120,24 @@ function LotsSearch() {
     <Card as="section" className="explore-filters" aria-label="Filtros de búsqueda">
       <form className="explore-filters__form" onSubmit={submit}>
         <div className="explore-filters__main">
-          <FormField label="Categoría">{control => <Input {...control} maxLength={100} value={filters.category} onChange={event => change('category', event.target.value)} placeholder="Ej. Panadería" />}</FormField>
-          <FormField label="Retiro comienza antes de" hint={`Horario en ${DEFAULT_TIME_ZONE}.`}>{control => <Input {...control} type="datetime-local" value={filters.pickupBefore} onChange={event => change('pickupBefore', event.target.value)} />}</FormField>
+          <FormField label="Categoría">{control => <Input {...control} list="explore-categories" maxLength={100} value={filters.category} onChange={event => change('category', event.target.value)} placeholder="Todas" />}</FormField>
+          <datalist id="explore-categories">{categorySuggestions.map(category => <option key={category} value={category} />)}</datalist>
+          <FormField label="Retiro comienza antes de">{control => <Input {...control} type="datetime-local" value={filters.pickupBefore} onChange={event => change('pickupBefore', event.target.value)} />}</FormField>
           <Button type="submit" loading={loading}>{loading ? 'Buscando…' : 'Buscar lotes'}</Button>
+          <p className="explore-filters__note">Horarios en {DEFAULT_TIME_ZONE}.</p>
         </div>
         <div className="explore-filters__location">
-          <Button variant="secondary" loading={locating} onClick={locate}>{locating ? 'Buscando ubicación…' : 'Usar mi ubicación'}</Button>
-          <p>Tu ubicación es opcional. También puedes ingresar una zona a mano.</p>
+          <FormField label="Distancia (opcional)">{control => <Select {...control} value={filters.radiusKm} onChange={event => change('radiusKm', event.target.value)}>
+            <option value="">Cualquier distancia</option>
+            {radii.map(radius => <option key={radius} value={radius}>Hasta {radius} km</option>)}
+          </Select>}</FormField>
+          <Button variant="secondary" loading={locating} onClick={locate}><Icon name="pin" />{locating ? 'Buscando ubicación…' : 'Usar mi ubicación'}</Button>
         </div>
         <details className="explore-zone" open={locationOpen} onToggle={event => setLocationOpen(event.currentTarget.open)} onInvalidCapture={event => { event.currentTarget.open = true }}>
-          <summary>Zona y radio de búsqueda</summary>
+          <summary>Ingresar coordenadas</summary>
           <div className="explore-filters__fields">
             <FormField label="Latitud de la zona" hint="Ejemplo: -33.45">{control => <Input {...control} type="number" step="any" min={-90} max={90} value={filters.latitude} onChange={event => change('latitude', event.target.value)} />}</FormField>
             <FormField label="Longitud de la zona" hint="Ejemplo: -70.66">{control => <Input {...control} type="number" step="any" min={-180} max={180} value={filters.longitude} onChange={event => change('longitude', event.target.value)} />}</FormField>
-            <FormField label="Radio (km)" hint="Hasta 100 km. Completa ambas coordenadas.">{control => <Input {...control} type="number" step="any" min="0.1" max="100" value={filters.radiusKm} onChange={event => change('radiusKm', event.target.value)} />}</FormField>
           </div>
         </details>
         {filterError && <div ref={filterErrorRef} tabIndex={-1}><Alert tone="danger" role="alert">{filterError}</Alert></div>}

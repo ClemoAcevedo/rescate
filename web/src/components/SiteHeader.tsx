@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Button } from './ui/Button'
 import { Icon } from './Icon'
@@ -33,9 +33,21 @@ export function SiteHeader() {
   const closeMenu = () => setIsMenuOpen(false)
   // El enlace orienta la navegación; la API vuelve a comprobar la membresía en cada operación.
   const isOperator = Boolean(session && session.operableEstablishments.length > 0)
-  const navigationItems = session
-    ? [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/espera', label: 'Mis esperas', end: false }, { to: '/reservas', label: 'Mis reservas', end: false }, ...(isOperator ? [{ to: '/operador/panel', label: 'Mi establecimiento', end: true }, { to: '/operador/lotes', label: 'Mis lotes', end: true }] : [])]
-    : [{ to: '/lotes', label: 'Explorar lotes', end: false }, { to: '/registro', label: 'Registro', end: false }]
+  const navLink = (to: string, label: ReactNode, end = false) => (
+    <NavLink
+      key={to}
+      end={end}
+      className={({ isActive }) =>
+        isActive
+          ? 'main-navigation__link main-navigation__link--active'
+          : 'main-navigation__link'
+      }
+      to={to}
+      onClick={closeMenu}
+    >
+      {label}
+    </NavLink>
+  )
 
   return (
     <div className="site-header-bar">
@@ -65,37 +77,44 @@ export function SiteHeader() {
         className={isMenuOpen ? 'main-navigation main-navigation--open' : 'main-navigation'}
         aria-label="Navegación principal"
       >
-        {navigationItems.map(({ to, label, end }) => (
-          <NavLink
-            key={to}
-            end={end}
-            className={({ isActive }) =>
-              isActive
-                ? 'main-navigation__link main-navigation__link--active'
-                : 'main-navigation__link'
-            }
-            to={to}
-            onClick={closeMenu}
-          >
-            {label}
-          </NavLink>
-        ))}
-        {session && <NotificationsLink key={session.user.id} onNavigate={closeMenu} />}
-        {isOperator && (
-          <NavLink className="ui-button ui-button--primary main-navigation__cta" to="/operador/lotes/nuevo" onClick={closeMenu}>
-            <Icon name="plus" />Publicar lote
-          </NavLink>
+        {session ? (
+          <>
+            <div className="main-navigation__group" role="group" aria-labelledby="navigation-rescue">
+              <p className="main-navigation__heading" id="navigation-rescue">Rescatar</p>
+              {navLink('/lotes', 'Explorar lotes')}
+              {navLink('/espera', 'Mis esperas')}
+              {navLink('/reservas', 'Mis reservas')}
+            </div>
+            {isOperator && (
+              <div className="main-navigation__group" role="group" aria-labelledby="navigation-establishment">
+                <p className="main-navigation__heading" id="navigation-establishment">Mi establecimiento</p>
+                {/* En el menú móvil el grupo ya dice «Mi establecimiento», así que el enlace se acorta a «Panel» */}
+                {navLink('/operador/panel', <><span className="main-navigation__wide">Mi establecimiento</span><span className="main-navigation__compact">Panel</span></>, true)}
+                {navLink('/operador/lotes', 'Mis lotes', true)}
+                <NavLink className="ui-button ui-button--primary main-navigation__cta" to="/operador/lotes/nuevo" onClick={closeMenu}>
+                  <Icon name="plus" />Publicar lote
+                </NavLink>
+              </div>
+            )}
+            <div className="main-navigation__group main-navigation__account" role="group" aria-labelledby="navigation-account">
+              <p className="main-navigation__heading" id="navigation-account">Tu cuenta</p>
+              <NotificationsLink key={session.user.id} onNavigate={closeMenu} />
+              <span className="session-status" title={session.user.email}>
+                <span className="session-status__avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
+                <span className="session-status__email"><span className="visually-hidden">Sesión: </span>{session.user.email}</span>
+              </span>
+              <Button variant="ghost" loading={status === 'signing-out'} onClick={() => { void logout() }}>Cerrar sesión</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            {navLink('/lotes', 'Explorar lotes')}
+            {navLink('/registro', 'Registro')}
+            {status !== 'checking' && (
+              <NavLink className="ui-button ui-button--secondary main-navigation__cta" to="/login" onClick={closeMenu}>Iniciar sesión</NavLink>
+            )}
+          </>
         )}
-        {!session && status !== 'checking' && (
-          <NavLink className="ui-button ui-button--secondary main-navigation__cta" to="/login" onClick={closeMenu}>Iniciar sesión</NavLink>
-        )}
-        {session && (
-          <span className="session-status" title={session.user.email}>
-            <span className="session-status__avatar" aria-hidden="true">{session.user.email.slice(0, 1).toUpperCase()}</span>
-            <span className="session-status__email"><span className="visually-hidden">Sesión: </span>{session.user.email}</span>
-          </span>
-        )}
-        {session && <Button variant="ghost" loading={status === 'signing-out'} onClick={() => { void logout() }}>Cerrar sesión</Button>}
       </nav>
     </header>
     </div>

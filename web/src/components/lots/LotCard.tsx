@@ -6,7 +6,7 @@ import { Icon } from '../Icon'
 import { LotPhoto } from './LotPhoto'
 
 function availabilityLabel(available: number) {
-  return available > 0 ? `${available} ${available === 1 ? 'pack libre' : 'packs libres'}` : 'Sin stock'
+  return available > 0 ? `${available} ${available === 1 ? 'pack libre' : 'packs libres'}` : 'Sin packs libres'
 }
 
 /** Tarjeta de exploración. No es clicable completa: el título es el enlace real al detalle. */

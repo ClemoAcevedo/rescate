@@ -49,7 +49,7 @@ function ReviewOutcome({ review, lot }: { review: Review; lot: LotResponse }) {
   if (!canConfirm) {
     return <Alert tone="warning" role="status">La ventana de retiro aún no comienza. Podrás confirmar desde {formatInstant(lot.pickupStartsAt, lot.timeZone)}.</Alert>
   }
-  return <Alert tone="info" role="status">La reserva está vigente. Entrega {packs(reservation.quantity)} completos y confirma el retiro.</Alert>
+  return <Alert tone="info" role="status">La reserva está vigente. Entrega {packs(reservation.quantity)} y confirma el retiro.</Alert>
 }
 
 function PickupDesk({ lot, csrfToken }: { lot: LotResponse; csrfToken: string }) {
@@ -179,7 +179,7 @@ function PickupDesk({ lot, csrfToken }: { lot: LotResponse; csrfToken: string })
                 {phase === 'confirming' ? 'Confirmando…' : unknownOutcome ? 'Reintentar confirmación' : `Confirmar retiro de ${packs(review.reservation.quantity)}`}
               </Button>
             )}
-            <Button variant="ghost" disabled={locked} onClick={reset}>Revisar otro código</Button>
+            <Button variant="secondary" disabled={locked} onClick={reset}>Revisar otro código</Button>
           </div>
         </Card>
       )}
