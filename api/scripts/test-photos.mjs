@@ -324,7 +324,7 @@ try {
   assert.deepEqual((await query('SELECT status FROM lot_photos WHERE public_id = $1', [waiting.publicId]))[0], { status: 'pending' })
   assert.deepEqual((await listObjects()).filter(key => key.includes(waiting.publicId)), [photoObjectKeys(waiting.publicId).upload])
   for (const [actor, variant] of [[operator, 'display'], [operator, 'thumbnail'], [null, 'display']]) {
-    await rejects(`${actor ? 'operador' : 'visitante'} lee ${variant} de foto en validación`,photos.read(actor, lot.publicId, waiting.publicId, variant), 'photo_not_found')
+    await rejects(`${actor ? 'operador' : 'visitante'} lee ${variant} de foto en validación`, photos.read(actor, lot.publicId, waiting.publicId, variant), 'photo_not_found')
   }
   await rejects('publicar con el worker detenido', lots.publish(operator, { publicId: lot.publicId, expectedVersion: 1 }), 'photo_not_ready')
   assert.equal(await photos.processNext(), true)
