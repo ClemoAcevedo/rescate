@@ -36,6 +36,11 @@ de mostrarlo aunque el borrado no haya corrido. Una vez al día el worker borra 
 conversaciones y conserva la fila sin texto como resultado del envío, para que un reintento
 tardío siga respondiendo lo mismo. Borrar otra vez no cambia nada.
 
+El borrado solo quita el texto. El compromiso, la entrega, los avisos de mensajes y los
+destinatarios de incidencias se conservan durante el piloto (anexos H p. 21), así que una
+incidencia publicada después del borrado igual avisa a quien retiró y sus instrucciones se
+leen sin el chat.
+
 ## Contrato HTTP
 
 | Método | Ruta | Resultado |
@@ -69,7 +74,8 @@ la API vuelve a comprobarlo bajo bloqueo al enviar.
 
 `npm --prefix api run db:test:chat:compose` crea una base aislada, la migra y recorre por la API
 real la conversación, los reintentos, el acceso ajeno, el límite, los envíos simultáneos, la
-carrera con cancelar, los cierres por vencimiento, retiro del lote y entrega, y la retención.
+carrera con cancelar, los cierres por vencimiento, retiro del lote y entrega, la retención y
+el aviso de una incidencia publicada después del borrado.
 
 Con Vite iniciado, `npm --prefix api run test:web:chat` comprueba con HTTP controlado
 dos contextos de navegador, respuesta perdida, reintento con la misma clave,

@@ -114,8 +114,9 @@ El worker revisa cada minuto:
 
 Así los originales y las cargas abandonadas desaparecen en minutos, dentro del plazo de
 24 h de E1. Una carga que termina después de vencer no se confirma (409) y borra su
-objeto. Si el operador quita una foto durante su validación, el worker borra lo que
-alcanzó a escribir.
+objeto. Si la API se detiene después de escribir el temporal y antes de confirmar, la fila
+sigue en carga y la limpieza borra el objeto cuando vence la reserva. Si el operador quita
+una foto durante su validación, el worker borra lo que alcanzó a escribir.
 
 **Reinicio.** Reclamar una foto confirma de inmediato el reclamo de 2 minutos; la
 validación ocurre sin transacciones abiertas. Si el worker se detiene, otro proceso
@@ -134,7 +135,7 @@ Ley 19.628):
 | --- | --- |
 | Proporcionalidad | La imagen y la miniatura se vuelven a codificar sin EXIF, XMP ni ICC: GPS, fecha, dispositivo y autor no llegan a nadie. Lo prueban `photos-domain.test.ts`, con un fixture que trae GPS y autor, y `db:test:photos` sobre la imagen que sirve la API. |
 | Finalidad | Del EXIF solo se usa la orientación, para girar la imagen. El resto no se lee ni se guarda en la base. |
-| Temporalidad | El original con EXIF es un objeto temporal que se borra apenas termina la validación, y la limpieza lo revisa cada minuto. Si el worker está detenido, el original espera en el bucket privado hasta que vuelva; no se sirve ni entra al respaldo. K051 (#54) prueba esa retención. |
+| Temporalidad | El original con EXIF es un objeto temporal que se borra apenas termina la validación, y la limpieza lo revisa cada minuto. Si el worker está detenido, el original espera en el bucket privado hasta que vuelva: no se sirve, no permite publicar y no entra al respaldo. El plazo de 24 h de E1 rige para temporales sin registro; este original tiene su fila y se borra al validarse. |
 | Seguridad | El bucket es privado y la API solo entrega imagen y miniatura, nunca el original. Las claves de objeto usan el ID aleatorio de la foto, no el nombre del archivo, y los registros guardan códigos, no metadatos. |
 
 ## Configuración
@@ -208,20 +209,22 @@ adaptador local del prototipo.
 
 ## Respaldo
 
-`pg_dump` no guarda bytes de fotos. E1 (anexos I p. 28) pide copias separadas de las
-imágenes finales con un manifiesto de referencias y ensayar la restauración; ese
-procedimiento corresponde a K053 (#56). Los originales temporales no forman parte del
-respaldo.
+Las fotos viven en el bucket B2, fuera de Railway: desplegar la API o el worker no las
+toca, y `PHOTO_STORAGE=local` se rechaza en producción. `pg_dump` no guarda bytes de
+fotos. E1 (anexos I p. 28) pide copias separadas de las imágenes finales con un
+manifiesto de referencias y ensayar la restauración; ese procedimiento corresponde a
+K053 (#56). Los originales temporales no forman parte del respaldo.
 
 ## Pruebas
 
 | Comando | Qué comprueba |
 | --- | --- |
-| `npm --prefix api test` | Firmas, APNG, SVG, animaciones, 20 MP, truncados, EXIF eliminado, orientación y límites de salida con sharp real; transporte HTTP (401, 403, 413 declarado y por streaming sin cortar la conexión, 415, 422, 429) contra OpenAPI; D-05 en Domain. |
-| `npm --prefix api run test:web:compose` | Formulario del operador en Chromium con la API y un worker reales: tipo no permitido sin enviar, archivo falso (422), imagen animada rechazada por el worker, JPEG listo con miniatura, quitar, 422 por foto no lista desde otra pestaña, publicación con fotos, galería con ambas fotos y reemplazo en el detalle público. La comprobación de galería retrasa la respuesta de sesión real para verificar también la recarga del detalle al autenticar al actor. |
-| `npm --prefix api run db:test:photos:compose` | PostgreSQL real y objetos en disco: acceso ajeno, archivos falsos y grandes, límites de 3 fotos y 2 cargas, publicación bloqueada hasta quitar la rechazada, reinicio con reclamo vencido sin duplicar, tres intentos, carga vencida limpiada, foto quitada durante la validación, recorrido HTTP con sesión/CSRF y proceso real del worker con un archivo de 20 MP y 4,3 MiB (memoria máxima medida y SIGTERM). Termina con un inventario: solo quedan salidas de fotos listas. |
+| `npm --prefix api test` | Firmas, APNG, SVG, animaciones, 20 MP, truncados, EXIF eliminado, orientación y límites de salida con sharp real; transporte HTTP (401, 403, 413 declarado y por streaming sin cortar la conexión, 415, 422, 429) contra OpenAPI; D-05 en Domain; almacenamiento local rechazado en producción. |
+| `npm --prefix api run test:web:compose` | Formulario del operador en Chromium con la API y un worker reales: tipo no permitido y archivo de más de 5 MiB sin enviar, archivo falso (422), imagen animada rechazada por el worker, JPEG listo con miniatura, quitar, 422 por foto no lista desde otra pestaña, publicación con fotos, galería con ambas fotos y reemplazo en el detalle público. La comprobación de galería retrasa la respuesta de sesión real para verificar también la recarga del detalle al autenticar al actor. |
+| `npm --prefix api run db:test:photos:compose` | PostgreSQL real y objetos en disco: acceso ajeno y membership revocada, archivos falsos y grandes, HTML con firma JPEG y PNG liso de 20,5 MP rechazados por el worker, límites de 3 fotos y 2 cargas, publicación bloqueada hasta quitar la rechazada, reinicio con reclamo vencido sin duplicar, tres intentos, carga vencida limpiada, temporal escrito por una API detenida antes de confirmar, worker detenido 25 h sin servir el original, foto quitada durante la validación, recorrido HTTP con sesión/CSRF (una foto en validación responde 404 en todas sus rutas) y proceso real del worker con un archivo de 20 MP y 4,3 MiB (memoria máxima medida y SIGTERM). Termina con un inventario: solo quedan salidas de fotos listas. |
+| `npm --prefix api run test:deploy` | Después de cada deploy de producción, cada imagen y miniatura de los lotes publicados responde 200 WebP. Solo lee. |
 
-Ambos corren en CI.
+Las tres primeras corren en CI y `test:deploy`, en el workflow de deploy.
 
 Una carga de más de 5 MiB recibe 413 apenas se sabe, por el `Content-Length` o al leer.
 La API no corta la conexión en ese momento, porque cerrar con bytes sin leer manda un
