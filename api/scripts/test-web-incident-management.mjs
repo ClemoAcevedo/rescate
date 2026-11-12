@@ -85,7 +85,7 @@ try {
   const reason = `El pan llegó con moho ${run}`
   const holderPage = watch(await holder.context.newPage())
   await holderPage.goto(`${baseUrl}/reservas/${reserved.body.id}`)
-  await holderPage.getByRole('link', { name: 'Reportar un problema con este lote' }).click()
+  await holderPage.getByRole('link', { name: 'Reportar un problema' }).click()
   await holderPage.waitForURL(new RegExp(`/lotes/${lot}/reportar$`))
   await holderPage.getByText(title).waitFor()
   // Vacío lo bloquea el navegador (campo obligatorio); solo espacios lo rechaza la página sin enviar.

@@ -86,7 +86,7 @@ try {
           release()
         }
         if (scenario === 'lost') {
-          await page.getByText(/No se recibió la confirmación/).waitFor()
+          await page.getByText(/No pudimos confirmar si se canceló/).waitFor()
           assert.equal(await page.getByText('Cancelada', { exact: true }).count(), 0)
           assert.equal(await page.locator('.pickup-code').count(), 0)
           await page.getByRole('button', { name: 'Reintentar cancelación' }).click()
@@ -96,7 +96,7 @@ try {
           await page.getByText(scenario === 'conflict' ? /La reserva ya terminó/ : /rechazada por seguridad/).waitFor()
           assert.equal(await page.locator('.pickup-code').count(), 0)
           assert.equal(await page.getByText('Cancelada', { exact: true }).count(), 0)
-          await page.getByRole('button', { name: 'Consultar estado actualizado' }).click()
+          await page.getByRole('button', { name: 'Actualizar', exact: true }).click()
           await page.getByText(scenario === 'conflict' ? 'Retirada' : confirmed.pickupCode, { exact: true }).waitFor()
         } else await page.getByText('Cancelada', { exact: true }).waitFor()
       }
@@ -128,14 +128,14 @@ try {
     throw new Error(`Ruta inesperada: ${path}`)
   })
   await page.goto(`${base}/lotes/lot_test`)
-  await page.getByRole('button', { name: 'Confirmar reserva' }).click()
-  await page.getByRole('button', { name: 'Comprobar la misma solicitud' }).waitFor()
+  await page.getByRole('button', { name: 'Reservar 1 pack' }).click()
+  await page.getByRole('button', { name: 'Comprobar mi reserva' }).waitFor()
   await page.reload()
-  await page.getByRole('button', { name: 'Comprobar la misma solicitud' }).waitFor()
+  await page.getByRole('button', { name: 'Comprobar mi reserva' }).waitFor()
   assert.equal(await page.getByRole('spinbutton').isDisabled(), true)
   recover = true
-  await page.getByRole('button', { name: 'Comprobar la misma solicitud' }).click()
-  await page.getByRole('link', { name: 'Ver mi reserva' }).click()
+  await page.getByRole('button', { name: 'Comprobar mi reserva' }).click()
+  await page.getByRole('link', { name: 'Ver mi código de retiro' }).click()
   await page.getByText('Vencida', { exact: true }).waitFor()
   assert.equal(await page.locator('.pickup-code').count(), 0)
   assert.equal(creations, 1)

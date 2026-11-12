@@ -50,13 +50,13 @@ try {
   const [holder, operator] = pages
   await holder.getByRole('textbox', { name: 'Mensaje (obligatorio)', exact: true }).fill('Hola desde titular')
   await holder.getByRole('button', { name: 'Enviar mensaje', exact: true }).click()
-  await holder.getByText('Pendiente de confirmación…', { exact: true }).waitFor()
+  await holder.getByText('Enviando…', { exact: true }).waitFor()
   assert.equal(await holder.getByRole('button', { name: 'Enviar mensaje', exact: true }).isDisabled(), true)
   releaseFirst()
-  await holder.getByRole('button', { name: 'Reintentar el mismo mensaje' }).click()
+  await holder.getByRole('button', { name: 'Reintentar', exact: true }).click()
   await holder.locator('.chat__messages li').filter({ hasText: 'Hola desde titular' }).waitFor()
   assert.equal(messages.length, 1)
-  await operator.getByRole('button', { name: 'Consultar conversación' }).click()
+  await operator.getByRole('button', { name: 'Actualizar', exact: true }).click()
   await operator.locator('.chat__messages li').filter({ hasText: 'Hola desde titular' }).waitFor()
   await holder.context().setOffline(true)
   await operator.getByRole('textbox', { name: 'Mensaje (obligatorio)', exact: true }).fill('Respuesta del local')
@@ -96,7 +96,7 @@ try {
   await resumed
   assert.ok(count() > before)
   open = false
-  await holder.getByRole('button', { name: 'Consultar conversación' }).click()
+  await holder.getByRole('button', { name: 'Actualizar', exact: true }).click()
   await holder.getByText(/Conversación cerrada/).waitFor()
   assert.equal(await holder.getByRole('textbox', { name: 'Mensaje (obligatorio)', exact: true }).isDisabled(), true)
   assert.equal(await holder.getByRole('button', { name: 'Enviar mensaje', exact: true }).isDisabled(), true)
