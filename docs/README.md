@@ -27,7 +27,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Base de datos | [Migraciones](migraciones.md) |
 | Rendimiento, carga e integridad | [Rendimiento](rendimiento.md) |
 | Accesibilidad y comprensión | [Revisión y protocolo](accesibilidad.md) |
-| Demo de entrega y recorridos con personas | [Demo E3](demo-e3.md) |
+| Uso de la aplicación por rol | [Manual de uso](manual.md) |
+| Demo de entrega y recorridos con personas | [Demo](demo.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 
 ## Decisiones (ADR)

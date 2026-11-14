@@ -1,18 +1,20 @@
 # Demo de entrega y recorridos
 
-La demo de E3 se presenta en producción con cuentas y lotes ficticios del
-establecimiento «Panadería Demo Rescate». Muestra reserva, espera con oferta, chat y
-retiro, y termina en el panel del establecimiento. Los recorridos moderados con
-personas siguen el [protocolo de accesibilidad](accesibilidad.md#protocolo-de-cinco-recorridos)
-en una instancia local.
+La demo final se presenta en producción con cuentas y lotes ficticios del establecimiento
+«Panadería Demo Rescate». Recorre RF01 a RF13 con tres cuentas separadas: publicación con
+foto, búsqueda, reserva, espera con oferta, cancelación, chat, retiro, una incidencia
+después de entregar, vencimientos y el panel. Cada paso usa las funciones del
+[manual](manual.md). Los recorridos moderados con personas siguen el
+[protocolo de accesibilidad](accesibilidad.md#protocolo-de-cinco-recorridos) en una
+instancia local.
 
 ## Cuentas
 
 | Cuenta | Rol en la demo |
 | --- | --- |
-| `operador.e3@rescate.test` | Operador de «Panadería Demo Rescate»: publica, chatea, valida el retiro y abre el panel |
+| `operador.e3@rescate.test` | Operador de «Panadería Demo Rescate»: publica, chatea, valida el retiro, gestiona la incidencia y abre el panel |
 | `persona.a.e3@rescate.test` | Persona A: reserva el lote completo y luego cancela |
-| `persona.b.e3@rescate.test` | Persona B: entra a la espera, acepta la oferta, chatea y retira |
+| `persona.b.e3@rescate.test` | Persona B: espera, acepta la oferta, chatea, retira y reporta un problema |
 
 Las tres usan la misma contraseña, que el equipo comparte por un canal privado; no se
 guarda en el repositorio. El dominio `.test` no recibe correo, por lo que una
@@ -33,62 +35,78 @@ pipeline de despliegue.
 
 ## Preparación
 
-**Antes del día.** Ensayar el guion completo en producción y grabarlo como respaldo.
-El ensayo confirma que las tres sesiones desde una misma red no alcanzan los
-[límites de tráfico](seguridad.md#límites).
+**Antes del día.** Ensayar el guion completo, primero en local (ver más abajo) y luego en
+producción, y grabarlo como respaldo. El ensayo en producción confirma que las tres
+sesiones desde una misma red no alcanzan los [límites de tráfico](seguridad.md#límites).
+Tener a mano una foto del pack (JPEG, PNG o WebP de hasta 5 MiB).
 
-`npm --prefix api run demo:e3` prepara los lotes por la API pública con las cuentas
-del operador y de A, igual que la web. Exige `WEB_URL` (el origen HTTPS, sin ruta) y
-`DEMO_PASSWORD`, y se detiene si el establecimiento ya tiene un lote con la ventana
-abierta, para que el panel y la búsqueda muestren un solo lote durante el guion.
-`--foto` agrega una foto JPEG, PNG o WebP antes de publicar.
+`npm --prefix api run demo` prepara datos por la API pública con las cuentas de la demo,
+igual que la web. Exige `WEB_URL` (el origen HTTPS, sin ruta) y `DEMO_PASSWORD`, y se
+detiene si el establecimiento ya tiene un lote con la ventana abierta, para que el panel y
+la búsqueda muestren un solo lote durante el guion. `--foto` agrega una foto antes de
+publicar.
 
 ```bash
 WEB_URL=https://rescate-rescate1.vercel.app DEMO_PASSWORD='…' \
-  npm --prefix api run demo:e3 -- previo --foto pan.jpg
+  npm --prefix api run demo -- previo --foto pan.jpg
 ```
 
-**Resultados del período.** El panel muestra por defecto los últimos 7 días con hoy
-incluido y solo cuenta lotes cerrados ([panel](panel.md)). Con al menos una hora de
-anticipación, `previo` publica un lote de 2 packs cuya ventana termina en 20 minutos
-(`--minutos`), A reserva 1 pack y el operador registra su retiro. Al cerrar, el
-período muestra ese lote: 1 pack retirado, 1 no asignable y la reserva retirada.
+**Al menos una hora antes.** El panel muestra por defecto los últimos 7 días con hoy
+incluido y solo cuenta lotes cerrados ([panel](panel.md)). `previo` publica un lote de 2
+packs cuya ventana termina en 20 minutos (`--minutos`): A reserva 1 pack y el operador
+registra su retiro; B reserva el otro y no lo retira. Al cerrar, B tiene una reserva
+«Vencida» (RF08) y el período muestra ese lote: 1 pack retirado, 1 no asignable, una
+reserva retirada y una vencida.
 
-**Minutos antes.**
-
-1. `en-vivo` publica el lote del guion: 2 packs, con una ventana que ya comenzó y
-   termina en 3 horas (`--horas`). Retirar exige que la ventana haya comenzado, y una
-   oferta no se emite con menos de un minuto de ventana. A reserva los 2 packs y el
-   lote queda sin packs libres.
-2. Abrir una ventana privada o un perfil de navegador por cuenta, con la sesión
-   iniciada: A y B en ancho móvil, el operador en escritorio.
-
-Para ensayar contra una instancia local, `WEB_URL=https://localhost:5174` con
-`NODE_EXTRA_CA_CERTS` apuntando al certificado de Vite y las mismas cuentas y
-membership en la base local.
+**Minutos antes.** Abrir una ventana privada o un perfil de navegador por cuenta, con la
+sesión iniciada: A y B en ancho móvil, el operador en escritorio. Si no habrá tiempo para
+publicar en vivo, `en-vivo` deja publicado el lote del guion (2 packs, ventana de 3 horas,
+`--horas`) con los 2 packs reservados por A: el paso 2 se muestra sobre ese lote ya
+publicado y el paso 3 sobre la reserva ya hecha.
 
 ## Guion
 
-| Paso | Quién | Qué se muestra |
-| --- | --- | --- |
-| 1. Reserva | A | «Mis reservas» y el detalle: primero el estado y el código de retiro, luego cantidad, lugar y ventana. |
-| 2. Espera | B | «Explorar lotes»: el lote no tiene packs libres. «Unirme a la lista de espera», 1 pack y de nuevo «Unirme a la lista de espera»; «Mis esperas» muestra su lugar en la lista. La espera no retiene packs. |
-| 3. Cancelación y oferta | A, luego B | A elige «Cancelar reserva» y confirma; el código deja de servir. B recibe la oferta por 1 pack en su espera y en «Avisos», con la cuenta regresiva de diez minutos, y elige «Aceptar 1 pack». Aceptar crea su reserva y cierra su espera. |
-| 4. Chat | B y operador | B usa «Chat de la reserva» en el detalle y escribe al establecimiento. El operador lo ve en «Avisos» o en los compromisos de «Mi establecimiento» y responde. |
-| 5. Retiro | Operador | «Validar retiros» desde «Mis lotes»: escribe el código que muestra B, revisa la reserva y confirma la entrega. El chat queda cerrado. |
-| 6. Panel | Operador | «Mi establecimiento»: el lote en vivo con 1 pack retirado y 1 libre, los compromisos de A y B, el historial de la sesión y los resultados del período. |
+| Paso | Quién | Qué se muestra | RF |
+| --- | --- | --- | --- |
+| 1. Cuentas | Todos | «Registro» muestra el consentimiento del correo sin enviarlo. El operador ve el grupo «Mi establecimiento» en el menú; A y B no. | RF01 |
+| 2. Publicación | Operador | «Publicar lote»: 2 packs, una ventana que ya comenzó y termina después de la presentación. «Guardar borrador», «Agregar foto» hasta que deja de estar «En validación», «Publicar lote» y «Confirmar publicación». Publicado, el lote queda fijo. | RF02 |
+| 3. Búsqueda y reserva | A | «Explorar lotes» con la ubicación o la categoría; el detalle con foto, «Tu retiro» y condiciones. «Reservar 2 packs» y «Ver mi código de retiro». | RF03, RF04 |
+| 4. Espera | B | El lote muestra «Sin packs libres». «Unirme a la lista de espera» por 1 pack; «Mis esperas» muestra su lugar. La espera no retiene packs. | RF07 |
+| 5. Cancelación y oferta | A, luego B | A elige «Cancelar reserva» y «Confirmar cancelación»; el código deja de servir. B recibe la oferta en «Avisos» con su plazo de diez minutos y elige «Aceptar 1 pack». | RF05, RF07, RF09 |
+| 6. Chat | B y operador | B abre «Chat de la reserva» y escribe. El operador recibe el aviso del mensaje y responde desde «Avisos» o los compromisos de «Mi establecimiento». | RF13, RF09 |
+| 7. Retiro | Operador | «Validar retiros»: escribe el código que muestra B, «Revisar código» y «Confirmar retiro de 1 pack». La conversación queda cerrada. | RF06 |
+| 8. Incidencia | B, operador, A | B elige «Reportar un problema» en su reserva retirada. El operador la ve en «Incidencias por revisar», la publica con instrucciones y ve los avisos pendientes, generados y leídos. B (con entrega) y A (sin entrega) reciben el «Aviso de incidencia»; B lo marca como leído. El operador elige «Resolver incidencia». | RF11, RF09 |
+| 9. Vencimiento | B | «Mis reservas» muestra la reserva de `previo` como «Vencida», sin código. | RF08 |
+| 10. Panel | Operador | «Mi establecimiento»: el lote con 1 pack retirado y 1 libre, compromisos e historial de la sesión, y los resultados del período con las tasas de retiro y de vencimiento. | RF10, RF12 |
 
-La oferta vence a los diez minutos. Si vence, B pierde la posición y debe volver a
-entrar a la espera; el guion continúa con una nueva oferta.
+La oferta vence a los diez minutos. Si vence, B pierde su lugar y vuelve a unirse a la
+espera; A puede reservar de nuevo para repetir el paso 5. Para mostrar un estado de error,
+tras el paso 7 la conversación responde «Conversación cerrada…» y revisar el mismo código
+muestra la reserva como «Retirada».
 
 ## Fuera de la demo
 
 No se muestran ni se anuncian como disponibles:
 
-- Incidencias del lote y sus avisos en el panel ([#46](https://github.com/ClemoAcevedo/rescate/issues/46), [#48](https://github.com/ClemoAcevedo/rescate/issues/48)).
 - Recuperación de contraseña y administración de establecimientos y memberships desde
   la aplicación.
 - Coordenadas precargadas o elegidas en un mapa ([#97](https://github.com/ClemoAcevedo/rescate/issues/97)).
+
+## Ensayo local
+
+La instancia de los recorridos sirve para ensayar el guion sin tocar producción. Las cuentas
+cambian, pero los pasos son los mismos:
+
+1. `npm --prefix api run recorridos:e3` levanta la instancia en `https://localhost:5174`
+   (ver [recorridos moderados](#recorridos-moderados)) e imprime la contraseña local.
+2. `preparar P01` y luego `preparar P02` registran `participante.p01@example.test` (A) y
+   `participante.p02@example.test` (B). El operador es `operador.recorridos@example.test`,
+   de «Panadería de prueba».
+3. Se recorre el guion desde el paso 1 en tres ventanas. Los dos lotes de `preparar P02`
+   siguen visibles en «Explorar lotes»; el guion usa el que publica el operador en el paso 2.
+4. Los pasos 9 y 10 dependen de `previo`, que solo se prepara en producción: en local, el
+   vencimiento se ve al publicar un lote con una ventana corta y esperar su cierre.
+5. `salir` detiene los servicios.
 
 ## Recorridos moderados
 

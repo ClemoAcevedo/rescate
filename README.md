@@ -284,9 +284,10 @@ lo cambia.
   medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
   ajenas a la implementación. `recorridos:e3` levanta una instancia local con datos
   propios por participante para esas sesiones (K040).
-- **Demo E3:** cuentas y establecimiento ficticios en producción, preparación de lotes
-  por la API pública con `demo:e3` y guion de reserva, espera, chat y retiro
-  ([demo](docs/demo-e3.md), K040).
+- **Demo y manual:** [manual de uso](docs/manual.md) por rol con RF01 a RF13 y estados de
+  error; cuentas y establecimiento ficticios en producción, preparación por la API pública
+  con `demo` (retiro y vencimiento previos) y guion por todos los RF con ensayo local en
+  `recorridos:e3` ([demo](docs/demo.md), K040, K052).
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
