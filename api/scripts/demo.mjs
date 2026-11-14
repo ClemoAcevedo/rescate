@@ -1,6 +1,6 @@
-// Prepara los datos de la demo E3 por la API pública, como lo haría la web
-// (docs/demo-e3.md). `previo` deja un lote que cierra con un retiro registrado;
-// `en-vivo` deja el lote del guion con todos sus packs reservados por A.
+// Prepara los datos de la demo por la API pública, como lo haría la web (docs/demo.md).
+// `previo` deja un lote que cierra con un retiro de A y una reserva de B que vence sin
+// retirar; `en-vivo` deja un lote con todos sus packs reservados por A.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
@@ -10,7 +10,7 @@ import { parseArgs } from 'node:util'
 const { positionals: [mode], values: options } = parseArgs({ allowPositionals: true, options: {
   foto: { type: 'string' }, minutos: { type: 'string', default: '20' }, horas: { type: 'string', default: '3' },
 } })
-assert.ok(['previo', 'en-vivo'].includes(mode), 'Uso: npm run demo:e3 -- previo|en-vivo [--foto ruta] [--minutos N] [--horas N]')
+assert.ok(['previo', 'en-vivo'].includes(mode), 'Uso: npm run demo -- previo|en-vivo [--foto ruta] [--minutos N] [--horas N]')
 const origin = process.env.WEB_URL
 assert.ok(origin, 'Configura WEB_URL con el origen HTTPS de la web (producción o local)')
 assert.equal(new URL(origin).origin, origin, 'WEB_URL debe ser un origen exacto, sin ruta')
@@ -20,6 +20,7 @@ assert.ok(password, 'Configura DEMO_PASSWORD; no se guarda en el repositorio')
 const establishmentName = process.env.DEMO_ESTABLISHMENT ?? 'Panadería Demo Rescate'
 const operatorEmail = process.env.DEMO_OPERATOR_EMAIL ?? 'operador.e3@rescate.test'
 const personAEmail = process.env.DEMO_PERSON_A_EMAIL ?? 'persona.a.e3@rescate.test'
+const personBEmail = process.env.DEMO_PERSON_B_EMAIL ?? 'persona.b.e3@rescate.test'
 const photoTypes = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' }
 if (options.foto) assert.ok(photoTypes[extname(options.foto).toLowerCase()], 'La foto debe ser JPEG, PNG o WebP')
 
@@ -57,9 +58,11 @@ async function signIn(email) {
 
 let operator
 let personA
+let personB
 try {
   operator = await signIn(operatorEmail)
   personA = await signIn(personAEmail)
+  if (mode === 'previo') personB = await signIn(personBEmail)
   const establishment = operator.session.operableEstablishments.find(item => item.name === establishmentName)
   assert.ok(establishment, `${operatorEmail} no opera «${establishmentName}»: falta su membership`)
   const base = `/establishments/${encodeURIComponent(establishment.id)}`
@@ -113,7 +116,10 @@ try {
     assert.equal(review.canConfirm, true, 'La revisión no permite confirmar el retiro')
     await operator.call('POST', `${lotPath}/pickups`, { expect: 201,
       json: { reservationId: reservation.id, code: pickupCode, idempotencyKey: randomUUID() } })
-    console.log(`Retiro registrado. El lote cierra el ${clock(lot.pickupEndsAt, lot.timeZone)}; desde ahí cuenta en los resultados del período.`)
+    // B reserva el pack restante y no lo retira: al cierre su reserva vence (RF08).
+    await personB.call('POST', `/public${lotPath}/reservations`, { expect: 201, json: { quantity: 1, idempotencyKey: randomUUID() } })
+    console.log(`Retiro de A registrado; ${personBEmail} reservó 1 pack que vencerá sin retiro.`)
+    console.log(`El lote cierra el ${clock(lot.pickupEndsAt, lot.timeZone)}; desde ahí cuenta en los resultados del período.`)
   } else {
     console.log(`Lote en vivo sin packs libres hasta el ${clock(lot.pickupEndsAt, lot.timeZone)}: ${origin}/lotes/${encodeURIComponent(lot.id)}`)
   }
@@ -122,5 +128,5 @@ try {
   console.error(`FAIL: ${error.message.split('\n')[0]}`)
   process.exitCode = 1
 } finally {
-  await Promise.allSettled([operator, personA].filter(Boolean).map(account => account.signOut()))
+  await Promise.allSettled([operator, personA, personB].filter(Boolean).map(account => account.signOut()))
 }
