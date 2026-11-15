@@ -124,6 +124,8 @@ Si falla worker, web o smoke, la API puede haber cambiado: revisar el job y
 reejecutar CD desde Actions después de corregir la causa. Para volver atrás,
 revertir el cambio por PR y desplegar con CI. Conservar la base y el historial;
 no ejecutar `db:rollback` en producción como parte de un rollback de aplicación.
+La copia, la restauración y la comprobación del release anterior sobre una base
+restaurada están en [operación](operacion.md#copia-y-restauración-rnf08).
 Un cambio de esquema debe ser compatible con la API anterior mientras Railway
 mantiene ambas versiones durante la transición.
 

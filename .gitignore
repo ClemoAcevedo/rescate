@@ -5,6 +5,7 @@ coverage/
 .k005-storage/
 .k032-results/
 .k039-results/
+.k053-results/
 
 .env
 .env.*

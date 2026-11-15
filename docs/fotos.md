@@ -211,9 +211,11 @@ adaptador local del prototipo.
 
 Las fotos viven en el bucket B2, fuera de Railway: desplegar la API o el worker no las
 toca, y `PHOTO_STORAGE=local` se rechaza en producción. `pg_dump` no guarda bytes de
-fotos. E1 (anexos I p. 28) pide copias separadas de las imágenes finales con un
-manifiesto de referencias y ensayar la restauración; ese procedimiento corresponde a
-K053 (#56). Los originales temporales no forman parte del respaldo.
+fotos, y B2 borra todas las versiones al quitar una foto, así que el bucket no se
+respalda a sí mismo. `backup:create` copia aparte la imagen y la miniatura de cada foto
+lista con su sha256 en el manifiesto, y la restauración concilia fotos listas con
+objetos ([copia y restauración](operacion.md#copia-y-restauración-rnf08), anexos I p. 27).
+Los originales temporales no forman parte del respaldo.
 
 ## Pruebas
 
