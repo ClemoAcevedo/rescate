@@ -229,7 +229,7 @@ con `DATABASE_URL` repite la suite sobre una existente.
 | Oferta antes, en y después del plazo con el trabajador detenido | Integridad (plazo cruzado mientras otra transacción bloquea el lote); [cola de espera](cola-de-espera.md#pruebas) |
 | Aislamiento de usuarios y operadores ajenos | Integridad (operador de otro establecimiento); [seguridad](seguridad.md#pruebas) y [chat](chat.md) |
 | Caída y recuperación del trabajador y respuesta perdida | [Vencimientos](vencimientos.md#pruebas) y [reservas](reservas.md#pruebas) |
-| Restaurar copia | K053 (#56) |
+| Restaurar copia | [Copia y restauración](operacion.md#copia-y-restauración-rnf08): ensayo con pérdida simulada, conciliación y fallas detectadas |
 | Tareas vencidas: P95 ≤ 30 s con 100 ofertas | Integridad, con el worker real y todas las ofertas venciendo a la vez |
 | Chat visible: P95 ≤ 7 s en otro navegador | Chat visible (abajo) |
 
@@ -279,4 +279,3 @@ consulta tarda decenas de milisegundos. Por eso el panel no agrega índices.
 - En el modo Compose local, generador, API, worker y PostgreSQL corren en un mismo equipo. El anexo exige declarar
   esa interferencia: el resultado no sustituye la prueba con otro equipo (p. 18). Esa
   prueba, con un servidor que cumpla los mínimos del anexo, es #170.
-- Restaurar copia y conciliar después es K053 (#56).

@@ -415,8 +415,9 @@ tarjetas y evidencia de entrega; cualquier cambio de alcance se registra aparte.
   revisión manual, no enforcement
   automático de dependencias en CI todavía.
 - B2 y PostgreSQL tienen fallos y ciclos de vida diferentes. K014 registra cada
-  clave antes de escribir su objeto y limpia con el worker; restauración de objetos
-  y trabajos recuperables de otros módulos siguen pendientes.
+  clave antes de escribir su objeto y limpia con el worker. La copia y la restauración
+  guardan ambos juntos y concilian fotos listas con objetos
+  ([operación](../operacion.md#copia-y-restauración-rnf08)).
 - Mantener el riesgo de ADR 0002: reingreso tras oferta parcial frente al compromiso
   confirmado activo por usuario/lote. No relajar el índice ni inventar tablas aquí.
 - Despliegue público, recursos y operación no se deducen de Compose. Las propuestas

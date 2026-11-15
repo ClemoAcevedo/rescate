@@ -354,5 +354,15 @@ lo cambia.
   ([entorno local](docs/desarrollo-local.md#cobertura-de-la-api), K039).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
+- **Copias y restauración:** `backup:create` copia PostgreSQL y las fotos listas con un
+  manifiesto de versión, migraciones, conteos, huella del esquema, sha256 y referencias
+  faltantes, leyendo la fuente en solo lectura y exigiendo TLS fuera del equipo;
+  `backup:restore` restaura en una base aislada, concilia esquema, secuencias,
+  inventario, entregas, códigos con su clave, incidencias, avisos, chat, migraciones y
+  fotos, y levanta la API y el worker actuales y los del release anterior sin migraciones
+  down; `backup:reconcile` concilia una base restaurada fuera del Compose;
+  `backup:rehearsal` ensaya pérdida, recuperación medida frente a 60 min y 24 h y fallas
+  detectadas con datos ficticios. La copia de producción se toma por un túnel SSH de
+  Railway, sin abrir puertos públicos ([operación](docs/operacion.md#copia-y-restauración-rnf08), K053).
 
 El [índice de documentación](docs/README.md) lleva a cada área.
