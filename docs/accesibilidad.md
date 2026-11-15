@@ -65,7 +65,7 @@ para observar ambos anchos. El moderador lee la consigna sin indicar botones,
 observa y registra obstáculos antes de ayudar.
 
 Usar cuentas y lotes ficticios en una instancia HTTPS de prueba con sus servicios
-activos ([preparación local](demo-e3.md#recorridos-moderados)). Preparar un lote
+activos ([preparación local](demo.md#recorridos-moderados)). Preparar un lote
 disponible y otro agotado con cola. La espera no admite más packs de los que tiene el
 lote, así que la oferta parcial por 4 de 10 usa un lote de 10 reservado por dos
 cuentas de apoyo, con 4 y 6 packs: el participante entra a la espera por 10 y se
