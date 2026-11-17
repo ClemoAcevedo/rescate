@@ -1,5 +1,9 @@
 # ADR 0018: carga remota hacia Railway
 
+## Estado
+
+Aceptado.
+
 ## Contexto
 
 El anexo H de E1 propone un servidor y otro computador en la misma LAN. La

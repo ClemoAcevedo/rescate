@@ -1,7 +1,7 @@
 # ADR 0001: gestor de migraciones
 
 Fecha: 2026-09-20. Tarjeta: K002.
-Estado: decisión adoptada en esta rama y validada contra PostgreSQL 16.15.
+Estado: vigente. Todas las migraciones del proyecto la siguen ([migraciones](../migraciones.md)).
 
 ## Contexto
 

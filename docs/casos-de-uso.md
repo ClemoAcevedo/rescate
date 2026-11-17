@@ -3,7 +3,7 @@
 Este catálogo se incorpora en K013 porque el repositorio no tenía casos de uso
 editables anteriores. Describe comportamiento de negocio; no es una lista de
 pantallas, endpoints ni evidencia de implementación. El modelo y las máquinas de
-estado que usa están en [modelo-inicial.md](modelo-inicial.md#modelo-conceptual-e2-k013).
+estado que usa están en [modelo de datos](modelo-inicial.md#estados).
 
 ## Fuentes y alcance
 
