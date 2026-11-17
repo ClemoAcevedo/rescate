@@ -111,8 +111,8 @@ las ramas de integración:
 
 | Control | Herramienta y alcance | Resultado y criterio |
 | --- | --- | --- |
-| SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src` y `web/src` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
-| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON por paquete en `security-sca-api` y `security-sca-web`; falla con severidad alta o crítica, o si el servicio de auditoría no responde. Las moderadas también quedan visibles para revisión. |
+| SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src`, `web/src` y `web/middleware.ts` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
+| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON íntegro y clasificación por paquete en `security-sca-api` y `security-sca-web`; bloquea severidad alta/crítica salvo la excepción de desarrollo acotada de abajo. Un error del servicio también bloquea. Las moderadas permanecen visibles. |
 
 Los overrides de npm fijan `glob` 14.0.3 dentro de `node-pg-migrate` y `minimatch`
 11.0.3 en las herramientas de web. Esas versiones corrigen los avisos de cancelación
@@ -120,6 +120,17 @@ y amplificación de patrones de #180. Los padres todavía declaran rangos anteri
 la compatibilidad se comprueba con descubrimiento de migraciones, rollback real,
 selección de archivos de ESLint, lint, build y recorridos de navegador. Los overrides
 se pueden retirar cuando los padres incorporen las versiones corregidas.
+
+La [política SCA](../.github/scripts/npm-audit.mjs) permite temporalmente el aviso
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) de
+`picomatch` 4.0.7, sin parche publicado. Sigue siendo una vulnerabilidad conocida:
+la excepción se limita a las cadenas enumeradas de build, lint y generación de tipos,
+cuyos patrones proceden del repositorio y no de solicitudes HTTP. Exige que cada
+nodo afectado sea exclusivamente de desarrollo en el lockfile. No elimina entradas
+del informe npm: publica además `audit-policy.json` con la clasificación y su
+vencimiento obligatorio. Otra versión, aviso, consumidor, uso en producción,
+severidad crítica o vencimiento vuelve a bloquear. El seguimiento de la corrección
+está en [upstream](https://github.com/micromatch/picomatch/issues/175).
 
 El [workflow Trivy](../.github/workflows/trivy-manual.yml), adaptado de la plantilla
 de clases `specs-trivy-sonarqube`, complementa SCA con Trivy 0.70.0 sobre los
@@ -137,8 +148,9 @@ publica calidad, mantenibilidad y hotspots. La
 por commit del PR. Son controles complementarios al SAST y SCA del CI habitual.
 
 Los artefactos se conservan catorce días, incluso cuando hay hallazgos. Para repetir
-SCA: `npm --prefix api audit --audit-level=high` y el equivalente con `web`. Para SAST:
-`semgrep scan --config p/javascript --config p/typescript --metrics=off --error api/src web/src`.
+SCA: ejecutar `node ../.github/scripts/npm-audit.mjs` desde `api/` y `web/`.
+`npm audit --audit-level=high` reproduce el informe sin aplicar la clasificación. Para SAST:
+`semgrep scan --config p/javascript --config p/typescript --metrics=off --error api/src web/src web/middleware.ts`.
 
 Semgrep detecta patrones y flujo de datos que cubren sus reglas; no acredita por sí
 solo la autorización de negocio ni encuentra todos los defectos. Sus paquetes de reglas

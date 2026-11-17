@@ -16,3 +16,7 @@ coverage/
 .DS_Store
 Thumbs.db
 .regression-results/
+api/audit.json
+api/audit-policy.json
+web/audit.json
+web/audit-policy.json
