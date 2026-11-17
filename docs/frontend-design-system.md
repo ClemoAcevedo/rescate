@@ -70,6 +70,24 @@ aún se desconoce. No limitar alturas ni recortar direcciones/horarios para forz
 una geometría constante con cualquier respuesta. Un cambio de estructura exige
 actualizar su composición de carga y la regresión correspondiente.
 
+## Criterios de interacción
+
+- Poner primero el dato y la acción que necesita la persona, con vocabulario del
+  producto y sin UUID ni explicaciones del backend. Base: [PR #201](https://github.com/ClemoAcevedo/rescate/pull/201).
+- Conservar lo escrito y los datos disponibles ante un error o una consulta lenta;
+  distinguir fallo, vacío y resultado incierto. Una precarga tardía no sobrescribe
+  campos que la persona ya modificó. Base: [PR #94](https://github.com/ClemoAcevedo/rescate/pull/94)
+  y [PR #199](https://github.com/ClemoAcevedo/rescate/pull/199).
+- Comprobar la carga con la distribución final y la zona horaria del dato, también
+  cuando el navegador está en otra zona. Base: [PR #192](https://github.com/ClemoAcevedo/rescate/pull/192).
+- Mantener etiquetas, foco visible y navegación completa con teclado. La
+  confirmación destructiva enfoca primero su pregunta y devuelve el foco al
+  conservar. Base: [PR #145](https://github.com/ClemoAcevedo/rescate/pull/145)
+  y [PR #211](https://github.com/ClemoAcevedo/rescate/pull/211).
+- Revisar menú, controles y textos largos desde 320 px, con datos reales y con
+  vacío, error y reintento. Las pruebas comprueban resultados y geometría; las
+  capturas complementan esa evidencia.
+
 ## Verificar cambios
 
 Desde la raíz:

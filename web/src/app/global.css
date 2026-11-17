@@ -42,6 +42,8 @@ code, kbd, samp { font-family: var(--font-mono); }
   background: var(--surface-card);
   border-bottom: var(--border-width) solid var(--border-subtle);
 }
+.lot-form__defaults { display: grid; align-items: center; min-height: var(--sp-16); color: var(--text-muted); }
+.lot-form__defaults p { margin: 0; }
 
 .site-header {
   display: flex;

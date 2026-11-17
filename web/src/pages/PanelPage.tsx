@@ -1,3 +1,5 @@
+import { useEstablishmentCatalog } from '../components/EstablishmentCatalog'
+import { EstablishmentPicker } from '../components/EstablishmentPicker'
 import { OperatorPageHeader } from '../components/OperatorPageHeader'
 import { Skeleton } from '../components/ui/Skeleton'
 import { ActivitySkeleton, CommitmentsSkeleton, PanelSkeleton } from './PanelSkeleton'
@@ -288,7 +290,7 @@ function PeriodForm({ from, to, onApply }: { from: string; to: string; onApply: 
 
 function Panel({ establishments }: { establishments: OperableEstablishment[] }) {
   const [params, setParams] = useSearchParams()
-  const establishment = establishments.find(item => item.id === params.get('establecimiento')) ?? establishments[0]!
+  const establishment = establishments.find(item => item.id === params.get('establecimiento')?.toLowerCase()) ?? establishments[0]!
   const from = params.get('desde') ?? undefined
   const to = params.get('hasta') ?? undefined
   const lotId = params.get('lote') ?? undefined
@@ -319,9 +321,11 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
       <div className="my-lots__toolbar">
         {establishments.length > 1
           ? <FormField label="Establecimiento">{control => (
-            <Select {...control} value={establishment.id} onChange={event => update({ establecimiento: event.target.value, lote: null })}>
-              {establishments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </Select>
+            establishments.length >= 20 ? <EstablishmentPicker {...control} name="establishmentId" options={establishments}
+              value={establishment.id} onChange={id => { if (id) update({ establecimiento: id, lote: null }) }} />
+              : <Select {...control} value={establishment.id} onChange={event => update({ establecimiento: event.target.value, lote: null })}>
+                {establishments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </Select>
           )}</FormField>
           : <p className="my-lots__establishment"><Icon name="pin" />{establishment.name}</p>}
         <div className="panel__refresh">
@@ -458,6 +462,7 @@ function Panel({ establishments }: { establishments: OperableEstablishment[] }) 
 }
 
 export function PanelPage() {
+  const { establishments } = useEstablishmentCatalog()
   const { status, session } = useAuth()
   const { pathname } = useLocation()
   if (status === 'checking' || status === 'error') {
@@ -483,5 +488,5 @@ export function PanelPage() {
       <p>Tu cuenta todavía no está habilitada para operar un establecimiento. La habilitación se gestiona por separado.</p>
     </Card></main>
   }
-  return <main className="page-content"><Panel establishments={session.operableEstablishments} /></main>
+  return <main className="page-content"><Panel establishments={establishments} /></main>
 }

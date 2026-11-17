@@ -100,7 +100,12 @@
     "backup:create": "npm run build && node scripts/backup-create.mjs",
     "backup:restore": "npm run build && node scripts/backup-restore.mjs",
     "backup:rehearsal": "npm run build && node scripts/backup-rehearsal.mjs",
-    "backup:reconcile": "npm run build && node scripts/backup-reconcile.mjs"
+    "backup:reconcile": "npm run build && node scripts/backup-reconcile.mjs",
+    "db:test:triage:compose": "node scripts/test-triage-compose.mjs",
+    "test:web:establishments": "node scripts/test-web-establishments.mjs",
+    "backup:scheduled": "npm run build && node scripts/backup-scheduled.mjs",
+    "backup:journal": "npm run build && node scripts/backup-journal.mjs",
+    "backup:fetch": "npm run build && node scripts/backup-fetch.mjs"
   },
   "keywords": [],
   "author": "",

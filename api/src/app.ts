@@ -19,6 +19,7 @@ export interface AppDependencies {
   incidentsRouter?: Router
   photosRouter?: Router
   authRouter?: Router
+  establishmentsRouter?: Router
   traffic?: express.RequestHandler
   /** Registro sin datos de la solicitud; por defecto, una línea JSON en la salida estándar. */
   log?: Log
@@ -63,6 +64,7 @@ export function createApp(dependencies: AppDependencies = {}): express.Express {
   })
 
   if (dependencies.authRouter) app.use(dependencies.authRouter)
+  if (dependencies.establishmentsRouter) app.use(dependencies.establishmentsRouter)
   if (dependencies.discoveryRouter) app.use(dependencies.discoveryRouter)
   if (dependencies.reservationsRouter) app.use(dependencies.reservationsRouter)
   if (dependencies.waitlistRouter) app.use(dependencies.waitlistRouter)

@@ -30,7 +30,6 @@ levanta API y Vite HTTPS sobre una base aislada y ejecuta `test:web:auth`,
 | [services](src/services/README.md) | Cliente HTTP y límites del contrato |
 | `services/openapi.ts` | Tipos HTTP generados desde OpenAPI; no editar a mano |
 | `lots/`, `components/lots/` | Formulario de lote K011: conversiones al contrato y componentes |
-| `types/api.ts`, `services/api-types.ts` | Antecedentes K004; no contrato S02 |
 
 ## Estado de las rutas
 

@@ -17,6 +17,8 @@ sin dependencias nuevas. [Decisiones y verificación](../../../../docs/frontend-
   distinguir mayúsculas ni tildes, con flechas, Enter, Escape y clic. Filtra opciones
   ya cargadas en el navegador (no hace peticiones), muestra hasta `limit` (50) y envía
   el valor en un input oculto con `name`. Recibe las props de `FormField`.
+  Una fuente externa puede aportar resultados, carga y paginación mediante callbacks;
+  `EstablishmentPicker` se encarga de HTTP, cancelación y respuestas obsoletas.
 - `FormField`: label obligatorio, ayuda/error e ID único; enlaza el control mediante
   las props del render prop. El error sustituye la ayuda; no valida datos.
 - `Card`: contenedor div/section/article, tono default/sunken. No es clicable;

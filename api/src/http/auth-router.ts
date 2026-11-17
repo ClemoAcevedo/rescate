@@ -37,6 +37,7 @@ export function createAuthRouter(useCases: IdentityUseCases, auth: Authenticatio
   for (const operation of ["register", "login"] as const) router.post(`/auth/${operation}`, run(async (req, res) => {
     auth.requireOrigin(req)
     if (operation === "login") limits.login(clientAddress(req))
+    else limits.register(clientAddress(req))
     auth.requireCsrf(req, await auth.resolve(req))
     if (!req.is("application/json")) { sendError(res, 415, "UNSUPPORTED_MEDIA_TYPE", "Se requiere application/json."); return }
     const { email, password, privacyConsent } = credentials(req.body, operation)

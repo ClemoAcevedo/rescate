@@ -69,7 +69,8 @@ export async function restoreAndVerify({ directory, pickupKey, previousRelease =
     }
     for (const item of report.current.checks) console.log(`${mark(item)} API actual ${item.name}: ${item.detail}`)
 
-    // Fuera de la medición y sobre copias: la sesión de lectura y los workers no tocan lo conciliado.
+    // Sobre una copia: la sesión de lectura y el worker no tocan lo conciliado.
+    // Su comprobación sí forma parte del tiempo de recuperación.
     const copy = await clock.run('copiar la base para el worker actual', () => db.clone(report.database, 'worker'))
     console.log(`  copia para el worker actual: ${copy}`)
     const forgetCopy = onInterrupt(() => db.drop(copy))
@@ -90,6 +91,12 @@ export async function restoreAndVerify({ directory, pickupKey, previousRelease =
     }
     for (const item of report.currentWorker.checks) console.log(`${mark(item)} API actual ${item.name}: ${item.detail}`)
 
+    // Recuperar incluye al worker operativo: no detener el reloj al responder la API.
+    const completeMs = elapsed(interventionStarted)
+    report.recovery = { ...report.recovery, apiReadyMs: recoveredMs, steps: [...clock.steps], totalMs: completeMs,
+      verified: verified && report.currentWorker.checks.every(item => item.ok),
+      rtoMet: verified && report.currentWorker.checks.every(item => item.ok) && completeMs <= RTO_MINUTES * 60_000 }
+
     if (previousCommit) {
       const release = await clock.run('copiar la base para la reversión', () => db.clone(report.database, 'release'))
       console.log(`  copia para el release anterior: ${release}`)
@@ -105,7 +112,7 @@ export async function restoreAndVerify({ directory, pickupKey, previousRelease =
       }
       printPrevious(report.previous)
     }
-    report.passed = verified && report.recovery.rtoMet && report.recovery.rpoMet
+    report.passed = report.recovery.verified && report.recovery.rtoMet && report.recovery.rpoMet
       && report.currentWorker.checks.every(item => item.ok) && (!report.previous || report.previous.ok)
   } finally {
     if (discard) { await removeRestored(); forgetDiscard() }

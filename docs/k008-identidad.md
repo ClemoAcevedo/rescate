@@ -11,7 +11,9 @@ Las mediciones originales de scrypt se conservan en la [guía HTTP](api/README.m
 | --- | --- |
 | POST `/auth/register` | Usuario, credencial y consentimiento atómicos; 201. Exige `privacyConsent: true` (422 si falta o es false). No inicia sesión ni agrega membership. Duplicado canónico: 409. |
 | POST `/auth/login` | Scrypt, protección de intentos y sesión persistente de 12 horas. Cookie opaca; JSON sin secreto. |
-| GET `/auth/session` | Sesión pública o null, establecimientos actuales y CSRF. No renueva la sesión. |
+| GET `/auth/session` | Sesión pública o null, hasta veinte establecimientos actuales y CSRF. No renueva la sesión. |
+| GET `/establishments?query=&page=1` | Búsqueda autorizada por nombre/dirección, sin tildes ni distinción de mayúsculas; páginas de veinte con `hasNextPage`. |
+| GET `/establishments/:id` | Dirección, coordenadas y zona de un establecimiento operable; otro o inexistente responde 404. |
 | POST `/auth/logout` | Revoca solo la sesión presentada; elimina ambas cookies; 204 sin cuerpo. Reintento: 401. |
 | K010 | Sesión → Actor interno → autorización por membership. Comandos con Origin/CSRF. |
 

@@ -406,12 +406,9 @@ CI incorpora ese comando; su ejecución remota no se acredita en esta etapa.
 
 ## Tipos, implementación futura y E2
 
-Los dos catálogos TypeScript de web siguen siendo **antecedentes sin consumidores
-de negocio**, no tipos derivados ni fuentes de verdad. Se marcan como históricos;
-no se actualizan a mano para copiar el YAML. `api:types` genera la misma salida
-para API y web (`web/src/services/openapi.ts`); K011 la consume para lotes. Los tipos
-manuales de identidad K009 y los catálogos K004 siguen como deuda en #98.
-No se exporta un cliente ficticio.
+`api:types` genera la misma salida para API y web (`web/src/services/openapi.ts`).
+Identidad y lotes consumen esos tipos y validan las respuestas en ejecución;
+`http-client.ts` comparte el parser del sobre de errores.
 Los tipos internos de Application/Domain seguirán siendo propios y no modelos SQL.
 
 Para E2 se preparará una fila por operationId con enlaces reales a:
