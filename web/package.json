@@ -13,6 +13,7 @@
     "test": "node --test scripts/test-*.mjs"
   },
   "dependencies": {
+    "@vercel/functions": "3.11.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3"

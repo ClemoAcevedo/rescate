@@ -103,7 +103,7 @@ jobs:
           semgrep scan --config p/javascript --config p/typescript
           --metrics=off --disable-version-check --error
           --json-output=semgrep.json --sarif-output=semgrep.sarif
-          api/src web/src
+          api/src web/src web/middleware.ts
       - name: Publish SAST results, including findings
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,13 +135,17 @@ jobs:
         run: npm ci --no-audit
       - name: Audit production and development dependencies
         working-directory: ${{ matrix.package }}
-        run: npm audit --audit-level=high --json > audit.json
+        run: node ../.github/scripts/npm-audit.mjs
+      - name: Check narrow advisory policy and fail-closed behavior
+        run: node --test .github/scripts/npm-audit.test.mjs
       - name: Publish SCA results, including findings
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-sca-${{ matrix.package }}
-          path: ${{ matrix.package }}/audit.json
+          path: |
+            ${{ matrix.package }}/audit.json
+            ${{ matrix.package }}/audit-policy.json
           if-no-files-found: error
           retention-days: 14
 

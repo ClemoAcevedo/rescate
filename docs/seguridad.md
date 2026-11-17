@@ -40,18 +40,24 @@ igual que revisar, también en la ventana por IP, y esa ventana solo la gastan o
 con membership del lote. Decisión y alternativas en
 [ADR 0013](adr/0013-limite-de-codigos-de-retiro.md).
 
-**Origen.** El proxy Vercel sobrescribe `x-rescate-proxy-secret` mediante un transform
-de petición del CDN. Solo con ese secreto válido la API acepta `x-vercel-forwarded-for`,
-que Vercel fija con la IP del cliente. Un acceso directo o un secreto incorrecto usa
-el socket. Nunca se confía en `X-Forwarded-For` ni se activa `trust proxy` general.
+**Origen.** El middleware Vercel lee la IP dentro del runtime con `ipAddress` y
+sobrescribe `x-rescate-client-ip` y su firma HMAC-SHA256. La firma liga la dirección
+a un instante con tolerancia de 60 segundos. El CDN sobrescribe además
+`x-rescate-proxy-secret`; la API exige el secreto y una firma válida antes de aceptar
+la dirección. Un acceso directo, una firma ausente/incorrecta/vencida o un secreto
+incorrecto usa el socket. Las URLs de despliegues anteriores pueden seguir inyectando
+el secreto, pero no producen firmas de IP. Las cabeceras genéricas, incluida
+`x-vercel-forwarded-for` en un rewrite externo, no autentican al cliente.
+Nunca se activa `trust proxy` general.
 IPv4-mapped se normaliza como IPv4; IPv6 comparte ventana por /64, para evitar
 eludirla rotando direcciones del mismo prefijo. El secreto solo vive en configuración
 de servidor, sin cabecera de respuesta ni variable `VITE_`.
 
-La garantía sobre la cabecera procede de [Vercel](https://vercel.com/docs/headers/request-headers);
-el [transform de petición](https://vercel.com/docs/project-configuration/vercel-json#transforms)
-mantiene el rewrite externo sin interponer una función con un límite de cuerpo menor
-al de las fotos. La comprobación del trayecto real forma parte del release (#141).
+El middleware se invoca explícitamente antes del rewrite de `/api`. No lee cuerpos:
+[`skipMiddlewareRequestBody`](https://vercel.com/docs/project-configuration/vercel-json#skipmiddlewarerequestbody)
+los envía directamente al destino, conservando las fotos de 5 MiB. La IP se obtiene
+en el contexto de función documentado por [Vercel](https://vercel.com/docs/headers/request-headers).
+La comprobación del trayecto real forma parte del release (#141).
 
 ## Aislamiento por objeto
 
@@ -105,8 +111,8 @@ las ramas de integración:
 
 | Control | Herramienta y alcance | Resultado y criterio |
 | --- | --- | --- |
-| SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src` y `web/src` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
-| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON por paquete en `security-sca-api` y `security-sca-web`; falla con severidad alta o crítica, o si el servicio de auditoría no responde. Las moderadas también quedan visibles para revisión. |
+| SAST | Semgrep CE con versión fijada y reglas `p/javascript` y `p/typescript` sobre `api/src`, `web/src` y `web/middleware.ts` | JSON y SARIF en `security-sast`; los hallazgos bloquean el job. También falla si no puede ejecutar el análisis. |
+| SCA | `npm audit` sobre ambos lockfiles, incluidas dependencias de desarrollo | JSON íntegro y clasificación por paquete en `security-sca-api` y `security-sca-web`; bloquea severidad alta/crítica salvo la excepción de desarrollo acotada de abajo. Un error del servicio también bloquea. Las moderadas permanecen visibles. |
 
 Los overrides de npm fijan `glob` 14.0.3 dentro de `node-pg-migrate` y `minimatch`
 11.0.3 en las herramientas de web. Esas versiones corrigen los avisos de cancelación
@@ -114,6 +120,17 @@ y amplificación de patrones de #180. Los padres todavía declaran rangos anteri
 la compatibilidad se comprueba con descubrimiento de migraciones, rollback real,
 selección de archivos de ESLint, lint, build y recorridos de navegador. Los overrides
 se pueden retirar cuando los padres incorporen las versiones corregidas.
+
+La [política SCA](../.github/scripts/npm-audit.mjs) permite temporalmente el aviso
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) de
+`picomatch` 4.0.7, sin parche publicado. Sigue siendo una vulnerabilidad conocida:
+la excepción se limita a las cadenas enumeradas de build, lint y generación de tipos,
+cuyos patrones proceden del repositorio y no de solicitudes HTTP. Exige que cada
+nodo afectado sea exclusivamente de desarrollo en el lockfile. No elimina entradas
+del informe npm: publica además `audit-policy.json` con la clasificación y su
+vencimiento obligatorio. Otra versión, aviso, consumidor, uso en producción,
+severidad crítica o vencimiento vuelve a bloquear. El seguimiento de la corrección
+está en [upstream](https://github.com/micromatch/picomatch/issues/175).
 
 El [workflow Trivy](../.github/workflows/trivy-manual.yml), adaptado de la plantilla
 de clases `specs-trivy-sonarqube`, complementa SCA con Trivy 0.70.0 sobre los
@@ -131,8 +148,9 @@ publica calidad, mantenibilidad y hotspots. La
 por commit del PR. Son controles complementarios al SAST y SCA del CI habitual.
 
 Los artefactos se conservan catorce días, incluso cuando hay hallazgos. Para repetir
-SCA: `npm --prefix api audit --audit-level=high` y el equivalente con `web`. Para SAST:
-`semgrep scan --config p/javascript --config p/typescript --metrics=off --error api/src web/src`.
+SCA: ejecutar `node ../.github/scripts/npm-audit.mjs` desde `api/` y `web/`.
+`npm audit --audit-level=high` reproduce el informe sin aplicar la clasificación. Para SAST:
+`semgrep scan --config p/javascript --config p/typescript --metrics=off --error api/src web/src web/middleware.ts`.
 
 Semgrep detecta patrones y flujo de datos que cubren sus reglas; no acredita por sí
 solo la autorización de negocio ni encuentra todos los defectos. Sus paquetes de reglas

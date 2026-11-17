@@ -101,7 +101,8 @@ Node al ejecutarse desde `api/`; la variable del entorno tiene prioridad.
 `.env` está ignorado por Git.
 Codifica caracteres reservados de usuario/contraseña en la URL. Para un servidor
 remoto, configura TLS según sus requisitos; no desactives la validación del certificado.
-La API `/health` no depende de esta variable ni ejecuta migraciones al iniciar.
+La API requiere `DATABASE_URL` al iniciar. `GET /health` comprueba PostgreSQL y
+responde 503 si la base no está disponible ([operación](operacion.md#salud)).
 
 ## Comandos (desde api/)
 

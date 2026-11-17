@@ -16,8 +16,8 @@ worker reclama.
 ```mermaid
 flowchart LR
   persona["Persona: rescata u opera un establecimiento"] --> navegador["Web React en el navegador"]
-  navegador -->|HTTPS| vercel["Vercel: web compilada y reenvío de /api"]
-  vercel -->|HTTPS, sin /api y con el secreto del proxy| api["API Express"]
+  navegador -->|HTTPS| vercel["Vercel: web compilada y middleware de /api"]
+  vercel -->|HTTPS, IP firmada y secreto del proxy| api["API Express"]
   subgraph railway["Railway, red privada"]
     api --> db[("PostgreSQL 16 + PostGIS")]
     worker["Worker"] --> db
@@ -36,18 +36,18 @@ flowchart LR
 | Componente | Qué hace | Detalle |
 | --- | --- | --- |
 | Web | Interfaz por rol: búsqueda, reserva, espera, chat, avisos e incidencias de quien rescata; lotes, retiros, panel e incidencias del operador. Tipos HTTP generados desde OpenAPI. | [web/README](../../web/README.md), [manual](../manual.md) |
-| Vercel | Sirve `dist/` y reenvía `/api/*` al origen HTTPS de la API quitando el prefijo. Agrega `x-rescate-proxy-secret`, con el que la API acepta la IP del cliente que fija Vercel. Las cookies son del dominio de la web. | [despliegue](../despliegue.md), [seguridad](../seguridad.md) |
-| API | 44 operaciones HTTP de [OpenAPI](../api/openapi.yaml) y `GET /health`. Sesión por cookie, Origin/CSRF en comandos y límites por usuario y por IP del cliente. | [seguridad](../seguridad.md), [identidad](../k008-identidad.md) |
+| Vercel | Sirve `dist/`. El middleware firma la IP del cliente antes de reenviar `/api/*` a Railway sin el prefijo. El CDN agrega el secreto del proxy y envía el cuerpo directamente a la API, incluidas las fotos de hasta 5 MiB. Las cookies son del dominio de la web. | [despliegue](../despliegue.md), [seguridad](../seguridad.md) |
+| API | 44 operaciones HTTP de [OpenAPI](../api/openapi.yaml), incluido `GET /health`. Sesión por cookie, Origin/CSRF en comandos y límites por usuario y por IP. Valida el secreto, la firma y la vigencia de la IP del proxy. | [seguridad](../seguridad.md), [identidad](../k008-identidad.md) |
 | Worker | Mismo paquete e imagen que la API (`node dist/worker.js`), otro proceso, sin HTTP y con un Pool de 2 conexiones. | [Worker](#worker) |
 | PostgreSQL/PostGIS | Datos, inventario, colas de trabajo (fotos, vencimientos, outbox, destinatarios de incidencias) y latido del worker. Sin acceso público. | [modelo de datos](../modelo-inicial.md), [migraciones](../migraciones.md) |
 | Objetos | Bucket B2 privado: fotos, copias cifradas (`rescate-backups/v1/`) y diario de recuperación. En desarrollo, un directorio local. La web nunca recibe una URL del bucket: la API sirve los bytes. | [fotos](../fotos.md) |
 | CI/CD | [ci.yml](../../.github/workflows/ci.yml) valida tipos, lint, pruebas, build y Compose con PostGIS, worker y Chromium HTTPS. [deploy.yml](../../.github/workflows/deploy.yml) migra, despliega API y luego worker y web en paralelo, publica el servicio backups con el mismo commit y verifica el sitio ([ADR 0015](../adr/0015-deploy-de-worker-y-web-en-paralelo.md)). | [desarrollo local y CI](../desarrollo-local.md) |
-| Backups | Servicio Railway con [Dockerfile.backup](../../api/Dockerfile.backup) que se ejecuta cada 12 h: copia PostgreSQL y las fotos listas con manifiesto, cifra con AES-256-GCM, verifica lo subido y conserva la última copia de cada uno de los siete días. La restauración concilia base y fotos. | [operación](../operacion.md#programación-y-secretos) |
+| Backups | Servicio Railway con [Dockerfile.backup](../../api/Dockerfile.backup) que se ejecuta cada 12 h. Copia PostgreSQL y las fotos listas con manifiesto, cifra con AES-256-GCM, verifica lo subido y conserva la última copia completa de cada uno de los siete días más recientes. La rotación elimina todas las versiones y marcadores de los objetos vencidos de copias y diario. | [operación](../operacion.md#programación-y-secretos) |
 | Diario de recuperación | Registro cifrado fuera de PostgreSQL de cada comando que cambia compromisos, para identificar los posteriores a una copia antes de reabrir. | [ADR 0022](../adr/0022-diario-de-recuperacion.md), [operación](../operacion.md#compromisos-posteriores-a-la-copia) |
 
 En desarrollo, [Compose](../../compose.yaml) levanta web (Vite), API, worker y
-PostGIS con fotos en un volumen local. Vite reenvía `/api` igual que Vercel. Ni la
-API ni Compose migran al arrancar: en producción migra el pre-deploy de la API.
+PostGIS con fotos en un volumen local. Vite reenvía `/api` a la API eliminando ese
+prefijo. El pre-deploy de la API aplica las migraciones en producción.
 
 ## Módulos
 
