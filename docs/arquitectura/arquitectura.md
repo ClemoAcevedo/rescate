@@ -96,12 +96,10 @@ La estructura real añade `http/`, `application/lots/`, `domain/`,
 `index.ts`, `worker.ts` y `prototypes/photos/`. Web tiene `app/`, `components/`, `pages/`, `services/` y
 `types/`, además de `styles/` y primitives en `components/ui/` tras la integración
 visual compartida. La [guía de frontend](../../web/README.md) describe esa base,
-la sesión K009 y el formulario de lotes K011. Los dos archivos de tipos preliminares,
-[services/api-types.ts](../../web/src/services/api-types.ts) y
-[types/api.ts](../../web/src/types/api.ts), aún existen y no son un contrato
-definitivo ni modelos de persistencia. Se marcan como antecedentes históricos;
-K011 introduce tipos web generados desde OpenAPI; la sustitución de los tipos
-manuales K009 y K004 queda como deuda en #98.
+la sesión y el formulario de lotes. Identidad y lotes consumen los tipos generados
+desde OpenAPI y comparten la validación del sobre de errores en
+[http-client.ts](../../web/src/services/http-client.ts). Los tipos internos de
+Application y Domain siguen siendo propios.
 
 La búsqueda y reserva K015 siguen los mismos límites: el router de descubrimiento
 consume Application y los DTO generados. Application define la unidad atómica de

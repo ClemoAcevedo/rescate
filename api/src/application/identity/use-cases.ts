@@ -1,6 +1,8 @@
 import { PRIVACY_POLICY_VERSION, SESSION_DURATION_MS, validEmail, validPassword } from "../../domain/identity.js"
 import { blockAfterFailure, expiredFailuresCutoff, retryAfterSeconds } from "../../domain/attempts.js"
 import { IdentityError } from "./errors.js"
+import { establishmentNotFound } from '../errors.js'
+import type { EstablishmentSearch } from './ports.js'
 import type { EmailCanonicalizer, IdentityRepository, IdentityUser, LoginSecurityRepository, PasswordCredential, PasswordHasher, SessionCredentials, SessionRepository, StoredSession } from "./ports.js"
 
 export interface SessionContext { session: StoredSession; user: IdentityUser }
@@ -79,6 +81,16 @@ export function createIdentityUseCases(d: IdentityDependencies) {
       return { user: { id: context.user.publicId, email: context.user.email },
         operableEstablishments: await d.identities.listEstablishments(context.user.id),
         expiresAt: context.session.expiresAt.toISOString() }
+    },
+    async searchEstablishments(userId: string, filter: EstablishmentSearch) {
+      if (filter.query.length > 100 || filter.query.includes('\u0000')) throw new IdentityError('invalid_input', ['query'])
+      if (!Number.isSafeInteger(filter.page) || filter.page < 1 || filter.page > 1000) throw new IdentityError('invalid_input', ['page'])
+      return { ...await d.identities.searchEstablishments(userId, filter), page: filter.page }
+    },
+    async getEstablishment(userId: string, publicId: string) {
+      const found = await d.identities.findEstablishmentForUser(userId, publicId)
+      if (!found) throw establishmentNotFound()
+      return found
     },
     async logout(context: SessionContext) {
       const now = d.now()

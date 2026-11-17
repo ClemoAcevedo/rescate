@@ -8,7 +8,8 @@ import { createSessionCredentials } from "../src/infrastructure/crypto/session-c
 test("scrypt: sal aleatoria, bytes acordados y verificación sin normalizar la contraseña", async () => {
   const passwords = createPasswordHasher()
   const password = " Contraseña ficticia de prueba "
-  const [first, second] = await Promise.all([passwords.hash(password), passwords.hash(password)])
+  const first = await passwords.hash(password)
+  const second = await passwords.hash(password)
   assert.equal(first.hash.length, 64)
   assert.equal(first.salt.length, 16)
   assert.deepEqual(first.parameters, SCRYPT_CREATION_PARAMETERS)
@@ -33,12 +34,15 @@ test("verify utiliza parámetros persistidos y rechaza credenciales malformadas/
   assert.throws(() => createPasswordHasher({ N: 2, r: 8, p: 1 }), InvalidPasswordCredentialError)
 })
 
-test("scrypt limita simultaneidad sin cola y libera capacidad al terminar", async () => {
+test("scrypt reserva capacidad de login ante una ráfaga de registros y libera los cupos", async () => {
   const passwords = createPasswordHasher()
+  const existing = await passwords.hash("Cuenta existente ficticia")
   const first = passwords.hash("Primer cálculo ficticio")
-  const second = passwords.hash("Segundo cálculo ficticio")
-  await assert.rejects(passwords.hash("Tercer cálculo ficticio"), PasswordHashingCapacityError)
-  await Promise.all([first, second])
+  await assert.rejects(passwords.hash("Registro concurrente ficticio"), PasswordHashingCapacityError)
+  const login = passwords.verify("Cuenta existente ficticia", existing)
+  await assert.rejects(passwords.verify("Otra cuenta ficticia", existing), PasswordHashingCapacityError)
+  assert.equal(await login, true)
+  await first
   const next = await passwords.hash("Cálculo posterior ficticio")
   assert.equal(await passwords.verify("Cálculo posterior ficticio", next), true)
 })

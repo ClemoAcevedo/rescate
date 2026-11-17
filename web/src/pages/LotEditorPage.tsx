@@ -1,3 +1,6 @@
+import { getEstablishment, establishmentError } from '../services/establishments-service'
+import { useEstablishmentCatalog } from '../components/EstablishmentCatalog'
+import { LoadingState, Skeleton } from '../components/ui/Skeleton'
 import { LotEditorSkeleton } from '../components/lots/LotEditorSkeleton'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -90,6 +93,11 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
   const [loadError, setLoadError] = useState<Result | null>(null)
   const [values, setValues] = useState<LotFormValues>(() => emptyLotValues(DEFAULT_TIME_ZONE))
   const [establishmentId, setEstablishmentId] = useState(establishments.length === 1 ? establishments[0].id : '')
+  const touched = useRef(new Set<LotField>())
+  const defaultsRegion = useRef<HTMLDivElement>(null)
+  const returnDefaultsFocus = useRef(false)
+  const [defaults, setDefaults] = useState<{ id: string; error?: string } | null>(null)
+  const [defaultsRetry, setDefaultsRetry] = useState(0)
   const [errors, setErrors] = useState<LotFieldErrors>({})
   const [result, setResult] = useState<Result | null>(() => (location.state as { notice?: string } | null)?.notice === 'created'
     ? { tone: 'success', message: 'Borrador guardado. Revísalo y publícalo cuando esté listo.' }
@@ -98,6 +106,25 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
   // Instante de apertura: decide si ofrecer la vista pública de un lote publicado.
   const [openedAt] = useState(() => Date.now())
   const [confirmingPublish, setConfirmingPublish] = useState(false)
+
+  useEffect(() => {
+    if (lotId || !establishmentId) return undefined
+    const controller = new AbortController()
+    getEstablishment(establishmentId, controller.signal).then(item => {
+      if (controller.signal.aborted) return
+      const location: Partial<LotFormValues> = { address: item.address, latitude: String(item.latitude), longitude: String(item.longitude), timeZone: item.timeZone }
+      setValues(current => ({ ...current, ...Object.fromEntries(Object.entries(location).filter(([field]) => !touched.current.has(field as LotField))) }))
+      setDefaults({ id: establishmentId })
+    }).catch(error => { if (!controller.signal.aborted) setDefaults({ id: establishmentId, error: establishmentError(error) }) })
+    return () => controller.abort()
+  }, [lotId, establishmentId, defaultsRetry])
+
+  useEffect(() => {
+    if (returnDefaultsFocus.current && defaults?.id === establishmentId) {
+      if (document.activeElement === document.body) defaultsRegion.current?.focus()
+      returnDefaultsFocus.current = false
+    }
+  }, [defaults, establishmentId])
 
   // El aviso de creación se muestra una vez; al recargar la página no debe repetirse.
   useEffect(() => {
@@ -234,6 +261,7 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
   const dirty = lot ? hasUnsavedChanges(values, lot) : true
   const locked = pending !== null
   const onChange = (field: LotField, value: string) => {
+    touched.current.add(field)
     setValues((current) => ({ ...current, [field]: value })); setConfirmingPublish(false)
   }
 
@@ -251,12 +279,24 @@ function LotEditor({ lotId, establishments, csrfToken }: EditorProps) {
       </p>
       {result && <ResultAlert result={result} {...reloadButton} />}
       <form ref={form} className="lot-form" noValidate onSubmit={save} aria-busy={locked}>
+        {!lotId && <div ref={defaultsRegion} tabIndex={-1} role="group" aria-label="Ubicación del establecimiento" className="lot-form__defaults" aria-busy={Boolean(establishmentId && defaults?.id !== establishmentId)}>
+          {establishmentId && defaults?.id !== establishmentId ? <LoadingState label="Consultando la ubicación del establecimiento…"><Skeleton width="100%" /></LoadingState>
+            : defaults?.id === establishmentId && defaults.error ? <Alert tone="warning" role="alert">{defaults.error} Puedes completar la ubicación a mano. <Button onClick={() => { returnDefaultsFocus.current = true; setDefaults(null); setDefaultsRetry(value => value + 1) }}>Reintentar ubicación</Button></Alert>
+            : <p>{establishmentId ? 'Ubicación precargada del establecimiento; puedes cambiarla.' : 'Selecciona un establecimiento para precargar su ubicación.'}</p>}
+        </div>}
         <LotFormFields
           values={values}
           errors={errors}
           disabled={locked}
           onChange={onChange}
-          establishment={lot ? undefined : { options: establishments, value: establishmentId, onChange: setEstablishmentId }}
+          establishment={lot ? undefined : { options: establishments, value: establishmentId, onChange: id => {
+            setEstablishmentId(id)
+            if (id) {
+              touched.current.clear()
+              setDefaults(null)
+              setValues(current => ({ ...current, address: '', latitude: '', longitude: '', timeZone: DEFAULT_TIME_ZONE }))
+            }
+          } }}
         />
         {lot
           ? <LotPhotos
@@ -310,6 +350,7 @@ export function LotEditorPage() {
   const { lotId } = useParams()
   const { pathname } = useLocation()
   const { status, session, csrfToken } = useAuth()
+  const { establishments } = useEstablishmentCatalog()
   const loginPath = `/login?from=${encodeURIComponent(pathname)}`
 
   if (status === 'checking' || (!session && status === 'signing-out')) {
@@ -361,7 +402,7 @@ export function LotEditorPage() {
   return (
     <main className="page-content page-content--stack">
       <Link className="back-link" to="/operador/lotes"><Icon name="arrowLeft" />Mis lotes</Link>
-      <LotEditor key={lotId ?? 'nuevo'} lotId={lotId} establishments={session.operableEstablishments} csrfToken={csrfToken} />
+      <LotEditor key={lotId ?? 'nuevo'} lotId={lotId} establishments={establishments} csrfToken={csrfToken} />
     </main>
   )
 }

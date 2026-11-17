@@ -1,4 +1,7 @@
-import { useId, useMemo, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Button } from './Button'
+import { Skeleton } from './Skeleton'
+import { Alert } from './Alert'
 
 export type ComboboxOption = { value: string; label: string }
 
@@ -16,6 +19,16 @@ type ComboboxProps = {
   placeholder?: string
   /** Máximo de opciones visibles; el resto se alcanza escribiendo más. */
   limit?: number
+  /** Fuente externa: el consumidor decide cómo consultar y descarta respuestas obsoletas. */
+  onSearch?: (query: string) => void
+  onOpen?: () => void
+  loading?: boolean
+  loadMore?: () => void
+  remote?: boolean
+  selectedLabel?: string
+  emptyMessage?: string
+  errorMessage?: string | null
+  onRetry?: () => void
 }
 
 const normalize = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('es')
@@ -26,10 +39,16 @@ const normalize = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}
  * opción y se envía en un input oculto con `name`.
  */
 export function Combobox({
-  id, required = false, name, options, value, onChange, disabled = false, placeholder, limit = 50, ...aria
+  id, required = false, name, options, value, onChange, disabled = false, placeholder, limit = 50,
+  onSearch, onOpen, loading = false, loadMore, remote = false, selectedLabel: providedLabel, emptyMessage = 'Sin coincidencias.', errorMessage, onRetry, ...aria
 }: ComboboxProps) {
   const listboxId = useId()
-  const selectedLabel = options.find((option) => option.value === value)?.label ?? ''
+  const input = useRef<HTMLInputElement>(null)
+  const retrying = useRef(false)
+  useEffect(() => {
+    if (retrying.current && !loading) { input.current?.focus(); retrying.current = false }
+  }, [loading, errorMessage])
+  const selectedLabel = providedLabel ?? options.find((option) => option.value === value)?.label ?? ''
   const [query, setQuery] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -37,8 +56,8 @@ export function Combobox({
 
   const matches = useMemo(() => {
     const needle = normalize(query ?? '')
-    return needle ? options.filter((option) => normalize(option.label).includes(needle)) : options
-  }, [options, query])
+    return needle && !remote ? options.filter((option) => normalize(option.label).includes(needle)) : options
+  }, [options, query, remote])
   const visible = matches.slice(0, limit)
   const activeIndex = Math.min(active, visible.length - 1)
 
@@ -48,7 +67,7 @@ export function Combobox({
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
-      if (!open) { setOpen(true); return }
+      if (!open) { setOpen(true); onOpen?.(); return }
       const step = event.key === 'ArrowDown' ? 1 : -1
       setActive((current) => Math.max(0, Math.min(visible.length - 1, current + step)))
     } else if (event.key === 'Enter' && open) {
@@ -61,9 +80,10 @@ export function Combobox({
   }
 
   return (
-    <div className="ui-combobox">
+    <div className="ui-combobox" onBlur={event => { if (!retrying.current && !event.currentTarget.contains(event.relatedTarget)) close() }}>
       <input
         {...aria}
+        ref={input}
         id={id}
         className="ui-control"
         type="text"
@@ -78,17 +98,17 @@ export function Combobox({
         disabled={disabled}
         value={text}
         onChange={(event) => {
-          setQuery(event.target.value); setOpen(true); setActive(0)
+          setQuery(event.target.value); setOpen(true); setActive(0); onSearch?.(event.target.value)
           // Escribir invalida la selección previa hasta elegir una opción.
           if (value) onChange('')
         }}
-        onClick={() => setOpen(true)}
+        onClick={() => { if (!open) onOpen?.(); setOpen(true) }}
         onKeyDown={onKeyDown}
-        onBlur={close}
       />
       <input type="hidden" name={name} value={value} />
       {open && (
-        <ul id={listboxId} className="ui-combobox__listbox" role="listbox">
+        <div className="ui-combobox__popup">
+        <ul id={listboxId} className="ui-combobox__listbox" role="listbox" aria-busy={loading}>
           {visible.map((option, index) => (
             <li
               key={option.value}
@@ -103,13 +123,19 @@ export function Combobox({
               {option.label}
             </li>
           ))}
-          {visible.length === 0 && <li className="ui-combobox__note" role="presentation">Sin coincidencias.</li>}
+          {loading && visible.length === 0 && [0, 1, 2].map(row => <li key={row} className="ui-combobox__note" role="presentation"><Skeleton width="80%" /></li>)}
+          {!loading && !errorMessage && visible.length === 0 && <li className="ui-combobox__note" role="presentation">{emptyMessage}</li>}
           {matches.length > visible.length && (
             <li className="ui-combobox__note" role="presentation">
               Mostrando {visible.length} de {matches.length}. Sigue escribiendo para acotar.
             </li>
           )}
         </ul>
+        {loading && <span className="visually-hidden" role="status">Buscando opciones…</span>}
+        {errorMessage && <Alert tone="warning" role="alert">{errorMessage} {onRetry && <Button variant="secondary" loading={loading}
+          onClick={() => { retrying.current = true; onRetry() }}>Reintentar búsqueda</Button>}</Alert>}
+        {loadMore && <Button className="ui-combobox__more" variant="secondary" loading={loading} onClick={loadMore}>Más resultados</Button>}
+        </div>
       )}
     </div>
   )

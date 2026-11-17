@@ -1,8 +1,5 @@
 // Límites de tráfico por proceso (E1 H p. 21). Los fallos por cuenta y por operador viven en PostgreSQL.
-import type { Request } from "express"
-
-/** Origen de la solicitud: el socket. Sin `trust proxy`, X-Forwarded-For no lo cambia. */
-export const clientAddress = (req: Request) => req.ip ?? req.socket.remoteAddress ?? "unknown"
+export { clientAddress } from './client-address.js'
 
 export class TrafficLimitError extends Error {
   constructor(readonly retryAfter: number) { super("Límite temporal de solicitudes") }
@@ -42,6 +39,8 @@ export function createTrafficLimits(now: () => number = Date.now) {
     /** Lecturas autenticadas (GET y HEAD): cupo propio para navegar el panel sin gastar el de escrituras (ADR 0014). */
     userRead: (id: string) => bucket(`user-read:${id}`, 300, 60),
     login: (ip: string) => slidingWindow(`login:${ip}`, 30, 900000),
+    /** Registro: cupo independiente del login, antes de scrypt. */
+    register: (ip: string) => slidingWindow(`register:${ip}`, 30, 900000),
     /** Revisar o confirmar un código de retiro (K034): 30 por IP cada minuto, cobrado tras el permiso. */
     pickupCode: (ip: string) => slidingWindow(`pickup-code:${ip}`, 30, 60000),
     /** Enviar un mensaje de chat: 12 por minuto y usuario, ráfaga 3. */

@@ -59,8 +59,10 @@ Nada envía alertas: Operación revisa una vez al día (anexos H p. 22).
    último día. Con el `requestId` de un `request_failed`, la línea `request` da la
    operación que falló.
 3. En los registros del worker, buscar `worker_error`.
-4. Revisar la antigüedad de la última copia en el registro de copias: su `createdAt` no
-   supera 24 h ([copia y restauración](#copia-y-restauración-rnf08)).
+4. `ops:status` lee el estado privado del respaldo: la copia debe tener menos de 24 h
+   y el último intento debe estar correcto. Ausencia, error, intento aún en curso o
+   copia antigua terminan con código 1. Consultar el servicio `backups` en Railway
+   ante `backup_failed`; no imprime credenciales ni datos del origen.
 
 | Cola | Pendiente | En error: no se reintenta sola |
 | --- | --- | --- |
@@ -82,6 +84,9 @@ con un manifiesto de referencias y ensayo de restauración. La meta es recuperar
 | `npm --prefix api run backup:restore -- <copia> [--anterior <ref>] [--manifiesto-sha256 <hex>] [--borrar]` | Restaura en una base nueva `rescate_k053_restore_*` del Compose, concilia y levanta la API. `--borrar` elimina esa base y sus fotos al terminar, también si falla. |
 | `npm --prefix api run backup:reconcile -- <copia> [--manifiesto-sha256 <hex>]` | Concilia una base restaurada fuera del Compose (`K053_TARGET_DATABASE_URL`) y sus fotos (`K053_TARGET_PHOTO_STORAGE` `s3` o `local`). Solo lee. |
 | `npm --prefix api run backup:rehearsal` | [Ensayo local](#ensayo-local) con datos ficticios. |
+| `npm --prefix api run backup:scheduled` | Copia, cifra, verifica la subida y rota siete días completos; publica estado para Operación. |
+| `npm --prefix api run backup:fetch -- --salida <dir> [--todas] [--descifrar <dir-vacío>]` | Descarga la última copia (o todas), verifica bytes y sha256; conserva el cifrado salvo petición explícita. |
+| `npm --prefix api run backup:journal -- <copia> --salida <informe.json> [--decisiones <decisiones.json>]` | Identifica los compromisos posteriores/inciertos y sus contactos frente a la base restaurada; exige decisiones antes de declarar listo para reabrir. |
 
 `pg_dump` y `pg_restore` corren en la imagen `postgis/postgis:16-3.5`. Los scripts nunca
 imprimen URLs ni claves, y la contraseña llega a `pg_dump` en un archivo temporal 0600.
@@ -124,8 +129,9 @@ correos, textos ni códigos.
 | Fotos | Foto lista sin objeto, sha256 distinto u objeto sin foto. |
 
 Después arranca la API sobre lo restaurado: `/health`, búsqueda, detalle y miniatura. Sin
-lotes publicados en plazo, esas lecturas salen como `OMIT`. Fuera de la medición, el
-worker completa un ciclo sin errores. El informe queda en `<copia>/restore-<base>.json`.
+lotes publicados en plazo, esas lecturas salen como `OMIT`. El reloj de recuperación
+incluye comprobar la bandeja y el worker operativo sin errores; la comprobación opcional
+del release anterior queda fuera de esa medición. El informe queda en `<copia>/restore-<base>.json`.
 
 ### Volver al release anterior
 
@@ -136,71 +142,117 @@ temporal y levanta su API y su worker sobre otra copia de la base. El release an
 conoce las tablas nuevas: muestra los avisos ya generados, pero no las funciones que
 agregaron.
 
-### Procedimiento en producción
+### Programación y secretos
 
-**Acceso.** El PostgreSQL de Railway no tiene TLS (`ssl=off`) ni TCP proxy. Se alcanza
-con un túnel SSH de Railway, cifrado y sin cambiar el servicio. Requiere ser miembro del
-proyecto, `railway login`, `railway link` al entorno `production` y una llave registrada
-con `railway ssh keys add`:
+El servicio Railway `backups` usa [Dockerfile.backup](../api/Dockerfile.backup), contexto
+`api/`, comando `node scripts/backup-scheduled.mjs`, cron `0 */12 * * *` (UTC), una
+réplica y restart `NEVER`. Cada ejecución termina; el margen de doce horas permite
+reintentar sin agotar inmediatamente las 24 h. El trabajo toma un advisory lock de
+sesión propio: una ejecución manual concurrente no compite con la programada.
 
-```zsh
-railway ssh config --service postgres --alias rescate-pg
-ssh -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes -f -N \
-  -L 127.0.0.1:15432:127.0.0.1:5432 rescate-pg   # cerrar al terminar
+Recibe `DATABASE_URL` por la red privada Railway, `PHOTO_STORAGE=s3`, `PHOTO_S3_*` y
+`BACKUP_ENCRYPTION_KEY` (32 bytes aleatorios en base64). `BACKUP_S3_*` permite un bucket
+privado distinto; por omisión usa el de fotos con prefijo exclusivo `rescate-backups/v1/`.
+`BACKUP_PG_TOOLS=native` usa pg_dump 16 dentro de la imagen, sin Docker anidado.
+`K053_ALLOW_PLAINTEXT=1` solo corresponde al transporte interno privado de Railway;
+los accesos desde fuera usan túnel SSH cifrado o TLS.
+
+`BACKUP_TOOL_SHA` identifica el checkout que construyó el servicio y
+`BACKUP_TOOL_DIRTY=0` una imagen del commit publicado. El workflow de release actualiza
+esos valores y despliega el servicio junto con la versión compatible.
+
+La copia se cifra con AES-256-GCM antes de subirla. Se vuelve a leer el archivo remoto
+y se verifica sha256 y tamaño antes de publicar el marcador de completitud. Solo
+entonces se rota: se conserva la última copia completa de cada uno de los siete días
+más recientes, no siete ejecuciones. Una copia incompleta no desplaza una completa;
+un inventario inconsistente detiene el borrado. El directorio temporal sin cifrar
+se elimina al terminar, también ante error.
+
+El estado privado `status.json` conserva el último éxito aunque falle el intento
+siguiente. `ops:status` requiere `BACKUP_S3_*` o las variables de fotos de producción
+para consultarlo. La clave del cifrado nunca se guarda junto al archivo ni en Git.
+
+API y worker reciben otra clave `RECOVERY_JOURNAL_KEY`, con el scope
+`RAILWAY_ENVIRONMENT_ID` (o `RECOVERY_JOURNAL_SCOPE` explícito). `RECOVERY_S3_*` permite
+separar su bucket; por omisión usa el de fotos. El diario se conserva durante al menos
+ocho días y mientras lo necesite la copia más antigua retenida. No rotar claves sin
+conservar las anteriores hasta que caduquen sus copias y registros.
+
+### Segunda copia y restauración
+
+Operación y revisor conservan sus copias cifradas en equipos distintos y la clave
+aparte (anexos H p. 22). `backup:fetch -- --todas --salida <directorio-nuevo>` descarga
+las copias completas con sus metadatos y comprueba los hashes. El repositorio es
+público: estas copias no se publican como artifacts de CI ni se agregan a Git.
+
+Para una intervención:
+
+1. Registrar el comienzo y pausar las escrituras de API y worker. Descargar y
+   autenticar una copia de hasta 24 h:
+   `backup:fetch -- --salida <cifradas> --descifrar <copia-vacía>`.
+   La extracción autentica el archivo completo antes de escribir el destino y rechaza
+   rutas absolutas, recorridos `..`, enlaces y dispositivos.
+2. Crear un PostgreSQL/PostGIS compatible con volumen nuevo, separado de producción,
+   y abrir el túnel SSH de Railway. Registrar IDs del entorno, volumen y despliegues;
+   comprobar que difieren de los de producción. Restaurar en una base vacía creada
+   desde `template0`, con `pg_restore --no-owner --no-privileges --exit-on-error
+   --single-transaction`. No ejecutar migraciones down ni restaurar sobre la fuente.
+3. Restaurar `objects/lot-photos/` en el almacenamiento del destino, conservando claves
+   y bytes. En un ensayo, usar bucket separado o almacenamiento aislado: API/worker
+   del ensayo no deben limpiar objetos del bucket activo. Conservar la clave original
+   de los códigos de retiro.
+4. Ejecutar `backup:reconcile` con `K053_TARGET_DATABASE_URL`,
+   `K053_TARGET_PHOTO_STORAGE`, sus variables de fotos y `K053_PICKUP_CODE_KEY`.
+   Debe pasar todo el manifiesto: esquema, inventario, entregas, códigos,
+   incidencias/destinatarios, mensajes, avisos y fotos.
+5. Ejecutar la conciliación del diario descrita abajo, resolver los casos y registrar
+   las decisiones. No reabrir con casos inciertos pendientes.
+6. Desplegar API y worker compatibles contra el destino. Comprobar `/health` con base
+   y worker activos, búsqueda, detalle, fotos y bandeja autenticada; `test:deploy`
+   comprueba el trayecto HTTPS de la web. Medir el tiempo completo desde el paso 1:
+   debe ser hasta 60 min y la antigüedad de la copia hasta 24 h. Un paso omitido o
+   fallido no acredita el ensayo (#206).
+7. Reabrir solo después de conciliar y comprobar. Eliminar datos descifrados,
+   informes privados, túneles y recursos del ensayo; conservar evidencia sin datos
+   personales en la PR/release. La segunda copia cifrada y las claves se conservan
+   según su retención.
+
+La cuenta Railway debe pertenecer al proyecto. `railway ssh config --service postgres
+--alias rescate-pg` prepara el acceso SSH; el túnel local puede usar
+`ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:15432:127.0.0.1:5432 rescate-pg`.
+Las credenciales se cargan desde un gestor seguro o lectura silenciosa, nunca en argv,
+stdout, archivos versionados ni variables `VITE_`.
+
+### Compromisos posteriores a la copia
+
+El [ADR 0022](adr/0022-diario-de-recuperacion.md) define el diario independiente:
+intención antes del efecto y resultado mínimo después del COMMIT. Un fallo de
+confirmación conserva una intención incierta; una cuenta creada después de la copia
+sigue siendo contactable mediante su correo cifrado en ese diario.
+
+Con la base restaurada aún cerrada, configurar su `K053_TARGET_DATABASE_URL`, la
+`RECOVERY_JOURNAL_KEY`, el `RECOVERY_JOURNAL_SCOPE` del **origen** y su almacenamiento.
+`backup:journal -- <copia> --salida <informe-nuevo.json>` solo consulta PostgreSQL y
+objetos. Excluye resultados presentes en la copia y rechazos definitivos; incluye
+resultados posteriores y cualquier intención incierta retenida. Un diario corrupto
+impide generar un informe válido. El informe 0600 lista operación, lote/compromiso,
+resultado y contactos. La salida estándar solo muestra cantidad y estado.
+
+Operación contrasta cada caso con titular y establecimiento por el canal autorizado:
+confirmar si una reserva o una oferta sigue acordada, si se canceló o retiró, y si
+hubo una entrega o una incidencia que deba registrarse. No repetir automáticamente
+entregas, cobros, códigos ni mensajes. Registrar una decisión por ID del informe:
+
+```json
+[{"id":"<id-del-caso>","action":"contacted","evidence":"Contacto y acuerdo verificados por Operación."}]
 ```
 
-**Secretos.** Están en `railway variables --service postgres` y `--service api`. Se cargan
-con `read -rs` (no quedan en el historial de zsh) y se borran al terminar:
-
-```zsh
-read -rs 'K053_SOURCE_DATABASE_URL?URL: '; echo; export K053_SOURCE_DATABASE_URL
-read -rs 'PHOTO_S3_SECRET_ACCESS_KEY?Clave S3: '; echo; export PHOTO_S3_SECRET_ACCESS_KEY
-read -rs 'K053_PICKUP_CODE_KEY?PICKUP_CODE_KEY: '; echo; export K053_PICKUP_CODE_KEY
-# al terminar
-unset K053_SOURCE_DATABASE_URL PHOTO_S3_SECRET_ACCESS_KEY K053_PICKUP_CODE_KEY PGPASSWORD K053_TARGET_DATABASE_URL
-```
-
-El checkout debe tener `api/migrations` igual al release vigente
-(`git diff --quiet deploy-<SHA vigente> -- api/migrations`).
-
-1. **Copiar** cada día y antes de cada demostración, sin desplegar mientras corre. La URL
-   es `postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@127.0.0.1:15432/<POSTGRES_DB>`.
-   Para las fotos conviene una application key de B2 de solo lectura.
-
-   ```zsh
-   export K053_SOURCE_PHOTO_STORAGE=s3 PHOTO_S3_ENDPOINT=… PHOTO_S3_REGION=… PHOTO_S3_BUCKET=… PHOTO_S3_ACCESS_KEY_ID=…
-   npm --prefix api run backup:create
-   ```
-2. **Ensayar la restauración** con la ruta absoluta que imprime la copia:
-
-   ```zsh
-   npm --prefix api run backup:restore -- <copia> --manifiesto-sha256 <sha256> --anterior deploy-<SHA anterior> --borrar
-   ```
-3. **Cifrar y guardar.** Siete copias diarias en el equipo de Operación y una segunda en
-   el del revisor, con la clave aparte. Registrar `createdAt`, el sha256 del manifiesto y
-   el resultado del paso 2, y borrar la carpeta sin cifrar:
-
-   ```zsh
-   tar -C <padre> -cf - <copia> | openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -out <copia>.tar.enc
-   rm -rf <padre>/<copia>
-   # para usarla: openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in <copia>.tar.enc | tar -C <nueva> -xf -
-   ```
-4. **Recuperar ante una pérdida real.** Pausar API y worker, crear un PostgreSQL nuevo
-   con la imagen y el volumen de [despliegue](despliegue.md#servicios) y abrir un túnel
-   a él. La imagen crea extensiones que el volcado vuelve a crear, así que la base se
-   recrea desde `template0`:
-
-   ```zsh
-   export PGHOST=host.docker.internal PGPORT=15432 PGUSER=<POSTGRES_USER>   # PGPASSWORD con read -rs
-   pg() { docker run --rm -i -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD postgis/postgis:16-3.5 "$@" }
-   pg dropdb --force <POSTGRES_DB> && pg createdb --template=template0 <POSTGRES_DB>
-   pg pg_restore -d <POSTGRES_DB> --no-owner --no-privileges --exit-on-error --single-transaction < <copia>/database.dump
-   ```
-
-   Subir las fotos que falten en el bucket desde `objects/lot-photos/`. Antes de reabrir,
-   `backup:reconcile` debe pasar contra la base nueva y el bucket. Luego apuntar
-   `DATABASE_URL` de API y worker a la base nueva, desplegar el release compatible y
-   comprobar `test:deploy`.
+`action` admite `contacted`, `reconciled` o `no_effect`; cada caso requiere evidencia
+concreta. Repetir con `--decisiones <archivo.json> --salida <otro-informe.json>`
+verifica cobertura completa de decisiones. Sin resolver casos, sale con código 2 y
+`readyToReopen=false`; con acceso/integridad incorrectos sale 1. El resultado expresa
+la revisión registrada por Operación: el script no envía mensajes ni comprueba por sí
+mismo que una persona recibió el aviso. Borrar informes y decisiones al terminar.
 
 ### Ensayo local
 
@@ -222,10 +274,8 @@ worktree con `git worktree prune`.
 
 ### Limitaciones
 
-- La copia no está programada ni se cifra o rota sola.
-- La recuperación en Railway (paso 4) no está ensayada ni medida frente a 60 min.
-- Las escrituras posteriores a la copia se pierden, y los registros no dicen de qué
-  persona ni lote eran.
+- El ensayo real de recuperación en Railway debe acreditar el procedimiento completo y sus tiempos (#206).
+- El diario identifica los efectos posteriores; su conciliación requiere intervención de Operación y contacto con los afectados.
 - El bucket B2 borra todas las versiones al quitar una foto: la copia es el único
   respaldo de las fotos ([fotos](fotos.md#respaldo)).
 - La copia no incluye `PICKUP_CODE_KEY`. Sin esa clave, los códigos vigentes restaurados
@@ -241,4 +291,6 @@ worktree con `git worktree prune`.
 | --- | --- |
 | `npm --prefix api test` | Línea por solicitud con plantilla de la ruta, `(sin ruta)` y estado `null` si se corta; `request_failed` con el mismo identificador; salud con base disponible o no. |
 | `npm --prefix api run db:test:operations:compose` | PostgreSQL real y procesos reales del worker: salud sin worker, latido, demora por cola, fallo real correlacionado con su solicitud, `kill -9` detectado como worker detenido, `ops:status` con un lote atrasado, lotes en error, el último intento en curso como pendiente y un aviso abandonado, recuperación al reiniciar, salud 503 sin base y con la base colgada (llamadas simultáneas y sucesivas con una sola conexión), `ops:status` sin base o con la base que deja de responder tras la salud, y base sin migrar. |
-| `npm --prefix api run backup:rehearsal` | Ensayo de copia y restauración de punta a punta con datos ficticios ([abajo](#ensayo-local)). |
+| `npm --prefix api run backup:rehearsal` | Ensayo de copia y restauración de punta a punta con datos ficticios ([ensayo local](#ensayo-local)). |
+| `node --test api/test/encrypted-backups.test.mjs api/test/recovery-report.test.mjs` (tras build) | Cifrado, corrupción, extracción, subida verificada, rotación y decisiones completas. |
+| `npm --prefix api run db:test:triage:compose` | Instantánea anterior a nueve operaciones reales; diario cifrado, contactos de cuentas nuevas, vínculos con lotes y ausencia de llamadas externas bajo locks. |

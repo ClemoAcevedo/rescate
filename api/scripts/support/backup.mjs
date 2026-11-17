@@ -37,6 +37,10 @@ export async function sha256File(path) {
 }
 
 export function repositoryState() {
+  if (process.env.BACKUP_TOOL_SHA) {
+    if (!/^[a-f0-9]{40}$/.test(process.env.BACKUP_TOOL_SHA)) throw new Error('BACKUP_TOOL_SHA debe identificar el commit completo de la herramienta')
+    return { commit: process.env.BACKUP_TOOL_SHA, dirty: process.env.BACKUP_TOOL_DIRTY === '1' }
+  }
   return { commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain').length > 0 }
 }
 
@@ -211,19 +215,23 @@ export async function dumpDatabase(connection, snapshot, target) {
     const escape = value => value.replace(/[\\:]/g, character => `\\${character}`)
     await writeFile(join(work, 'pgpass'), `*:*:*:*:${escape(connection.password)}\n`, { mode: 0o600 })
     const linux = process.platform === 'linux'
+    const native = process.env.BACKUP_PG_TOOLS === 'native'
+    if (native && !/^pg_dump \(PostgreSQL\) 16\./.test(execFileSync('pg_dump', ['--version'], { encoding: 'utf8' }))) throw new Error('La copia requiere pg_dump 16')
     const env = {
-      PGHOST: connection.loopback && !linux ? 'host.docker.internal' : connection.host,
+      PGHOST: connection.loopback && !linux && !native ? 'host.docker.internal' : connection.host,
       PGPORT: String(connection.port), PGUSER: connection.user, PGDATABASE: connection.database,
-      PGPASSFILE: '/k053/pgpass', PGCONNECT_TIMEOUT: String(connection.connectTimeout), PGAPPNAME: 'rescate-k053',
+      PGPASSFILE: native ? join(work, 'pgpass') : '/k053/pgpass', PGCONNECT_TIMEOUT: String(connection.connectTimeout), PGAPPNAME: 'rescate-k053',
       PGSSLMODE: connection.sslmode ?? (connection.loopback ? 'disable' : 'prefer'),
     }
     if (connection.rootCertPath) {
       await copyFile(connection.rootCertPath, join(work, 'root.crt'))
-      env.PGSSLROOTCERT = '/k053/root.crt'
+      env.PGSSLROOTCERT = native ? join(work, 'root.crt') : '/k053/root.crt'
     }
-    const child = spawn('docker', ['run', '--rm', '--platform', 'linux/amd64', ...(connection.loopback && linux ? ['--network', 'host'] : []),
+    const args = ['--format=custom', '--no-owner', '--no-privileges', `--lock-wait-timeout=${LOCK_WAIT}`, `--snapshot=${snapshot}`]
+    const child = native ? spawn('pg_dump', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } })
+      : spawn('docker', ['run', '--rm', '--platform', 'linux/amd64', ...(connection.loopback && linux ? ['--network', 'host'] : []),
       '-v', `${work}:/k053:ro`, ...Object.keys(env).flatMap(key => ['-e', key]), POSTGRES_IMAGE,
-      'pg_dump', '--format=custom', '--no-owner', '--no-privileges', `--lock-wait-timeout=${LOCK_WAIT}`, `--snapshot=${snapshot}`],
+      'pg_dump', ...args],
     { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } })
     const stopChild = onInterrupt(() => child.kill('SIGKILL'))
     const hash = createHash('sha256')

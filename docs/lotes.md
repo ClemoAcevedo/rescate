@@ -94,8 +94,8 @@ recibe una explicación.
 | Tema | Decisión |
 | --- | --- |
 | Tipos | `api:types` genera `web/src/services/openapi.ts`; `lots-service.ts` valida la respuesta en runtime. |
-| Establecimiento y zona | `Combobox` con filtro por texto. El establecimiento se elige solo al crear; con uno solo queda preseleccionado. La zona parte en `America/Santiago`. |
-| Coordenadas | Se ingresan a mano o con «Usar mi ubicación actual» (geolocalización del navegador, sin llamar a la API). Precargarlas desde el establecimiento requiere cambiar el contrato (#97). |
+| Establecimiento y zona | Selector con búsqueda paginada en servidor. El establecimiento se elige solo al crear; con uno solo queda preseleccionado. Dirección, coordenadas y zona se consultan desde su detalle autorizado. |
+| Coordenadas | La precarga es editable; una respuesta tardía o un reintento conserva los campos que ya tocó la persona. «Usar mi ubicación actual» usa geolocalización del navegador. |
 | Ventana de retiro | Se escribe en la zona del lote y se envía en RFC 3339 con offset. Una hora inexistente por cambio de horario se rechaza antes de enviar. |
 | Campos numéricos | Ignoran cualquier cambio no numérico al escribir o pegar; la coma decimal se toma como punto. |
 | Edición | PATCH con `version` y solo los campos modificados. |
@@ -216,11 +216,13 @@ y crean una base aislada que conservan para inspección.
 | `npm --prefix api run db:test:discovery:compose` | Búsqueda PostGIS, filtros/páginas, último pack concurrente, reintentos, claves por actor, rollback y cierre tras esperar bloqueo. |
 | `npm --prefix api run test:web:compose` | Chromium contra Vite HTTPS, la API y el worker de fotos: formularios, fotos del borrador (rechazo, lista, D-05 y publicación), galería pública, «Mis lotes» con filtros, búsqueda sin geolocalización, reserva real, respuesta perdida tras commit y layout sin scroll horizontal. |
 
-## Limitaciones
-
-- Las coordenadas no se precargan desde el establecimiento (#97). Geocodificar o
-  elegir en un mapa requiere decidir proveedor, claves y costo.
-- El filtro de establecimientos opera sobre la lista completa de la sesión (#99).
+La búsqueda de establecimientos consulta nombre y dirección sin distinguir mayúsculas
+ni tildes, en páginas de veinte. La sesión solo incluye hasta veinte opciones iniciales;
+el catálogo de la interfaz recuerda las seleccionadas y resuelve por detalle autorizado
+un enlace a otra opción. Cambiar establecimiento conserva el contenido del lote y
+reinicia su ubicación; reintentar su precarga conserva las modificaciones manuales.
+La precarga reserva espacio durante carga, error y resultado. Geocodificar una dirección
+o elegir en un mapa requiere decidir proveedor, claves y costo.
 
 ## Disponibilidad después de publicar
 

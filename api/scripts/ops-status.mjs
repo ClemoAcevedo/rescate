@@ -3,6 +3,7 @@
 import { EXPIRY_LIMITS } from '../dist/application/expiries/use-cases.js'
 import { createOperations } from '../dist/infrastructure/postgres/operations.js'
 import { createPool } from '../dist/infrastructure/postgres/pool.js'
+import { BACKUP_PREFIX, backupStore, readJson } from './support/encrypted-backups.mjs'
 
 if (!process.env.DATABASE_URL) throw new Error('Falta DATABASE_URL')
 // Conexión con tope de 5 s y cada consulta con tope local: una base que deja de responder no
@@ -20,6 +21,20 @@ try {
     const failed = await operations.listFailedTasks()
     if (failed.length) console.table(failed)
     else console.log('Sin tareas en error.')
+    if (process.env.BACKUP_S3_BUCKET || process.env.NODE_ENV === 'production' && process.env.PHOTO_S3_BUCKET) {
+      const store = backupStore()
+      try {
+        const status = await readJson(store, `${BACKUP_PREFIX}status.json`)
+        const createdAt = status?.lastSuccess?.createdAt
+        const age = createdAt ? (Date.now() - Date.parse(createdAt)) / 3_600_000 : Infinity
+        const valid = Number.isFinite(age) && age >= 0 && age <= 24 && status.state === 'ok'
+        console.log(`Copia diaria: ${valid ? 'vigente' : 'REVISAR'}, última copia: ${createdAt ?? 'sin copia'}, último intento: ${status?.state ?? 'sin registro'}`)
+        if (!valid) process.exitCode = 1
+      } catch {
+        console.error('No se pudo verificar la copia diaria en el bucket privado.')
+        process.exitCode = 1
+      } finally { store.close() }
+    }
   }
 } catch {
   // El error puede traer host o credenciales.

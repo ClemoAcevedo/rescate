@@ -205,6 +205,8 @@ export interface HttpSchemas {
   IncidentNoticeCounts: IncidentNoticeCounts
   EstablishmentIncident: EstablishmentIncident
   EstablishmentIncidentPage: EstablishmentIncidentPage
+  OperableEstablishmentDetails: OperableEstablishmentDetails
+  OperableEstablishmentPage: OperableEstablishmentPage
 }
 export interface LotManagementRequest {
   action: "reduce_stock" | "pause" | "resume" | "withdraw"
@@ -252,7 +254,9 @@ export interface LoginResponse {
 export interface Session {
   user: User
   /**
-   * Lista sin establecimientos duplicados; puede estar vacía. Una persona puede operar varios. Es información para la UI, no autorización reutilizable.
+   * Hasta 20 establecimientos iniciales, ordenados por ID público. Puede estar vacía. Para buscar o paginar usar GET /establishments. Es información para la UI, no autorización reutilizable.
+   *
+   * @maxItems 20
    */
   operableEstablishments: OperableEstablishment[]
   /**
@@ -1045,6 +1049,22 @@ export interface EstablishmentIncidentPage {
    * @maxItems 20
    */
   items: EstablishmentIncident[]
+  page: number
+  hasNextPage: boolean
+}
+export interface OperableEstablishmentDetails {
+  id: PublicId
+  name: string
+  address: Address
+  latitude: Latitude
+  longitude: Longitude
+  timeZone: TimeZone
+}
+export interface OperableEstablishmentPage {
+  /**
+   * @maxItems 20
+   */
+  items: OperableEstablishmentDetails[]
   page: number
   hasNextPage: boolean
 }

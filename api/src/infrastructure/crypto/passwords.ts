@@ -21,10 +21,14 @@ function checkedParameters(parameters: ScryptParameters): ScryptParameters {
 export function createPasswordHasher(creationParameters: ScryptParameters = SCRYPT_CREATION_PARAMETERS): PasswordHasher {
   const creation = checkedParameters(creationParameters)
   let active = 0
+  let registrations = 0
 
-  async function derive(password: string, salt: Uint8Array, parameters: ScryptParameters): Promise<Buffer> {
-    if (active >= MAX_CONCURRENT) throw new PasswordHashingCapacityError()
+  async function derive(password: string, salt: Uint8Array, parameters: ScryptParameters, registration = false): Promise<Buffer> {
+    // Un registro no consume el último cupo: el acceso de cuentas existentes
+    // conserva capacidad incluso ante registros desde varios orígenes.
+    if (active >= MAX_CONCURRENT || (registration && registrations >= MAX_CONCURRENT - 1)) throw new PasswordHashingCapacityError()
     active++
+    if (registration) registrations++
     try {
       return await new Promise<Buffer>((resolve, reject) => {
         // API asíncrona: libuv hace el cálculo, sin bloquear el event loop.
@@ -35,13 +39,14 @@ export function createPasswordHasher(creationParameters: ScryptParameters = SCRY
       })
     } finally {
       active--
+      if (registration) registrations--
     }
   }
 
   return {
     async hash(password) {
       const salt = randomBytes(16)
-      const hash = await derive(password, salt, creation)
+      const hash = await derive(password, salt, creation, true)
       return { hash: new Uint8Array(hash), salt: new Uint8Array(salt), parameters: { ...creation } }
     },
     async verify(password: string, credential: PasswordCredential) {

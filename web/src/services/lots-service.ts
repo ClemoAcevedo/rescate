@@ -1,6 +1,7 @@
 import {
   ConnectionError,
   HttpError,
+  parseApiError,
   UnexpectedResponseError,
   buildUrl,
   request,
@@ -39,12 +40,6 @@ export class LotRequestError extends Error {
     this.retryAfter = retryAfter
   }
 }
-
-const errorCodes = new Set<LotErrorCode>([
-  'MALFORMED_REQUEST', 'UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND', 'CONFLICT',
-  'PAYLOAD_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE', 'VALIDATION_ERROR', 'RATE_LIMITED',
-  'INTERNAL_ERROR', 'SERVICE_UNAVAILABLE',
-])
 
 const lotStatuses: readonly string[] = ['draft', 'published', 'expired', 'withdrawn'] satisfies LotResponse['status'][]
 
@@ -98,15 +93,6 @@ const parseLotResponse: ResponseParser<LotResponse> = (value) => {
   }
 }
 
-function parseError(value: unknown): LotError | undefined {
-  if (!isRecord(value) || !isRecord(value.error) || typeof value.error.code !== 'string'
-    || !errorCodes.has(value.error.code as LotErrorCode) || typeof value.error.message !== 'string') return undefined
-  const issues = isRecord(value.error.details) && Array.isArray(value.error.details.issues)
-    ? value.error.details.issues.flatMap((issue) => isRecord(issue) && typeof issue.path === 'string' && typeof issue.message === 'string'
-      ? [{ path: issue.path, message: issue.message }] : [])
-    : []
-  return { code: value.error.code as LotErrorCode, message: value.error.message, issues }
-}
 
 const photoStatuses = new Set<LotPhoto['status']>(['uploading', 'pending', 'ready', 'rejected'])
 const rejectionReasons = new Set<NonNullable<LotPhoto['rejectionReason']>>([
@@ -164,7 +150,7 @@ async function send<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
     })
   } catch (error) {
     if (error instanceof HttpError) {
-      const lotError = parseError(error.body)
+      const lotError = parseApiError(error.body)
       if (lotError) throw new LotRequestError(lotError, error.status, error.retryAfter)
     }
     throw error

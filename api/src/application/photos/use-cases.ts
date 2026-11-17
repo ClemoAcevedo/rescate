@@ -60,6 +60,12 @@ export function createPhotoUseCases({ repository, objects, images, now, maxPhoto
     return objects
   }
 
+  async function authorizeBeforeLock(actor: Actor, lotId: string): Promise<void> {
+    const found = await repository.findLotPhotos(lotId)
+    if (found === null) throw lotNotFound()
+    if (!(await repository.isMemberOfEstablishment(actor.userId, found.lot.establishmentId))) throw notAuthorized()
+  }
+
   /** Retiro de una carga fallida. Si falla, la limpieza periódica lo completa. */
   async function release(lotId: string, photoId: string, store: ObjectStore): Promise<void> {
     try {
@@ -102,6 +108,7 @@ export function createPhotoUseCases({ repository, objects, images, now, maxPhoto
   return {
     async upload(actor, input) {
       const store = requireObjects()
+      await authorizeBeforeLock(actor, input.lotId)
       const at = now()
       const slot = await repository.withLotPhotos(input.lotId, async (lot, writer) => {
         if (lot === null) throw lotNotFound()
@@ -127,8 +134,12 @@ export function createPhotoUseCases({ repository, objects, images, now, maxPhoto
           throw new PhotoRuleError("unrecognized_image")
         }
         await store.put(photoObjectKeys(slot.publicId).upload, bytes, "application/octet-stream")
-        const confirmed = await repository.withLotPhotos(input.lotId, async (lot, writer) =>
-          lot?.status === "draft" ? writer.confirmUpload(slot.publicId, bytes.length, now()) : null)
+        await authorizeBeforeLock(actor, input.lotId)
+        const confirmed = await repository.withLotPhotos(input.lotId, async (lot, writer) => {
+          if (!lot) return null
+          if (!(await writer.isMemberOfEstablishment(actor.userId, lot.establishmentId))) throw notAuthorized()
+          return lot.status === 'draft' ? writer.confirmUpload(slot.publicId, bytes.length, now()) : null
+        })
         if (confirmed === null) throw photoUploadExpired()
         return confirmed
       } catch (error) {
@@ -146,6 +157,7 @@ export function createPhotoUseCases({ repository, objects, images, now, maxPhoto
     },
 
     async remove(actor, lotId, photoId) {
+      await authorizeBeforeLock(actor, lotId)
       await repository.withLotPhotos(lotId, async (lot, writer) => {
         if (lot === null) throw lotNotFound()
         if (!(await writer.isMemberOfEstablishment(actor.userId, lot.establishmentId))) throw notAuthorized()

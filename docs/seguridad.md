@@ -17,6 +17,7 @@ acotan sus claves: con el mapa lleno, una clave nueva recibe 503.
 | 3000 solicitudes/min por IP, ráfaga 100 | Todas las rutas salvo `/health` | Memoria del proceso |
 | Login: 5 fallos por cuenta en 15 min bloquean 15 min | Application de identidad | PostgreSQL (`login_security_state` y `login_failures`) |
 | Login: 30 intentos por IP en 15 min | `POST /auth/login` | Memoria del proceso |
+| Registro: 30 intentos por IP en 15 min, independiente del login | `POST /auth/register`, antes de scrypt | Memoria del proceso |
 | Código de retiro: 5 fallos por operador en 15 min suspenden 15 min | Application de reservas, al revisar y al confirmar | PostgreSQL (`pickup_code_security_state` y `pickup_code_failures`) |
 | Código de retiro: 30 revisiones por IP por minuto | Application de reservas, después del permiso y antes de comparar el código | Memoria del proceso |
 | Mensajes de chat: 12/min por usuario, ráfaga 3 | `POST /reservations/:reservationId/messages` ([chat](chat.md)) | Memoria del proceso |
@@ -26,6 +27,11 @@ instancias: H p. 21 los describe como protección de una sola API, no como defen
 distribuida. Los fallos de login y de código se guardan en PostgreSQL, así que
 sobreviven a un reinicio y valen para todos los procesos.
 
+Registro y login comparten un adaptador scrypt con un máximo de dos cálculos
+simultáneos y sin cola. Solo uno puede ser de registro: una ráfaga de altas conserva
+un cupo para verificar contraseñas de cuentas existentes. Agotar el cupo de registro
+no consume la ventana de login.
+
 **Códigos de retiro.** Cuenta como fallo un código que no corresponde a una reserva del
 lote; el código válido de una reserva terminada no. Durante la suspensión, revisar y
 confirmar responden 429 antes de buscar el código, también con el correcto, y no suman
@@ -34,11 +40,18 @@ igual que revisar, también en la ventana por IP, y esa ventana solo la gastan o
 con membership del lote. Decisión y alternativas en
 [ADR 0013](adr/0013-limite-de-codigos-de-retiro.md).
 
-**Origen.** La IP es la del socket: la API no confía en `X-Forwarded-For` y cambiar
-esa cabecera no evade un límite. Detrás del proxy de producción todos los clientes
-pueden compartir esa IP. Entonces la ventana de login por IP es común a todos, y quien
-la agote bloquea el login de los demás durante 15 minutos; la de códigos es común a los
-operadores autorizados (#141).
+**Origen.** El proxy Vercel sobrescribe `x-rescate-proxy-secret` mediante un transform
+de petición del CDN. Solo con ese secreto válido la API acepta `x-vercel-forwarded-for`,
+que Vercel fija con la IP del cliente. Un acceso directo o un secreto incorrecto usa
+el socket. Nunca se confía en `X-Forwarded-For` ni se activa `trust proxy` general.
+IPv4-mapped se normaliza como IPv4; IPv6 comparte ventana por /64, para evitar
+eludirla rotando direcciones del mismo prefijo. El secreto solo vive en configuración
+de servidor, sin cabecera de respuesta ni variable `VITE_`.
+
+La garantía sobre la cabecera procede de [Vercel](https://vercel.com/docs/headers/request-headers);
+el [transform de petición](https://vercel.com/docs/project-configuration/vercel-json#transforms)
+mantiene el rewrite externo sin interponer una función con un límite de cuerpo menor
+al de las fotos. La comprobación del trayecto real forma parte del release (#141).
 
 ## Aislamiento por objeto
 
@@ -57,6 +70,10 @@ En las rutas del operador, un lote o establecimiento ajeno responde 403 y uno
 inexistente 404, como fija el contrato; con UUID aleatorios eso no permite enumerar
 lotes.
 
+Editar, publicar y mutar fotos comprueban membership antes de competir por el bloqueo
+del lote y lo vuelven a comprobar dentro de la unidad atómica. La lista de sesión
+orienta la interfaz; no concede el permiso de escritura.
+
 ## Registros sin secretos
 
 Los registros llevan eventos con valores primitivos (`Log` en
@@ -74,6 +91,10 @@ llevan `X-Content-Type-Options: nosniff`.
 Todo evento nuevo usa el mismo tipo y el sumidero único que recibe `createApi`. La
 línea de cada solicitud lleva la plantilla de la ruta, nunca la URL con valores, sus
 cabeceras ni su cuerpo, y un identificador generado ([operación](operacion.md)).
+
+El diario de recuperación es un archivo privado cifrado separado de stdout. Guarda
+contacto e identificadores mínimos durante su retención para conciliar una pérdida
+([ADR 0022](adr/0022-diario-de-recuperacion.md)); nunca incluye credenciales ni códigos.
 
 ## Pruebas
 
