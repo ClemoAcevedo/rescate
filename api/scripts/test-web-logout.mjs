@@ -47,7 +47,7 @@ try {
     })
     await page.goto(`${baseUrl}/lotes`)
     await page.locator('.session-status').waitFor({ state: 'attached' })
-    const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+    const menu = page.getByRole('button', { name: /^Abrir menú(?:,|$)/ })
     if (await menu.isVisible()) await menu.click()
     const logout = page.getByRole('button', { name: 'Cerrar sesión' })
     await logout.click()

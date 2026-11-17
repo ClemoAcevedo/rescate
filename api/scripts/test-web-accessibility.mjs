@@ -19,6 +19,7 @@ try {
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     let current = structuredClone(reservation)
+    let cancellationRequests = 0
     let wait = { id: 'w_test', lot, requestedQuantity: 10, offeredQuantity: null, offerExpiresAt: null, position: 2, reservationId: null, status: 'waiting', createdAt: current.createdAt, endedAt: null }
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname
@@ -29,7 +30,10 @@ try {
       else if (path === '/api/public/lots/lot_test') json = lot
       else if (path === '/api/public/lots/lot_test/reservations') json = { id: current.id, lotId: lot.id, quantity: 1, status: 'confirmed', createdAt: current.createdAt }
       else if (path === '/api/reservations/res_test') json = current
-      else if (path === '/api/reservations/res_test/cancel') json = current = { ...current, status: 'cancelled', pickupCode: null, endedAt: '2030-01-15T19:00:00Z' }
+      else if (path === '/api/reservations/res_test/cancel') {
+        cancellationRequests++
+        json = current = { ...current, status: 'cancelled', pickupCode: null, endedAt: '2030-01-15T19:00:00Z' }
+      }
       else if (path === '/api/waitlist/w_test') json = wait
       else if (path === '/api/waitlist/w_test/accept') {
         current = { ...reservation, quantity: 4 }
@@ -85,15 +89,23 @@ try {
     await fits()
     await activate('button', 'Cancelar reserva')
     const confirm = page.getByRole('button', { name: 'Confirmar cancelación', exact: true })
-    await expectFocus(confirm)
+    const prompt = page.getByText('¿Cancelar esta reserva? Los packs quedarán libres para otras personas y tu código dejará de servir.', { exact: true })
+    await expectFocus(prompt)
+    await page.getByRole('group', { name: await prompt.innerText(), exact: true }).getByRole('button', { name: 'Confirmar cancelación', exact: true }).waitFor()
+    await page.keyboard.press('Enter')
+    await expectFocus(prompt)
+    assert.equal(cancellationRequests, 0, 'otro Enter sobre la pregunta no envía una cancelación')
+    assert.equal(current.status, 'confirmed')
     await activate('button', 'Conservar reserva')
     await expectFocus(page.getByRole('button', { name: 'Cancelar reserva', exact: true }))
     await page.keyboard.press('Enter')
-    await expectFocus(confirm)
+    await expectFocus(prompt)
+    await tabTo(confirm)
     await page.keyboard.press('Enter')
     await page.getByText('Cancelada', { exact: true }).waitFor()
     await expectFocus(page.locator('.reservation-result'))
     assert.equal(await page.locator('.pickup-code').count(), 0)
+    assert.equal(cancellationRequests, 1, 'cancelar exige elegir explícitamente la confirmación')
     await fits()
     await page.goto(base + '/espera/w_test')
     await page.getByText(/Tu lugar en la lista: 2/).waitFor()

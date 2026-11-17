@@ -133,6 +133,7 @@ code, kbd, samp { font-family: var(--font-mono); }
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
 }
+.menu-toggle .notifications-badge { margin-left: 0; }
 .session-status {
   display: inline-flex;
   align-items: center;
@@ -559,7 +560,7 @@ code, kbd, samp { font-family: var(--font-mono); }
     padding-block: var(--sp-3);
   }
 
-  .site-header .menu-toggle { display: inline-flex; }
+  .site-header .menu-toggle { display: inline-flex; padding-inline: var(--sp-3); }
 
   .main-navigation {
     display: none;
