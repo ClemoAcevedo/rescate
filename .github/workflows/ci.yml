@@ -77,6 +77,8 @@ jobs:
         run: npm run api:types:check
       - name: Tests
         run: npm run test:coverage
+      - name: Backup encryption, integrity and retention
+        run: npm run build && node --test test/encrypted-backups.test.mjs test/recovery-report.test.mjs
       - name: Build
         run: npm run build
       - name: Unit coverage by API layer
@@ -174,6 +176,8 @@ jobs:
         run: npm --prefix api ci
       - name: K003 migrations on empty PostgreSQL and rollback
         run: npm --prefix api run db:test:compose
+      - name: Triage membership locks, establishment pagination and registration capacity
+        run: npm --prefix api run db:test:triage:compose
       - name: K010 lots on empty PostgreSQL
         run: npm --prefix api run db:test:lots:compose
       - name: K008 identity infrastructure on empty PostgreSQL

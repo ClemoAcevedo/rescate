@@ -65,6 +65,7 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
     },
 
     async updateDraft(actor, input) {
+      await authorizeLot(await repository.findByPublicId(input.publicId), actor, repository)
       return repository.withLotTransaction(input.publicId, async (lot, writer) => {
         const target = await authorizeLot(lot, actor, writer)
         requireVersion(target, input.expectedVersion)
@@ -80,6 +81,7 @@ export function createLotUseCases(repository: LotRepository, now: Clock): LotUse
     },
 
     async publish(actor, input) {
+      await authorizeLot(await repository.findByPublicId(input.publicId), actor, repository)
       return repository.withLotTransaction(input.publicId, async (lot, writer) => {
         const target = await authorizeLot(lot, actor, writer)
         requireVersion(target, input.expectedVersion)

@@ -10,17 +10,20 @@ function load(environment: Record<string, string>) {
     "import { config } from './vercel.mjs'; console.log(JSON.stringify(config))"], {
     cwd: web,
     encoding: "utf8",
-    env: { ...process.env, API_PROXY_TARGET: "", VITE_API_BASE_URL: "", VITE_AUTH_MOCK_SCENARIO: "", ...environment },
+    env: { ...process.env, API_PROXY_TARGET: "", API_PROXY_SECRET: 'test'.repeat(10), VITE_API_BASE_URL: "", VITE_AUTH_MOCK_SCENARIO: "", ...environment },
   })
 }
 
 test("Vercel conserva /api en el navegador y lo elimina antes de Railway; fallback SPA al final", () => {
   const result = load({ API_PROXY_TARGET: "https://rescate-api.up.railway.app", VITE_API_BASE_URL: "/api" })
   assert.equal(result.status, 0, result.stderr)
-  const { rewrites } = JSON.parse(result.stdout)
-  assert.deepEqual(rewrites, [
-    { source: "/api/:path*", destination: "https://rescate-api.up.railway.app/:path*" },
-    { source: "/(.*)", destination: "/index.html" },
+  const { routes } = JSON.parse(result.stdout)
+  assert.deepEqual(routes, [
+    { src: '/api(?:/(.*))?$', dest: 'https://rescate-api.up.railway.app/$1', transforms: [
+      { type: 'request.headers', op: 'set', target: { key: 'x-rescate-proxy-secret' }, args: 'test'.repeat(10) },
+    ] },
+    { handle: 'filesystem' },
+    { src: '/(.*)', dest: '/index.html' },
   ])
 })
 
@@ -31,6 +34,7 @@ test("Vercel rechaza un proxy ausente/inseguro, un cliente de otro origen y mock
   }
   assert.notEqual(load({ API_PROXY_TARGET: "https://api.example.com", VITE_API_BASE_URL: "https://api.example.com" }).status, 0)
   assert.notEqual(load({ API_PROXY_TARGET: "https://api.example.com", VITE_AUTH_MOCK_SCENARIO: "success" }).status, 0)
+  assert.notEqual(load({ API_PROXY_TARGET: "https://api.example.com", API_PROXY_SECRET: '' }).status, 0)
 })
 
 test("K051: en producción API y worker guardan fotos solo en el bucket, nunca en el disco del servicio", () => {

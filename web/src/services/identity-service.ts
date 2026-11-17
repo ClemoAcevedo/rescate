@@ -6,26 +6,11 @@ import {
   type ResponseParser,
 } from './http-client'
 
-export type User = { id: string; email: string }
-export type OperableEstablishment = { id: string; name: string }
-export type Session = {
-  user: User
-  operableEstablishments: OperableEstablishment[]
-  expiresAt: string
-}
-export type SessionResponse = { session: Session | null; csrfToken: string }
-export type RegisterResponse = { user: User }
-export type LoginResponse = { session: Session; csrfToken: string }
-export type IdentityErrorCode =
-  | 'MALFORMED_REQUEST' | 'UNAUTHENTICATED' | 'FORBIDDEN' | 'NOT_FOUND'
-  | 'CONFLICT' | 'PAYLOAD_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' | 'VALIDATION_ERROR'
-  | 'RATE_LIMITED' | 'INTERNAL_ERROR' | 'SERVICE_UNAVAILABLE'
-
-export type IdentityError = {
-  code: IdentityErrorCode
-  message: string
-  issues: Array<{ path: string; message: string }>
-}
+import type { LoginResponse, RegisterResponse, Session, SessionResponse, User } from './openapi'
+import { parseApiError, type ApiError } from './http-client'
+export type { LoginResponse, OperableEstablishment, RegisterResponse, Session, SessionResponse, User } from './openapi'
+export type IdentityError = ApiError
+export type IdentityErrorCode = ApiError['code']
 
 export class IdentityRequestError extends Error {
   readonly kind = 'identity-request'
@@ -39,12 +24,6 @@ export class IdentityRequestError extends Error {
     this.status = status
   }
 }
-
-const errorCodes = new Set<IdentityErrorCode>([
-  'MALFORMED_REQUEST', 'UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND', 'CONFLICT',
-  'PAYLOAD_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE', 'VALIDATION_ERROR', 'RATE_LIMITED',
-  'INTERNAL_ERROR', 'SERVICE_UNAVAILABLE',
-])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -91,22 +70,12 @@ const parseLoginResponse: ResponseParser<LoginResponse> = (value) => {
   return { session: result.session, csrfToken: result.csrfToken }
 }
 
-function parseError(value: unknown): IdentityError | undefined {
-  if (!isRecord(value) || !isRecord(value.error) || typeof value.error.code !== 'string'
-    || !errorCodes.has(value.error.code as IdentityErrorCode) || typeof value.error.message !== 'string') return undefined
-  const issues = isRecord(value.error.details) && Array.isArray(value.error.details.issues)
-    ? value.error.details.issues.flatMap((issue) => isRecord(issue) && typeof issue.path === 'string' && typeof issue.message === 'string'
-      ? [{ path: issue.path, message: issue.message }] : [])
-    : []
-  return { code: value.error.code as IdentityErrorCode, message: value.error.message, issues }
-}
-
 async function command<T>(path: string, body: unknown, csrfToken: string, parse: ResponseParser<T>): Promise<T> {
   try {
     return await request({ path, method: 'POST', body, headers: { 'X-CSRF-Token': csrfToken }, parse }) as T
   } catch (error) {
     if (error instanceof HttpError) {
-      const identityError = parseError(error.body)
+      const identityError = parseApiError(error.body)
       if (identityError) throw new IdentityRequestError(identityError, error.status)
     }
     throw error
@@ -128,7 +97,7 @@ export function createIdentityService(): IdentityService {
       } catch (error) {
         if (error instanceof ConnectionError || error instanceof UnexpectedResponseError) throw error
         if (error instanceof HttpError) {
-          const identityError = parseError(error.body)
+          const identityError = parseApiError(error.body)
           if (identityError) throw new IdentityRequestError(identityError, error.status)
         }
         throw error

@@ -1,6 +1,7 @@
 // HTTP traduce errores semánticos; nunca devuelve diagnósticos internos.
 import { IdentityError, PasswordHashingCapacityError } from "../application/identity/errors.js"
 import { TrafficLimitError, TrafficCapacityError } from "./rate-limits.js"
+import { RecoveryJournalUnavailableError } from '../application/recovery/journal.js'
 import type { Response } from "express"
 import { ApplicationError, ConcurrentUploadsError, InventoryDiscrepancyError, PickupReviewSuspendedError } from "../application/errors.js"
 import { errorCode } from "../application/logging.js"
@@ -79,6 +80,9 @@ export function handleError(error: unknown, response: Response, log: Log): void 
   } else if (error instanceof TrafficLimitError) {
     response.set("Retry-After", String(error.retryAfter))
     sendError(response, 429, "RATE_LIMITED", "Intenta nuevamente después del tiempo indicado.")
+  } else if (error instanceof RecoveryJournalUnavailableError) {
+    response.set('Retry-After', '5')
+    sendError(response, 503, 'SERVICE_UNAVAILABLE', 'El servicio no está disponible temporalmente.')
   } else if (error instanceof PasswordHashingCapacityError || error instanceof TrafficCapacityError) {
     sendError(response, 503, "SERVICE_UNAVAILABLE", "El servicio no está disponible temporalmente.")
   } else if (error instanceof ReservationRuleError) {

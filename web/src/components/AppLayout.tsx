@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { RescateLogo } from './RescateLogo'
 import { SiteHeader } from './SiteHeader'
 import { Alert } from './ui/Alert'
+import { EstablishmentCatalog } from './EstablishmentCatalog'
 
 export function AppLayout() {
   const { status, session, error, refreshSession } = useAuth()
@@ -32,7 +33,7 @@ export function AppLayout() {
           </Alert>
         </div>
       )}
-      <Outlet />
+      <EstablishmentCatalog key={session?.user.id ?? 'anonymous'}><Outlet /></EstablishmentCatalog>
       <footer className="site-footer">
         <div className="site-footer__inner">
           <RescateLogo className="site-footer__brand" />

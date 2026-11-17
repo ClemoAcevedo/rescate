@@ -1,0 +1,19 @@
+FROM node:24.14.0-bookworm-slim AS build
+WORKDIR /app/api
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+COPY scripts ./scripts
+COPY migrations ./migrations
+
+# Cliente PostgreSQL 16 nativo: el trabajo de Railway no requiere un daemon Docker.
+FROM postgis/postgis:16-3.5
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+COPY --from=build --chown=postgres:postgres /app/api /app/api
+WORKDIR /app/api
+ENV BACKUP_PG_TOOLS=native
+USER postgres
+ENTRYPOINT []
+CMD ["node", "scripts/backup-scheduled.mjs"]

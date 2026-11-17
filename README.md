@@ -362,7 +362,11 @@ lo cambia.
   fotos, y levanta la API y el worker actuales y los del release anterior sin migraciones
   down; `backup:reconcile` concilia una base restaurada fuera del Compose;
   `backup:rehearsal` ensaya pérdida, recuperación medida frente a 60 min y 24 h y fallas
-  detectadas con datos ficticios. La copia de producción se toma por un túnel SSH de
-  Railway, sin abrir puertos públicos ([operación](docs/operacion.md#copia-y-restauración-rnf08), K053).
+  detectadas con datos ficticios. `backup:scheduled` automatiza cifrado autenticado,
+  subida verificada y retención de siete días; `backup:fetch` permite una segunda copia
+  cifrada en otro equipo. Un diario cifrado independiente permite identificar contactos
+  y conciliar efectos posteriores antes de reabrir (`backup:journal`). La validación
+  del cron y el ensayo real en Railway se completan en el release
+  ([operación](docs/operacion.md#copia-y-restauración-rnf08), #205/#206).
 
 El [índice de documentación](docs/README.md) lleva a cada área.

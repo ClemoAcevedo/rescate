@@ -1,3 +1,5 @@
+import { useEstablishmentCatalog } from '../components/EstablishmentCatalog'
+import { EstablishmentPicker } from '../components/EstablishmentPicker'
 import { OperatorPageHeader } from '../components/OperatorPageHeader'
 import { Skeleton } from '../components/ui/Skeleton'
 import { useEffect, useState } from 'react'
@@ -70,7 +72,7 @@ function LotRow({ lot, now }: { lot: OperatorLotSummary; now: number }) {
 
 function MyLots({ establishments }: { establishments: OperableEstablishment[] }) {
   const [params, setParams] = useSearchParams()
-  const requested = params.get('establecimiento')
+  const requested = params.get('establecimiento')?.toLowerCase()
   const establishment = establishments.find(item => item.id === requested) ?? establishments[0]!
   const status = params.get('estado') === 'draft' || params.get('estado') === 'published' ? params.get('estado') as 'draft' | 'published' : undefined
   const page = Math.max(1, Number(params.get('pagina')) || 1)
@@ -105,9 +107,11 @@ function MyLots({ establishments }: { establishments: OperableEstablishment[] })
       <div className="my-lots__toolbar">
         {establishments.length > 1
           ? <FormField label="Establecimiento">{control => (
-            <Select {...control} value={establishment.id} onChange={event => update({ establecimiento: event.target.value, pagina: null })}>
-              {establishments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </Select>
+            establishments.length >= 20 ? <EstablishmentPicker {...control} name="establishmentId" options={establishments}
+              value={establishment.id} onChange={id => { if (id) update({ establecimiento: id, pagina: null }) }} />
+              : <Select {...control} value={establishment.id} onChange={event => update({ establecimiento: event.target.value, pagina: null })}>
+                {establishments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </Select>
           )}</FormField>
           : <p className="my-lots__establishment"><Icon name="pin" />{establishment.name}</p>}
         <nav className="segmented" aria-label="Filtrar por estado">
@@ -144,6 +148,7 @@ function MyLots({ establishments }: { establishments: OperableEstablishment[] })
 }
 
 export function MyLotsPage() {
+  const { establishments } = useEstablishmentCatalog()
   const { status, session } = useAuth()
   const { pathname } = useLocation()
   if (status === 'checking' || status === 'error') {
@@ -169,5 +174,5 @@ export function MyLotsPage() {
       <p>Tu cuenta todavía no está habilitada para operar un establecimiento. La habilitación se gestiona por separado.</p>
     </Card></main>
   }
-  return <main className="page-content"><MyLots establishments={session.operableEstablishments} /></main>
+  return <main className="page-content"><MyLots establishments={establishments} /></main>
 }

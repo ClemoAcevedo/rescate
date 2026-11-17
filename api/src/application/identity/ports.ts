@@ -23,9 +23,22 @@ export interface EmailCanonicalizer {
   canonicalize(input: string): Promise<string>
 }
 
+export interface EstablishmentDetails {
+  id: string
+  name: string
+  address: string
+  latitude: number
+  longitude: number
+  timeZone: string
+}
+
+export interface EstablishmentSearch { query: string; page: number }
+
 export interface IdentityRepository {
   findByEmail(canonicalEmail: string): Promise<{ user: IdentityUser; credential: PasswordCredential | null } | null>
   listEstablishments(userId: string): Promise<Array<{ id: string; name: string }>>
+  searchEstablishments(userId: string, filter: EstablishmentSearch): Promise<{ items: EstablishmentDetails[]; hasNextPage: boolean }>
+  findEstablishmentForUser(userId: string, publicId: string): Promise<EstablishmentDetails | null>
   findUserById(userId: string): Promise<IdentityUser | null>
   /** Confirma usuario, credencial y consentimiento o nada. No normaliza, hashea, autentica ni da permisos. */
   createUserWithCredential(canonicalEmail: string, credential: PasswordCredential, consent: EmailConsent): Promise<
