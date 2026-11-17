@@ -42,6 +42,8 @@ code, kbd, samp { font-family: var(--font-mono); }
   background: var(--surface-card);
   border-bottom: var(--border-width) solid var(--border-subtle);
 }
+.lot-form__defaults { display: grid; align-items: center; min-height: var(--sp-16); color: var(--text-muted); }
+.lot-form__defaults p { margin: 0; }
 
 .site-header {
   display: flex;
@@ -133,6 +135,7 @@ code, kbd, samp { font-family: var(--font-mono); }
   font-size: var(--fs-micro);
   font-weight: var(--fw-bold);
 }
+.menu-toggle .notifications-badge { margin-left: 0; }
 .session-status {
   display: inline-flex;
   align-items: center;
@@ -559,7 +562,7 @@ code, kbd, samp { font-family: var(--font-mono); }
     padding-block: var(--sp-3);
   }
 
-  .site-header .menu-toggle { display: inline-flex; }
+  .site-header .menu-toggle { display: inline-flex; padding-inline: var(--sp-3); }
 
   .main-navigation {
     display: none;

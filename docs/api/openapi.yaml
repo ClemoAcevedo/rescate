@@ -63,6 +63,55 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/HealthStatus" }
               example: { status: "unavailable", database: "unavailable", worker: "unknown" }
+  "/establishments":
+    get:
+      operationId: searchOperableEstablishments
+      summary: Buscar establecimientos que puede operar la persona
+      description: "Membership actual. Búsqueda por nombre o dirección sin distinguir mayúsculas ni tildes; %, _ y barra inversa son literales. Páginas de 20, orden por nombre e ID público. Rechaza filtros desconocidos o repetidos."
+      tags: [Identity]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100, default: '' }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1 }
+      responses:
+        '200':
+          description: Página de establecimientos propios, con datos de retiro para precargar un lote nuevo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperableEstablishmentPage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  "/establishments/{establishmentId}":
+    get:
+      operationId: getOperableEstablishment
+      summary: Consultar los datos de retiro de un establecimiento operable
+      description: "Comprueba membership actual. Un establecimiento ajeno o inexistente responde 404. No concede permiso reutilizable para comandos posteriores."
+      tags: [Identity]
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - name: establishmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Datos actuales del establecimiento propio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperableEstablishmentDetails' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
   "/public/lots":
     get:
       operationId: "searchPublicLots"
@@ -2646,6 +2695,28 @@ components:
         user:
           $ref: "#/components/schemas/User"
       description: "Cuenta creada sin sesión ni membresías operables automáticas."
+    OperableEstablishmentDetails:
+      type: object
+      additionalProperties: false
+      required: [id, name, address, latitude, longitude, timeZone]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        name: { type: string, minLength: 1 }
+        address: { $ref: '#/components/schemas/Address' }
+        latitude: { $ref: '#/components/schemas/Latitude' }
+        longitude: { $ref: '#/components/schemas/Longitude' }
+        timeZone: { $ref: '#/components/schemas/TimeZone' }
+    OperableEstablishmentPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, hasNextPage]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/OperableEstablishmentDetails' }
+        page: { type: integer, minimum: 1, maximum: 1000 }
+        hasNextPage: { type: boolean }
     OperableEstablishment:
       type: "object"
       additionalProperties: false
@@ -2671,9 +2742,10 @@ components:
           $ref: "#/components/schemas/User"
         operableEstablishments:
           type: "array"
+          maxItems: 20
           items:
             $ref: "#/components/schemas/OperableEstablishment"
-          description: "Lista sin establecimientos duplicados; puede estar vacía. Una persona puede operar varios. Es información para la UI, no autorización reutilizable."
+          description: "Hasta 20 establecimientos iniciales, ordenados por ID público. Puede estar vacía. Para buscar o paginar usar GET /establishments. Es información para la UI, no autorización reutilizable."
         expiresAt:
           type: "string"
           description: "Vencimiento absoluto de la sesión: 12 horas desde login; consultar sesión no lo renueva."

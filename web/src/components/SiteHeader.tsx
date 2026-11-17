@@ -5,12 +5,16 @@ import { Icon } from './Icon'
 import { NotificationsLink } from './NotificationsLink'
 import { RescateLogo } from './RescateLogo'
 import { useAuth } from '../auth/AuthProvider'
+import { useUnreadCount } from '../notifications/unread'
 
 export function SiteHeader() {
   const menuButton = useRef<HTMLButtonElement>(null)
   const navigation = useRef<HTMLElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { status, session, logout } = useAuth()
+  const unread = useUnreadCount()
+  const unreadCount = session ? unread : null
+  const menuLabel = isMenuOpen ? 'Cerrar menú' : 'Abrir menú'
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -67,9 +71,11 @@ export function SiteHeader() {
         type="button"
         aria-controls="main-navigation"
         aria-expanded={isMenuOpen}
+        aria-label={unreadCount ? `${menuLabel}, Avisos, ${unreadCount} sin leer` : undefined}
         onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
       >
-        {isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+        {menuLabel}
+        {unreadCount ? <span className="notifications-badge" aria-hidden="true" title={`Avisos, ${unreadCount} sin leer`}>{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
       </Button>
       <nav
         ref={navigation}

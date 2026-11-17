@@ -6,6 +6,7 @@ import { Combobox } from '../ui/Combobox'
 import { Input, Textarea } from '../ui/FormControls'
 import { FormField } from '../ui/FormField'
 import { UseCurrentLocation } from './UseCurrentLocation'
+import { EstablishmentPicker } from '../EstablishmentPicker'
 
 type LotFormFieldsProps = {
   values: LotFormValues
@@ -48,11 +49,11 @@ export function LotFormFields({ values, errors, disabled, onChange, establishmen
       {establishment && (
         <FormField label="Establecimiento" hint="Escribe para filtrar. El lote queda asociado a este establecimiento y no se puede cambiar después." error={errors.establishmentId} required>
           {(control) => (
-            <Combobox
+            <EstablishmentPicker
               {...control}
               name="establishmentId"
               placeholder="Busca por nombre"
-              options={establishment.options.map((option) => ({ value: option.id, label: option.name }))}
+              options={establishment.options}
               value={establishment.value}
               disabled={disabled}
               onChange={establishment.onChange}

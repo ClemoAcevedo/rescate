@@ -95,6 +95,7 @@ jobs:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       API_PROXY_TARGET: ${{ vars.API_PROXY_TARGET }}
       VITE_API_BASE_URL: /api
+      API_PROXY_SECRET: ${{ secrets.API_PROXY_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -110,6 +111,7 @@ jobs:
           test -n "$VERCEL_ORG_ID"
           test -n "$VERCEL_PROJECT_ID"
           test -n "$API_PROXY_TARGET"
+          test -n "$API_PROXY_SECRET"
       - name: Pull production settings
         run: vercel pull --yes --environment=production --cwd web --token "$VERCEL_TOKEN"
       - name: Build production web
@@ -129,6 +131,31 @@ jobs:
           assert.equal(url.protocol, 'https:')
           appendFileSync(process.env.GITHUB_OUTPUT, `url=${url.href}\n`)
           NODE
+
+  backups:
+    name: Railway / encrypted daily backups
+    needs: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+      SERVICE_ID: ${{ vars.RAILWAY_BACKUP_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.63.1
+      - name: Configure backup schedule and source revision
+        run: node api/scripts/configure-backups.mjs
+      - name: Deploy backup image from the same release
+        run: node api/scripts/deploy-railway.mjs "$SERVICE_ID"
 
   verify:
     name: Public HTTPS / web, API and PostGIS
@@ -161,7 +188,7 @@ jobs:
 
   release:
     name: Tag and release of the verified commit
-    needs: [api, worker, web, verify]
+    needs: [api, worker, web, backups, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production

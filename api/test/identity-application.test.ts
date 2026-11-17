@@ -25,6 +25,7 @@ function fixture() {
   const dependencies: IdentityDependencies = {
     identities: { async findByEmail(email) { return email === user.email ? { user, credential } : null },
       async findUserById() { return user }, async listEstablishments() { return [] },
+      async searchEstablishments() { return { items: [], hasNextPage: false } }, async findEstablishmentForUser() { return null },
       async createUserWithCredential() { return { kind: "created", user } } },
     canonicalizer: { async canonicalize(s) { return s.trim().toLowerCase() } }, // Doble; SQL Unicode se prueba en PostgreSQL.
     passwords: { async hash() { return credential }, async verify(password) { assert.equal(locked, false); verifies++; return password === "contraseña correcta" } },

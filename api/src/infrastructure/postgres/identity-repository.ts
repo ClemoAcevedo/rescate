@@ -1,4 +1,4 @@
-import type { EmailCanonicalizer, IdentityRepository, IdentityUser, PasswordCredential } from "../../application/identity/ports.js"
+import type { EmailCanonicalizer, EstablishmentDetails, IdentityRepository, IdentityUser, PasswordCredential } from "../../application/identity/ports.js"
 import { withTransaction } from "./pool.js"
 import type { Pool } from "./pool.js"
 
@@ -42,8 +42,25 @@ export function createIdentityRepository(pool: Pool): IdentityRepository {
     async listEstablishments(userId) {
       const { rows } = await pool.query<{ id: string; name: string }>(`SELECT e.public_id::text AS id, e.name
         FROM public.establishments e JOIN public.memberships m ON m.establishment_id=e.id
-        WHERE m.user_id=$1 ORDER BY e.public_id`, [userId])
+        WHERE m.user_id=$1 ORDER BY e.public_id LIMIT 20`, [userId])
       return rows
+    },
+    async searchEstablishments(userId, filter) {
+      const query = filter.query.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('es')
+        .replace(/[\\%_]/g, '\\$&')
+      const { rows } = await pool.query<EstablishmentDetails>(`SELECT e.public_id::text AS id, e.name, e.address,
+        e.latitude, e.longitude, e.time_zone AS "timeZone"
+        FROM public.establishments e JOIN public.memberships m ON m.establishment_id=e.id
+        WHERE m.user_id=$1 AND translate(lower(e.name || ' ' || e.address), 'áéíóúüñ', 'aeiouun') LIKE $2 ESCAPE '\\'
+        ORDER BY e.name, e.public_id LIMIT 21 OFFSET $3`, [userId, `%${query}%`, (filter.page - 1) * 20])
+      return { items: rows.slice(0, 20), hasNextPage: rows.length > 20 }
+    },
+    async findEstablishmentForUser(userId, publicId) {
+      const { rows } = await pool.query<EstablishmentDetails>(`SELECT e.public_id::text AS id, e.name, e.address,
+        e.latitude, e.longitude, e.time_zone AS "timeZone"
+        FROM public.establishments e JOIN public.memberships m ON m.establishment_id=e.id
+        WHERE m.user_id=$1 AND e.public_id=$2`, [userId, publicId])
+      return rows[0] ?? null
     },
     async findUserById(userId) {
       const { rows } = await pool.query<AccountRow>("SELECT id::text, public_id::text, email FROM public.users WHERE id=$1", [userId])

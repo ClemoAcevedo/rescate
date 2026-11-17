@@ -47,12 +47,16 @@ import { createIncidentDispatcher, createIncidentUseCases } from "./application/
 import { createIncidentDispatchRepository, createIncidentRepository } from "./infrastructure/postgres/incident-repository.js"
 import { createIncidentsRouter } from "./http/incidents-router.js"
 import { createAuthRouter } from "./http/auth-router.js"
+import { createEstablishmentsRouter } from './http/establishments-router.js'
 import { createAuthentication } from "./http/authentication.js"
 import { clientAddress, createTrafficLimits } from "./http/rate-limits.js"
+import { readProxySecret, resolveClientAddress } from './http/client-address.js'
 import { handleError } from "./http/errors.js"
 import { createOperations } from "./infrastructure/postgres/operations.js"
 import { errorCode } from "./application/logging.js"
 import type { Log } from "./application/logging.js"
+import { auditCommands } from './application/recovery/journal.js'
+import { createRecoveryJournal } from './infrastructure/objects/recovery-journal.js'
 
 export interface Api { app: Express; close(): Promise<void> }
 export function readPhotoLimit(environment: NodeJS.ProcessEnv): number {
@@ -124,32 +128,53 @@ export function readPhotoStorage(environment: NodeJS.ProcessEnv): ObjectStore | 
 /** `log` es el único sumidero de la API: eventos primitivos, una línea JSON cada uno (docs/seguridad.md). */
 export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log = event => console.log(JSON.stringify(event))): Api {
   const config = readAuthConfiguration(environment)
+  const proxySecret = readProxySecret(environment)
   const pool = createPool({ connectionString: readDatabaseUrl(environment), log })
-  const identities = createIdentityUseCases({ identities: createIdentityRepository(pool),
+  const identityRepository = createIdentityRepository(pool)
+  const journal = createRecoveryJournal(environment, id => identityRepository.findUserById(id))
+  const identities = createIdentityUseCases({ identities: identityRepository,
     canonicalizer: createEmailCanonicalizer(pool), passwords: createPasswordHasher(), tokens: createSessionCredentials(),
     sessions: createSessionRepository(pool), security: createLoginSecurityRepository(pool),
     dummyCredential: createDummyCredential(), now: () => new Date() })
   const limits = createTrafficLimits()
   const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
   const authentication = createAuthentication(identities, createCsrfTokens(config.key), config.origins, limits)
-  const lotsRouter = createLotsRouter({ useCases: createLotUseCases(createLotRepository(pool), () => new Date()),
+  const establishmentsRouter = createEstablishmentsRouter(identities, authentication.authenticate, log)
+  const lots = auditCommands(createLotUseCases(createLotRepository(pool), () => new Date()), {
+    publish: (actor, input) => ({ operation: 'lot.publish', actorId: actor.userId, targetType: 'lot', targetId: input.publicId }),
+  }, journal)
+  const lotsRouter = createLotsRouter({ useCases: lots,
     authenticate: authentication.authenticate, protectCommand: authentication.protectCommand, log })
   // La API autoriza, recibe y sirve; decodificar y transformar corresponde al worker.
   const photos = createPhotoUseCases({ repository: createPhotoRepository(pool), objects: readPhotoStorage(environment),
     images: null, now: () => new Date(), maxPhotosPerLot: readPhotoLimit(environment), log })
   const photosRouter = createPhotosRouter({ useCases: photos, maxPhotosPerLot: readPhotoLimit(environment), authenticate: authentication.authenticate,
     protectCommand: authentication.protectCommand, log })
-  const managementRouter = createLotManagementRouter(createLotManagement(createLotManagementRepository(pool)),
+  const management = auditCommands(createLotManagement(createLotManagementRepository(pool)), {
+    command: (actor, id, input) => ({ operation: `lot.${input.action}`, actorId: actor.userId, targetType: 'lot', targetId: id, intentKey: input.idempotencyKey }),
+  }, journal)
+  const managementRouter = createLotManagementRouter(management,
     authentication.authenticate, authentication.protectCommand, log)
   lotsRouter.use(managementRouter)
   const codes = createPickupCodes(readPickupCodeKey(environment))
-  const discoveryRouter = createDiscoveryRouter(createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date()),
+  const discovery = auditCommands(createDiscoveryUseCases(createDiscoveryRepository(pool), codes, () => new Date()), {
+    reserve: (actor, id, _quantity, key) => ({ operation: 'reservation.create', actorId: actor.userId, targetType: 'lot', targetId: id, intentKey: key }),
+  }, journal)
+  const discoveryRouter = createDiscoveryRouter(discovery,
     authentication.authenticate, authentication.protectCommand, log)
-  const reservationsRouter = createReservationsRouter(
-    createReservationUseCases(createReservationRepository(pool), codes, () => new Date()),
+  const reservations = auditCommands(createReservationUseCases(createReservationRepository(pool), codes, () => new Date()), {
+    cancel: (actor, id) => ({ operation: 'reservation.cancel', actorId: actor.userId, targetType: 'reservation', targetId: id }),
+    confirmPickup: (actor, _lot, id, _code, key) => ({ operation: 'reservation.deliver', actorId: actor.userId, targetType: 'reservation', targetId: id, intentKey: key }),
+  }, journal)
+  const reservationsRouter = createReservationsRouter(reservations,
     authentication.authenticate, authentication.protectCommand, limits, log)
-  const waitlistRouter = createWaitlistRouter(
-    createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date()),
+  const waitlist = auditCommands(createWaitlistUseCases(createWaitlistRepository(pool), codes, () => new Date()), {
+    join: (actor, id, _quantity, key) => ({ operation: 'waitlist.join', actorId: actor.userId, targetType: 'lot', targetId: id, intentKey: key }),
+    accept: (actor, id) => ({ operation: 'waitlist.accept', actorId: actor.userId, targetType: 'waitlist', targetId: id }),
+    decline: (actor, id) => ({ operation: 'waitlist.decline', actorId: actor.userId, targetType: 'waitlist', targetId: id }),
+    leave: (actor, id) => ({ operation: 'waitlist.leave', actorId: actor.userId, targetType: 'waitlist', targetId: id }),
+  }, journal)
+  const waitlistRouter = createWaitlistRouter(waitlist,
     authentication.authenticate, authentication.protectCommand, log)
   const notificationsRouter = createNotificationsRouter(
     createNotificationUseCases(createNotificationRepository(pool), () => new Date()),
@@ -158,17 +183,22 @@ export function createApi(environment: NodeJS.ProcessEnv = process.env, log: Log
     authentication.authenticate, authentication.protectCommand, limits, log)
   const panelRouter = createPanelRouter(createPanelUseCases(createPanelRepository(pool), () => new Date()),
     authentication.authenticate, log)
-  const incidentsRouter = createIncidentsRouter(createIncidentUseCases(createIncidentRepository(pool)),
+  const incidents = auditCommands(createIncidentUseCases(createIncidentRepository(pool)), {
+    report: (actor, id, input) => ({ operation: 'incident.report', actorId: actor.userId, targetType: 'lot', targetId: id, intentKey: input.idempotencyKey }),
+    command: (actor, id, input) => ({ operation: `incident.${input.action}`, actorId: actor.userId, targetType: 'incident', targetId: id, intentKey: input.idempotencyKey }),
+  }, journal)
+  const incidentsRouter = createIncidentsRouter(incidents,
     authentication.authenticate, authentication.protectCommand, log)
-  return { app: createApp({ lotsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, chatRouter, panelRouter, incidentsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
+  return { app: createApp({ lotsRouter, establishmentsRouter, discoveryRouter, reservationsRouter, waitlistRouter, notificationsRouter, chatRouter, panelRouter, incidentsRouter, photosRouter, authRouter: createAuthRouter(identities, authentication, limits, log), log,
     // /health no pasa por el límite por IP: checkHealth comparte una sola consulta a la base.
     health: operations.checkHealth,
     traffic: (req, res, next) => {
+      resolveClientAddress(req, proxySecret)
       if (req.path === "/health") { next(); return }
       try { limits.ip(clientAddress(req)); next() }
       catch (error) { handleError(error, res, log) }
     },
-  }), close: () => pool.end() }
+  }), close: async () => { journal?.close(); await pool.end() } }
 }
 
 export interface Worker { tasks: string[]; run(): Promise<void>; stop(): void }
@@ -189,7 +219,8 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
   if (!databaseUrl) return null
   // Anexos H p. 20: dos conexiones para el trabajador.
   const pool = createPool({ connectionString: databaseUrl, max: 2, log })
-  const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log)
+  const journal = createRecoveryJournal(environment, id => createIdentityRepository(pool).findUserById(id))
+  const expiries = expiriesSetting === "off" ? null : createExpiryUseCases(createLotExpiryRepository(pool), log, EXPIRY_LIMITS, journal)
   const photos = objects === null ? null : createPhotoUseCases({ repository: createPhotoRepository(pool), objects,
     images: createSharpImageProcessor(), now: () => new Date(), log })
   const operations = createOperations(pool, EXPIRY_LIMITS.maxAttempts)
@@ -242,6 +273,7 @@ export function createWorker(environment: NodeJS.ProcessEnv = process.env,
           await pause(5000)
         }
       }
+      journal?.close()
       await pool.end()
     },
     stop() {

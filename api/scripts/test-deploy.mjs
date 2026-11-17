@@ -112,7 +112,7 @@ try {
     const logoutButton = page.getByRole('button', { name: 'Cerrar sesión', exact: true })
     try {
       await sessionStatus.waitFor({ state: 'attached', timeout: 10000 })
-      const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+      const menu = page.getByRole('button', { name: /^Abrir menú(?:,|$)/ })
       if (await menu.isVisible()) await menu.click()
       await sessionStatus.waitFor({ state: 'visible', timeout: 10000 })
       await logoutButton.waitFor({ state: 'visible', timeout: 10000 })

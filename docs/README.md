@@ -14,7 +14,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Dominio y requisitos | [Modelo](modelo-inicial.md), [casos de uso](casos-de-uso.md) y [trazabilidad](k013-trazabilidad.md) |
 | Identidad y sesiones | [Identidad](k008-identidad.md) |
 | Límites, aislamiento y registros sin secretos | [Seguridad](seguridad.md) |
-| Salud, registro de solicitudes y revisión diaria | [Operación](operacion.md) |
+| Salud, registro de solicitudes, revisión diaria y copias | [Operación](operacion.md) |
 | Lotes | [Lotes](lotes.md) |
 | Reservas, cancelación y retiro | [Reservas](reservas.md) |
 | Panel del establecimiento y resultados | [Panel](panel.md) |
@@ -27,7 +27,8 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | Base de datos | [Migraciones](migraciones.md) |
 | Rendimiento, carga e integridad | [Rendimiento](rendimiento.md) |
 | Accesibilidad y comprensión | [Revisión y protocolo](accesibilidad.md) |
-| Demo de entrega y recorridos con personas | [Demo E3](demo-e3.md) |
+| Uso de la aplicación por rol | [Manual de uso](manual.md) |
+| Demo de entrega y recorridos con personas | [Demo](demo.md) |
 | Frontend | [web/README](../web/README.md), [primitives UI](../web/src/components/ui/README.md) y [design system](frontend-design-system.md) |
 
 ## Decisiones (ADR)
@@ -54,6 +55,7 @@ reglas para escribir y mantener estos documentos están en [AGENTS.md](../AGENTS
 | [0019](adr/0019-fechas-y-cargas-estables.md) | Fechas y horas comunes con zona explícita; skeletons con la estructura final y regresión de geometría en CI |
 | [0020](adr/0020-destinatarios-de-incidencias.md) | Destinatarios de una incidencia fijados por versión bajo el bloqueo del lote; los compromisos nuevos se incorporan a las incidencias vigentes |
 | [0021](adr/0021-gestion-de-incidencias-del-operador.md) | El operador ve el correo de quien publicó cada versión y sus avisos pendientes, generados y leídos, calculados al leer; listado por establecimiento |
+| [0022](adr/0022-diario-de-recuperacion.md) | Diario cifrado fuera de PostgreSQL para identificar y conciliar compromisos posteriores a una copia antes de reabrir |
 
 ## Entregas y evidencia
 

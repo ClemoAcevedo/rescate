@@ -1,3 +1,5 @@
+import { useEstablishmentCatalog } from '../components/EstablishmentCatalog'
+import { EstablishmentPicker } from '../components/EstablishmentPicker'
 import './incidents.css'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
@@ -24,6 +26,7 @@ const description = 'Reportes de problemas sobre tus lotes, los avisos publicado
 
 /** Sesión y permiso de operador; la API vuelve a comprobar la membresía en cada consulta. */
 function OperatorGate({ title, children }: { title: string; children: (establishments: OperableEstablishment[], csrfToken: string) => ReactNode }) {
+  const { establishments } = useEstablishmentCatalog()
   const { status, session, csrfToken } = useAuth()
   const { pathname } = useLocation()
   let content: ReactNode
@@ -34,7 +37,7 @@ function OperatorGate({ title, children }: { title: string; children: (establish
       <Link className="text-link" to={`/login?from=${encodeURIComponent(pathname)}`}>Iniciar sesión</Link></Card>
   } else if (session.operableEstablishments.length === 0) {
     content = <Card as="section" className="content-card"><p>Tu cuenta todavía no está habilitada para operar un establecimiento. La habilitación se gestiona por separado.</p></Card>
-  } else return <main className="page-content"><div className="incidents">{children(session.operableEstablishments, csrfToken!)}</div></main>
+  } else return <main className="page-content"><div className="incidents">{children(establishments, csrfToken!)}</div></main>
   return <main className="page-content"><div className="incidents">
     <header className="page-header"><div><p className="eyebrow">Operación</p><h1>{title}</h1><p>{description}</p></div></header>
     {content}
@@ -51,7 +54,7 @@ const tabs: { value: string | null; status?: IncidentStatus; label: string }[] =
 
 function Overview({ establishments }: { establishments: OperableEstablishment[] }) {
   const [params, setParams] = useSearchParams()
-  const establishment = establishments.find(item => item.id === params.get('establecimiento')) ?? establishments[0]!
+  const establishment = establishments.find(item => item.id === params.get('establecimiento')?.toLowerCase()) ?? establishments[0]!
   const tab = tabs.find(item => item.value === params.get('estado')) ?? tabs[0]!
   const page = Math.max(1, Math.min(1000, Number(params.get('pagina')) || 1))
   const [refresh, setRefresh] = useState(0)
@@ -77,9 +80,11 @@ function Overview({ establishments }: { establishments: OperableEstablishment[] 
       <div className="my-lots__toolbar">
         {establishments.length > 1
           ? <FormField label="Establecimiento">{control => (
-            <Select {...control} value={establishment.id} onChange={event => update({ establecimiento: event.target.value, pagina: null })}>
-              {establishments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </Select>
+            establishments.length >= 20 ? <EstablishmentPicker {...control} name="establishmentId" options={establishments}
+              value={establishment.id} onChange={id => { if (id) update({ establecimiento: id, pagina: null }) }} />
+              : <Select {...control} value={establishment.id} onChange={event => update({ establecimiento: event.target.value, pagina: null })}>
+                {establishments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </Select>
           )}</FormField>
           : <p className="my-lots__establishment"><Icon name="pin" />{establishment.name}</p>}
         <Button variant="secondary" loading={loading && state.value !== null} onClick={() => setRefresh(value => value + 1)}>Actualizar</Button>

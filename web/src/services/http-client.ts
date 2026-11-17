@@ -1,3 +1,27 @@
+import type { ErrorResponse, ValidationIssue } from './openapi'
+
+export type ApiError = { code: ErrorResponse['error']['code']; message: string; issues: ValidationIssue[] }
+const errorCodes = new Set<ApiError['code']>([
+  'MALFORMED_REQUEST', 'UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND', 'CONFLICT',
+  'PAYLOAD_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE', 'VALIDATION_ERROR', 'RATE_LIMITED',
+  'INTERNAL_ERROR', 'SERVICE_UNAVAILABLE',
+])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Valida el sobre de errores HTTP compartido, conservando solo los campos del contrato. */
+export function parseApiError(value: unknown): ApiError | undefined {
+  if (!isRecord(value) || !isRecord(value.error) || typeof value.error.code !== 'string'
+    || !errorCodes.has(value.error.code as ApiError['code']) || typeof value.error.message !== 'string') return undefined
+  const issues = isRecord(value.error.details) && Array.isArray(value.error.details.issues)
+    ? value.error.details.issues.flatMap(issue => isRecord(issue) && typeof issue.path === 'string' && typeof issue.message === 'string'
+      ? [{ path: issue.path, message: issue.message }] : [])
+    : []
+  return { code: value.error.code as ApiError['code'], message: value.error.message, issues }
+}
+
 export class HttpError extends Error {
   readonly kind = 'http'
   readonly status: number

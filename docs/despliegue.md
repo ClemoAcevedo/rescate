@@ -19,6 +19,7 @@ ni usar mocks de identidad en el despliegue.
 | PostgreSQL | Imagen `postgis/postgis:16-3.5`; volumen en `/var/lib/postgresql/data`; `PGDATA=/var/lib/postgresql/data/pgdata`; usuario, base y contraseña propia en variables Railway. Sin dominio público ni TCP proxy. |
 | API | Contexto de build `api/`, [Dockerfile](../api/Dockerfile), `node dist/index.js`, `PORT=3000`, healthcheck `/health`, restart `ON_FAILURE`. Pre-deploy: `npm run db:migrate`. |
 | Worker | Mismo contexto e imagen, `node dist/worker.js`, restart `ON_FAILURE`. Sin pre-deploy ni dominio público. Registra [vencimientos](vencimientos.md) y genera los [avisos](avisos.md) del outbox con `DATABASE_URL`; valida fotos y limpia objetos si además tiene el almacenamiento de fotos. No usa `PICKUP_CODE_KEY` ni `WORKER_EXPIRIES`. Sin base queda inactivo. |
+| Backups | Contexto `api/`, `Dockerfile.backup`, `node scripts/backup-scheduled.mjs`, cron UTC `0 */12 * * *`, restart `NEVER`. Cifra, verifica y rota copias fuera de PostgreSQL; [operación](operacion.md#programación-y-secretos). |
 | Web | Proyecto Vercel vinculado a `web/`, Node 24.x, Vite, `npm ci` y build configurado en `vercel.mjs`; salida `dist/`. |
 
 Railway conserva la configuración de los servicios. Al crear un entorno, fijar
@@ -44,6 +45,17 @@ healthcheck detiene el despliegue; cambiarla deja los códigos de retiro vigente
 poder mostrarse ni verificarse ([reservas](reservas.md)). Los secretos quedan en Railway, nunca en
 variables `VITE_`. API y worker no están conectados al autodeploy de GitHub en
 Railway; el proyecto Vercel tampoco tiene un autodeploy Git independiente.
+
+API y configuración de servidor de Vercel comparten `API_PROXY_SECRET`. El job web
+lo recibe desde el secret GitHub `production/API_PROXY_SECRET`, antes de evaluar
+`vercel.mjs`; no usar `VITE_`. API y worker reciben `RECOVERY_JOURNAL_KEY` (32 bytes
+aleatorios en base64), distinta de las demás claves, y el scope del entorno Railway.
+El servicio backups recibe su propia `BACKUP_ENCRYPTION_KEY`, sus variables de base
+y fotos y, si corresponde, `BACKUP_S3_*` y `RECOVERY_JOURNAL_SCOPE`.
+Configurar estos secretos antes del release y conservarlos fuera de las copias.
+El environment GitHub production también requiere `RAILWAY_BACKUP_SERVICE_ID`.
+`configure-backups.mjs` valida el servicio y fija su cron y procedencia; el workflow
+publica su imagen con el mismo SHA y espera su despliegue antes de emitir el release.
 
 ## CI y producción automática
 
@@ -124,6 +136,8 @@ Si falla worker, web o smoke, la API puede haber cambiado: revisar el job y
 reejecutar CD desde Actions después de corregir la causa. Para volver atrás,
 revertir el cambio por PR y desplegar con CI. Conservar la base y el historial;
 no ejecutar `db:rollback` en producción como parte de un rollback de aplicación.
+La copia, la restauración y la comprobación del release anterior sobre una base
+restaurada están en [operación](operacion.md#copia-y-restauración-rnf08).
 Un cambio de esquema debe ser compatible con la API anterior mientras Railway
 mantiene ambas versiones durante la transición.
 

@@ -284,9 +284,10 @@ lo cambia.
   medir comprensión de espera, oferta y reserva y registrar obstáculos con personas
   ajenas a la implementación. `recorridos:e3` levanta una instancia local con datos
   propios por participante para esas sesiones (K040).
-- **Demo E3:** cuentas y establecimiento ficticios en producción, preparación de lotes
-  por la API pública con `demo:e3` y guion de reserva, espera, chat y retiro
-  ([demo](docs/demo-e3.md), K040).
+- **Demo y manual:** [manual de uso](docs/manual.md) por rol con RF01 a RF13 y estados de
+  error; cuentas y establecimiento ficticios en producción, preparación por la API pública
+  con `demo` (retiro y vencimiento previos) y guion por todos los RF con ensayo local en
+  `recorridos:e3` ([demo](docs/demo.md), K040, K052).
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
@@ -353,5 +354,19 @@ lo cambia.
   ([entorno local](docs/desarrollo-local.md#cobertura-de-la-api), K039).
 - **Despliegue:** configuración Railway (API, worker, PostGIS) y Vercel (web);
   CD tras CI aprobado de `main`, con verificación HTTPS antes del tag/release.
+- **Copias y restauración:** `backup:create` copia PostgreSQL y las fotos listas con un
+  manifiesto de versión, migraciones, conteos, huella del esquema, sha256 y referencias
+  faltantes, leyendo la fuente en solo lectura y exigiendo TLS fuera del equipo;
+  `backup:restore` restaura en una base aislada, concilia esquema, secuencias,
+  inventario, entregas, códigos con su clave, incidencias, avisos, chat, migraciones y
+  fotos, y levanta la API y el worker actuales y los del release anterior sin migraciones
+  down; `backup:reconcile` concilia una base restaurada fuera del Compose;
+  `backup:rehearsal` ensaya pérdida, recuperación medida frente a 60 min y 24 h y fallas
+  detectadas con datos ficticios. `backup:scheduled` automatiza cifrado autenticado,
+  subida verificada y retención de siete días; `backup:fetch` permite una segunda copia
+  cifrada en otro equipo. Un diario cifrado independiente permite identificar contactos
+  y conciliar efectos posteriores antes de reabrir (`backup:journal`). La validación
+  del cron y el ensayo real en Railway se completan en el release
+  ([operación](docs/operacion.md#copia-y-restauración-rnf08), #205/#206).
 
 El [índice de documentación](docs/README.md) lleva a cada área.

@@ -54,6 +54,17 @@ test("K034: revisión de códigos por IP en ventana de un minuto y mensajes con 
   assert.throws(() => limits.message("1"), TrafficLimitError)
 })
 
+test("registro tiene una ventana propia que no consume el login", () => {
+  let time = Date.now()
+  const limits = createTrafficLimits(() => time)
+  for (let i = 0; i < 30; i++) limits.register("192.0.2.1")
+  assert.throws(() => limits.register("192.0.2.1"), error => error instanceof TrafficLimitError && error.retryAfter === 900)
+  limits.login("192.0.2.1")
+  limits.register("192.0.2.2")
+  time += 900_000
+  limits.register("192.0.2.1")
+})
+
 test("K034: cinco fallos dentro de 15 minutos bloquean 15 minutos; el límite de la ventana es exclusivo", () => {
   const at = new Date("2030-01-01T00:15:00Z")
   const minutes = (n: number) => new Date(at.getTime() - n * 60_000)

@@ -6,6 +6,8 @@ import { isDueToExpire } from '../../domain/lots.js'
 import type { LotExpiryRepository } from './ports.js'
 import { errorCode } from '../logging.js'
 import type { Log } from '../logging.js'
+import { auditOperation } from '../recovery/journal.js'
+import type { RecoveryJournal } from '../recovery/journal.js'
 
 /**
  * Concesión de un reclamo, intentos máximos por lote y espera base entre intentos. Un
@@ -20,13 +22,14 @@ export interface ExpiryResult {
 }
 
 export function createExpiryUseCases(repository: LotExpiryRepository, log: Log,
-  limits: typeof EXPIRY_LIMITS = EXPIRY_LIMITS) {
+  limits: typeof EXPIRY_LIMITS = EXPIRY_LIMITS, journal: RecoveryJournal | null = null) {
   /**
    * Registra lo vencido de un lote: ofertas cuya hora pasó y, si el lote cerró, su
    * cola, sus reservas confirmadas y el propio lote. Repetirlo no libera de nuevo.
    */
   async function expireLot(lotId: string): Promise<ExpiryResult> {
-    return repository.withExpiryTransaction(lotId.toLowerCase(), async (state, writer) => {
+    return auditOperation(journal, { operation: 'lot.expire', actorId: null, targetType: 'lot', targetId: lotId },
+      () => repository.withExpiryTransaction(lotId.toLowerCase(), async (state, writer) => {
       if (!state) return { lotClosed: false, expiredReservations: 0, closedEntries: 0 }
       const closedEntries = await writer.settleQueue()
       const lotClosed = isDueToExpire(state, state.now)
@@ -35,7 +38,7 @@ export function createExpiryUseCases(repository: LotExpiryRepository, log: Log,
       if (lotClosed) await writer.closeLot(state.pickupEndsAt)
       await writer.complete()
       return { lotClosed, expiredReservations, closedEntries }
-    })
+    }))
   }
 
   return {
