@@ -1,8 +1,7 @@
 # ADR 0003: arquitectura incremental del backend para S02
 
-Fecha: 2026-09-21. Estado: **adoptada para desarrollo incremental de S02**.
-Alcance: decisión arquitectónica/documental posterior a S01, previa a K008/K010.
-No acredita implementación de las capas ni de operaciones de negocio.
+Fecha: 2026-09-21. Estado: **vigente**. Todo el backend la sigue; la
+[arquitectura](../arquitectura/arquitectura.md) describe cómo quedó materializada.
 
 ## Contexto
 
