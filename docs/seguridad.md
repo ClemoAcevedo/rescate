@@ -40,18 +40,24 @@ igual que revisar, también en la ventana por IP, y esa ventana solo la gastan o
 con membership del lote. Decisión y alternativas en
 [ADR 0013](adr/0013-limite-de-codigos-de-retiro.md).
 
-**Origen.** El proxy Vercel sobrescribe `x-rescate-proxy-secret` mediante un transform
-de petición del CDN. Solo con ese secreto válido la API acepta `x-vercel-forwarded-for`,
-que Vercel fija con la IP del cliente. Un acceso directo o un secreto incorrecto usa
-el socket. Nunca se confía en `X-Forwarded-For` ni se activa `trust proxy` general.
+**Origen.** El middleware Vercel lee la IP dentro del runtime con `ipAddress` y
+sobrescribe `x-rescate-client-ip` y su firma HMAC-SHA256. La firma liga la dirección
+a un instante con tolerancia de 60 segundos. El CDN sobrescribe además
+`x-rescate-proxy-secret`; la API exige el secreto y una firma válida antes de aceptar
+la dirección. Un acceso directo, una firma ausente/incorrecta/vencida o un secreto
+incorrecto usa el socket. Las URLs de despliegues anteriores pueden seguir inyectando
+el secreto, pero no producen firmas de IP. Las cabeceras genéricas, incluida
+`x-vercel-forwarded-for` en un rewrite externo, no autentican al cliente.
+Nunca se activa `trust proxy` general.
 IPv4-mapped se normaliza como IPv4; IPv6 comparte ventana por /64, para evitar
 eludirla rotando direcciones del mismo prefijo. El secreto solo vive en configuración
 de servidor, sin cabecera de respuesta ni variable `VITE_`.
 
-La garantía sobre la cabecera procede de [Vercel](https://vercel.com/docs/headers/request-headers);
-el [transform de petición](https://vercel.com/docs/project-configuration/vercel-json#transforms)
-mantiene el rewrite externo sin interponer una función con un límite de cuerpo menor
-al de las fotos. La comprobación del trayecto real forma parte del release (#141).
+El middleware se invoca explícitamente antes del rewrite de `/api`. No lee cuerpos:
+[`skipMiddlewareRequestBody`](https://vercel.com/docs/project-configuration/vercel-json#skipmiddlewarerequestbody)
+los envía directamente al destino, conservando las fotos de 5 MiB. La IP se obtiene
+en el contexto de función documentado por [Vercel](https://vercel.com/docs/headers/request-headers).
+La comprobación del trayecto real forma parte del release (#141).
 
 ## Aislamiento por objeto
 

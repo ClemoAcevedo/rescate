@@ -2,7 +2,8 @@
 
 La web compilada vive en Vercel; API, worker y PostgreSQL/PostGIS, en Railway.
 El navegador consulta `/api` bajo el dominio de la web. [vercel.mjs](../web/vercel.mjs)
-reenvía esas rutas al origen HTTPS de Railway quitando el prefijo; las demás
+invoca [middleware.ts](../web/middleware.ts) antes de reenviar esas rutas al origen
+HTTPS de Railway quitando el prefijo; las demás
 rutas usan el fallback de React. Las respuestas de identidad conservan cookies
 `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax`, sin `Domain`, y `Cache-Control: no-store`.
 
@@ -48,7 +49,11 @@ Railway; el proyecto Vercel tampoco tiene un autodeploy Git independiente.
 
 API y configuración de servidor de Vercel comparten `API_PROXY_SECRET`. El job web
 lo recibe desde el secret GitHub `production/API_PROXY_SECRET`, antes de evaluar
-`vercel.mjs`; no usar `VITE_`. API y worker reciben `RECOVERY_JOURNAL_KEY` (32 bytes
+`vercel.mjs`, que también lo configura como variable del middleware del servidor;
+no usar `VITE_`. El middleware firma la IP del runtime y el CDN añade el secreto al
+rewrite. La ruta explícita de middleware precede al rewrite externo, y
+`skipMiddlewareRequestBody=true` mantiene los cuerpos de fotos fuera del middleware.
+API y worker reciben `RECOVERY_JOURNAL_KEY` (32 bytes
 aleatorios en base64), distinta de las demás claves, y el scope del entorno Railway.
 El servicio backups recibe su propia `BACKUP_ENCRYPTION_KEY`, sus variables de base
 y fotos y, si corresponde, `BACKUP_S3_*` y `RECOVERY_JOURNAL_SCOPE`.

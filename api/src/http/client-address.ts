@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import { isIP } from 'node:net'
 import type { Request } from 'express'
 
@@ -27,13 +27,23 @@ export function addressKey(value: string): string | null {
   return `${numbers.slice(0, 4).map(n => n.toString(16)).join(':')}::/64`
 }
 
-/** Solo el proxy que posee el secreto puede declarar la IP del cliente. Nunca usa X-Forwarded-For. */
-export function resolveClientAddress(req: Request, proxySecret: string | undefined): string {
+/** Las URLs de despliegues anteriores también inyectan el secreto: la IP requiere firma propia. */
+function signedAddress(req: Request, secret: string, now: number): string | null {
+  const ip = req.get('x-rescate-client-ip') ?? ''
+  const address = addressKey(ip)
+  const signature = /^(\d{13})\.([A-Za-z0-9_-]{43})$/.exec(req.get('x-rescate-client-ip-signature') ?? '')
+  if (!address || !signature || Math.abs(now - Number(signature[1])) > 60_000) return null
+  const actual = Buffer.from(signature[2]!, 'base64url')
+  const expected = createHmac('sha256', secret).update(`${signature[1]}.${ip}`).digest()
+  return actual.length === expected.length && timingSafeEqual(actual, expected) ? address : null
+}
+
+export function resolveClientAddress(req: Request, proxySecret: string | undefined, now = Date.now()): string {
   const presented = req.get('x-rescate-proxy-secret') ?? ''
   const expected = Buffer.from(proxySecret ?? '')
   const actual = Buffer.from(presented)
   const trusted = expected.length >= 32 && actual.length === expected.length && timingSafeEqual(expected, actual)
-  const forwarded = trusted ? addressKey(req.get('x-vercel-forwarded-for') ?? '') : null
+  const forwarded = trusted ? signedAddress(req, proxySecret!, now) : null
   const address = forwarded ?? addressKey(req.socket.remoteAddress ?? '') ?? 'unknown'
   addresses.set(req, address)
   return address

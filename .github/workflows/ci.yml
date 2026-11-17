@@ -103,7 +103,7 @@ jobs:
           semgrep scan --config p/javascript --config p/typescript
           --metrics=off --disable-version-check --error
           --json-output=semgrep.json --sarif-output=semgrep.sarif
-          api/src web/src
+          api/src web/src web/middleware.ts
       - name: Publish SAST results, including findings
         if: always()
         uses: actions/upload-artifact@v4

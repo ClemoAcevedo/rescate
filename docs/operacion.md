@@ -168,6 +168,13 @@ más recientes, no siete ejecuciones. Una copia incompleta no desplaza una compl
 un inventario inconsistente detiene el borrado. El directorio temporal sin cifrar
 se elimina al terminar, también ante error.
 
+La rotación elimina todas las versiones y marcadores de cada objeto vencido,
+tanto de las copias como del diario. En B2, un DELETE sin versión solo oculta el
+archivo y conserva sus bytes. Se completa el listado paginado antes de borrar,
+se exige coincidencia exacta de la clave y se preservan los objetos vecinos.
+Las credenciales del servicio requieren listar versiones y borrarlas; un fallo
+del inventario interrumpe la rotación.
+
 El estado privado `status.json` conserva el último éxito aunque falle el intento
 siguiente. `ops:status` requiere `BACKUP_S3_*` o las variables de fotos de producción
 para consultarlo. La clave del cifrado nunca se guarda junto al archivo ni en Git.
