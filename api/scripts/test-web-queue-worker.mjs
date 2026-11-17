@@ -39,7 +39,7 @@ async function browserFor(label) {
 }
 
 async function openNotifications(page) {
-  const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+  const menu = page.getByRole('button', { name: /^Abrir menú(?:,|$)/ })
   if (await menu.isVisible()) await menu.click()
   await page.getByRole('link', { name: /^Avisos/ }).click()
 }

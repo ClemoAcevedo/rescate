@@ -45,7 +45,12 @@ La lectura exige sesión, `Origin` y CSRF.
 
 ## Web
 
-La cabecera muestra «Avisos» con el total sin leer. `/avisos` lista la bandeja con título y
+La cabecera muestra «Avisos» con el total sin leer. Hasta 1280 px, el botón de abrir
+o cerrar el menú también muestra el contador, incluso con el menú cerrado, y su
+nombre accesible incluye «Avisos, N sin leer». Ambos controles comparten el total
+de la sesión y se actualizan al recibir avisos o marcarlos como leídos; el indicador
+visual se limita a «99+», conservando el total exacto en el nombre accesible.
+`/avisos` lista la bandeja con título y
 texto según el tipo, el lote, la fecha y un indicador «Nuevo». Abrir un aviso lo marca como
 leído y lleva a la espera, la reserva o el chat; al chat le pasa el lote y quién mira
 para su encabezado. Las incidencias muestran las instrucciones en

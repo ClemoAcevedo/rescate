@@ -53,16 +53,24 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message))
   const rateLimited = []
   page.on('response', (response) => { if (response.status() === 429) rateLimited.push(new URL(response.url()).pathname) })
-  const inboxLink = page.getByRole('link', { name: /^Avisos/ })
+  const inboxLink = page.locator('a[href="/avisos"]')
+  const menu = page.locator('.menu-toggle')
+  await page.setViewportSize({ width: 360, height: 800 })
   await page.goto(`${baseUrl}/reservas`)
-  await inboxLink.waitFor()
+  await inboxLink.waitFor({ state: 'attached' })
   assert.equal(await inboxLink.getAttribute('aria-label'), 'Avisos')
+  await page.getByRole('button', { name: 'Abrir menú', exact: true }).waitFor()
+  assert.equal(await menu.locator('.notifications-badge').count(), 0)
+  assert.equal(await inboxLink.isVisible(), false)
   ok('sin avisos: la cabecera muestra «Avisos» sin contador')
 
   // Ana cancela: la oferta para Bea nace con la transición y el worker genera el aviso.
   assert.equal((await ana.call('POST', `/reservations/${reserved.body.id}/cancel`, {})).status, 200)
   await page.waitForFunction(() => document.querySelector('a[href="/avisos"]')?.getAttribute('aria-label') === 'Avisos, 1 sin leer',
     null, { timeout: 25_000 })
+  await page.getByRole('button', { name: 'Abrir menú, Avisos, 1 sin leer', exact: true }).waitFor()
+  assert.equal(await menu.locator('.notifications-badge').innerText(), '1')
+  assert.equal(await inboxLink.isVisible(), false, 'el aviso llega con el menú cerrado')
   ok('la oferta emitida llega a la cabecera por la consulta periódica (≤ 15 s con la pestaña visible)')
 
   // Sin conexión, la oferta vence y otra persona reserva el pack liberado; al reconectar se recupera de inmediato.
@@ -79,8 +87,12 @@ try {
     null, { timeout: 10_000 })
   const recovered = Date.now() - reconnectedAt
   assert.ok(recovered < 10_000)
+  await page.getByRole('button', { name: 'Abrir menú, Avisos, 2 sin leer', exact: true }).waitFor()
+  assert.equal(await menu.locator('.notifications-badge').innerText(), '2')
   ok(`desconectada: el aviso de vencimiento persiste y se recupera al reconectar (${recovered} ms)`)
 
+  await menu.click()
+  await page.getByRole('button', { name: 'Cerrar menú, Avisos, 2 sin leer', exact: true }).waitFor()
   await inboxLink.click()
   await page.waitForURL(`${baseUrl}/avisos`)
   await page.getByText('2 avisos sin leer.').waitFor()
@@ -99,6 +111,7 @@ try {
   ok('layout sin scroll horizontal en 360×800 y 1366×768')
 
   // Abrir el aviso de la oferta registra la lectura y lleva al estado vigente: vencida, sin aceptar.
+  await page.setViewportSize({ width: 360, height: 800 })
   const read = page.waitForResponse((response) => /\/api\/notifications\/[^/]+\/read$/.test(new URL(response.url()).pathname))
   await offerCard.getByRole('button', { name: 'Ver oferta' }).click()
   assert.equal((await read).status(), 200)
@@ -107,8 +120,11 @@ try {
   assert.equal(await page.getByRole('button', { name: /^Aceptar / }).count(), 0)
   assert.equal((await db.query('SELECT status FROM waitlist_entries WHERE public_id = $1', [entry.body.id])).rows[0].status, 'expired')
   await page.waitForFunction(() => document.querySelector('a[href="/avisos"]')?.getAttribute('aria-label') === 'Avisos, 1 sin leer')
+  await page.getByRole('button', { name: 'Abrir menú, Avisos, 1 sin leer', exact: true }).waitFor()
+  assert.equal(await menu.locator('.notifications-badge').innerText(), '1')
   ok('leer el aviso de una oferta antigua no la reactiva: el detalle la muestra vencida y sin aceptar')
 
+  await menu.click()
   await inboxLink.click()
   await page.getByText('1 aviso sin leer.').waitFor()
   assert.equal(await offerCard.getByText('Nuevo', { exact: true }).count(), 0)

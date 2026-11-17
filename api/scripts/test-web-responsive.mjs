@@ -11,16 +11,18 @@ const lot = { id: 'lot_test', description: 'Pack de panes surtidos para comparti
 const session = { user: { id: 'usr_layout', email: 'operador.con.correo.largo.para.probar@example.test' }, operableEstablishments: [{ id: 'est_layout', name: 'Almacén ficticio' }], expiresAt: '2030-01-15T22:00:00Z' }
 try {
   const page = await browser.newPage({ ignoreHTTPSErrors: true, reducedMotion: 'reduce' })
+  let unreadCount = 1234
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname
     if (path === '/api/auth/session') return route.fulfill({ json: { session, csrfToken: 'controlled' } })
-    if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
+    if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount } })
     if (path === '/api/public/lots') return route.fulfill({ json: { items: [lot, { ...lot, id: 'lot_two' }, { ...lot, id: 'lot_three' }], page: 1, hasNextPage: false } })
     if (path === '/api/public/lots/lot_test') return route.fulfill({ json: lot })
     throw new Error(`Ruta inesperada: ${path}`)
   })
   await page.goto(base + '/lotes')
   await page.locator('.session-status').waitFor({ state: 'attached' })
+  await page.locator('.menu-toggle').filter({ hasText: '99+' }).waitFor({ state: 'attached' })
   await page.locator('.lot-card-public').first().waitFor()
   // Redimensionar la misma página, como DevTools, también en sentido inverso.
   for (const width of [320, 360, 390, 768, 820, 1024, 1280, 1281, 1366, 1920, 820, 360]) {
@@ -36,10 +38,13 @@ try {
     assert.ok(layout.height <= 80, `${width}: cabecera ocupa varias filas con menú cerrado`)
     assert.equal(layout.columns, width <= 768 ? 1 : width < 936 ? 2 : 3, `${width}: columnas legibles`)
     assert.ok(layout.cardWidths.every(value => value >= Math.min(288, width - 32)), `${width}: tarjetas demasiado estrechas`)
-    const menu = page.getByRole('button', { name: 'Abrir menú', exact: true })
+    const menu = page.getByRole('button', { name: 'Abrir menú, Avisos, 1234 sin leer', exact: true })
     assert.equal(await menu.isVisible(), width <= 1280, `${width}: navegación adaptable`)
     if (width <= 1280) {
+      assert.equal(await menu.locator('.notifications-badge').isVisible(), true, `${width}: contador visible con menú cerrado`)
+      assert.equal(await menu.locator('.notifications-badge').innerText(), '99+')
       await menu.click()
+      await page.getByRole('button', { name: 'Cerrar menú, Avisos, 1234 sin leer', exact: true }).waitFor()
       const links = page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link')
       // Rescatar (explorar, esperas, reservas), Mi establecimiento (panel, Mis lotes, Publicar lote) y avisos en la cuenta.
       assert.equal(await links.count(), 7)
@@ -51,6 +56,18 @@ try {
       await page.keyboard.press('Escape')
     }
   }
+  // El mismo contador actualiza el botón sin abrir el menú ni recargar la página.
+  for (const count of [1, 0]) {
+    unreadCount = count
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    const label = count ? `Abrir menú, Avisos, ${count} sin leer` : 'Abrir menú'
+    const menu = page.getByRole('button', { name: label, exact: true })
+    await menu.waitFor()
+    assert.equal(await menu.getAttribute('aria-expanded'), 'false')
+    assert.equal(await menu.locator('.notifications-badge').count(), count ? 1 : 0)
+    if (count) assert.equal(await menu.locator('.notifications-badge').innerText(), String(count))
+    if (screenshots) await page.locator('.site-header').screenshot({ path: `${screenshots}/header-${count}-unread.png` })
+  }
   await page.goto(base + '/lotes/lot_test')
   await page.getByLabel('Cantidad de packs (obligatorio)', { exact: true }).waitFor()
   for (const width of [320, 360, 768, 820, 1024, 1280, 1366]) {
@@ -61,7 +78,7 @@ try {
       const controls = [...document.querySelectorAll('.reserve-quantity > *, .reserve-form > button')].map(el => el.getBoundingClientRect())
       return { overflow: document.documentElement.scrollWidth > innerWidth, panel: { x: panel.x, right: panel.right, width: panel.width, top: panel.top }, gallery: { bottom: gallery.bottom, right: gallery.right }, controls: controls.map(r => ({ x: r.x, right: r.right, width: r.width })) }
     })
-    if (screenshots) await page.screenshot({ path: `${screenshots}/${width}-responsive.png`, fullPage: true })
+    if (screenshots) await page.screenshot({ path: `${screenshots}/${width}-responsive-detail.png`, fullPage: true })
     assert.equal(layout.overflow, false, `${width}: desborde del detalle`)
     assert.ok(layout.panel.width >= Math.min(352, width - 32), `${width}: panel comprimido`)
     assert.ok(layout.controls.every(r => r.width > 0 && r.x >= layout.panel.x && r.right <= layout.panel.right), `${width}: controles fuera del panel`)

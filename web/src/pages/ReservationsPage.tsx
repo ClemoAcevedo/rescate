@@ -1,6 +1,6 @@
 import './reservations.css'
 import { DetailSkeleton, RecordSkeleton } from '../components/RecordSkeleton'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from '../components/Icon'
@@ -87,8 +87,9 @@ function Detail({ id }: { id: string }) {
   const busy = useRef(false)
   const generation = useRef({ value: 0 })
   const cancelRef = useRef<HTMLButtonElement>(null)
-  const confirmRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => { if (confirming) confirmRef.current?.focus() }, [confirming])
+  const cancelPromptRef = useRef<HTMLParagraphElement>(null)
+  const cancelPromptId = useId()
+  useEffect(() => { if (confirming) cancelPromptRef.current?.focus() }, [confirming])
   const resultRef = useRef<HTMLDivElement>(null)
   useEffect(() => { if (message && !cancelling) resultRef.current?.focus() }, [message, cancelling])
   const load = useCallback(async () => {
@@ -164,9 +165,9 @@ function Detail({ id }: { id: string }) {
         <Link className="ui-button ui-button--secondary" to="/incidencias">Historial de incidencias</Link>
       </nav>
       {current && !uncertain && !confirming && <Button ref={cancelRef} className="reservation-detail__cancel" variant="danger" disabled={!csrfToken || loading || stale} onClick={() => setConfirming(true)}>Cancelar reserva</Button>}
-      {(confirming || uncertain) && <Alert className="reservation-cancel" tone="warning"><p>{uncertain ? 'Ocultamos el código hasta saber si se canceló.' : '¿Cancelar esta reserva? Los packs quedarán libres para otras personas y tu código dejará de servir.'}</p>
-        <div className="reservation-cancel__actions">
-        <Button ref={confirmRef} className="reservation-cancel__confirm" variant="danger" loading={cancelling} disabled={!csrfToken || loading || stale} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
+      {(confirming || uncertain) && <Alert className="reservation-cancel" tone="warning"><p id={cancelPromptId} ref={cancelPromptRef} tabIndex={-1}>{uncertain ? 'Ocultamos el código hasta saber si se canceló.' : '¿Cancelar esta reserva? Los packs quedarán libres para otras personas y tu código dejará de servir.'}</p>
+        <div className="reservation-cancel__actions" role="group" aria-labelledby={cancelPromptId}>
+        <Button className="reservation-cancel__confirm" variant="danger" loading={cancelling} disabled={!csrfToken || loading || stale} onClick={() => { void cancel() }}>{cancelling ? 'Cancelando…' : uncertain ? 'Reintentar cancelación' : 'Confirmar cancelación'}</Button>
         {!uncertain && <Button variant="secondary" onClick={() => { setConfirming(false); requestAnimationFrame(() => cancelRef.current?.focus()) }}>Conservar reserva</Button>}
         </div>
       </Alert>}

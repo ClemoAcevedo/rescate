@@ -38,8 +38,9 @@ Para la revisión manual, recorrer explorar, reservar y cancelar en ambos anchos
 - Verificar etiquetas visibles asociadas a filtros y cantidad, nombres de botones
   y texto de resultados y estados.
 - Comprobar que texto, código, fechas y acciones no queden cortados ni superpuestos.
-- Abrir cancelación, conservar y volver a cancelar: el foco llega a la confirmación,
-  vuelve a cancelar al conservar y llega al resultado tras confirmar.
+- Abrir cancelación y pulsar Enter de nuevo: el foco queda en la pregunta y no
+  cancela. El grupo de acciones tiene esa pregunta como nombre accesible. Conservar
+  devuelve el foco a «Cancelar reserva»; confirmar lo lleva al resultado.
 
 La evidencia del PR distingue el comando ejecutado, la revisión manual realizada y
 el protocolo preparado. K033 pide preparar el protocolo; no fija un número de
@@ -48,7 +49,9 @@ participantes ni exige ejecutar las sesiones para cerrar la tarjeta.
 ## Distribución y regresiones independientes
 
 La cabecera usa menú hasta 1280 px y mantiene marca y botón en una fila desde
-320 px con el menú cerrado. Con sesión, el menú agrupa los enlaces en «Rescatar»,
+320 px con el menú cerrado, también con el contador de avisos sin leer en el botón.
+El contador conserva el total exacto en el nombre accesible y muestra hasta «99+».
+Con sesión, el menú agrupa los enlaces en «Rescatar»,
 «Mi establecimiento» (solo operadores, con «Panel», «Mis lotes» y «Publicar lote») y
 «Tu cuenta» (avisos, correo y cerrar sesión), cada grupo con `role="group"` y su título.
 En escritorio los títulos quedan para lectores de pantalla y el correo se ve en el
