@@ -42,6 +42,11 @@ test('diario independiente: prepara antes de escribir, confirma después y cifra
   assert.throws(() => decryptRecoveryRecord(outcomeBytes!, randomBytes(32)))
   const envelope = JSON.parse(outcomeBytes!.toString()); envelope.data = Buffer.from('alterado').toString('base64')
   assert.throws(() => decryptRecoveryRecord(Buffer.from(JSON.stringify(envelope)), key))
+  for (const length of [4, 8, 12, 15]) {
+    const truncated = JSON.parse(outcomeBytes!.toString())
+    truncated.tag = Buffer.alloc(length).toString('base64')
+    assert.throws(() => decryptRecoveryRecord(Buffer.from(JSON.stringify(truncated)), key), /incompleto/)
+  }
 })
 
 test('falla cerrada antes del efecto; resultado desconocido después de COMMIT conserva la intención para conciliar', async () => {

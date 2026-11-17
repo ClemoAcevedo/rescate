@@ -25,7 +25,7 @@ export function backupKey(encoded = process.env.BACKUP_ENCRYPTION_KEY) {
 
 export async function encryptBackup(directory, target, key) {
   const iv = randomBytes(IV_BYTES)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES })
   const output = createWriteStream(target, { mode: 0o600, flags: 'wx' })
   output.write(Buffer.concat([MAGIC, iv]))
   const tar = spawn('tar', ['-C', resolve(directory), '-cf', '-', '.'], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -57,7 +57,7 @@ export async function decryptBackup(archive, directory, key) {
   const temporary = await mkdtemp(join(tmpdir(), 'rescate-decrypt-'))
   try {
     const plaintext = join(temporary, 'backup.tar')
-    const decipher = createDecipheriv('aes-256-gcm', key, header.subarray(MAGIC.length))
+    const decipher = createDecipheriv('aes-256-gcm', key, header.subarray(MAGIC.length), { authTagLength: TAG_BYTES })
     decipher.setAuthTag(tag)
     await pipeline(createReadStream(archive, { start: header.length, end: size - TAG_BYTES - 1 }), decipher,
       createWriteStream(plaintext, { mode: 0o600, flags: 'wx' }))

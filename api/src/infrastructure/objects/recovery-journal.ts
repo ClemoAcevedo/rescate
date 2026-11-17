@@ -12,7 +12,7 @@ export function decryptRecoveryRecord(bytes: Uint8Array, key: Uint8Array): Recor
   if (envelope.format !== 1 || envelope.keyId !== createHash('sha256').update(key).digest('hex').slice(0, 16)) throw new Error('Clave o formato del diario incorrecto')
   const nonce = Buffer.from(envelope.nonce, 'base64'); const tag = Buffer.from(envelope.tag, 'base64')
   if (nonce.length !== 12 || tag.length !== 16) throw new Error('Diario incompleto')
-  const decipher = createDecipheriv('aes-256-gcm', key, nonce)
+  const decipher = createDecipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 })
   decipher.setAuthTag(tag)
   return JSON.parse(Buffer.concat([decipher.update(Buffer.from(envelope.data, 'base64')), decipher.final()]).toString('utf8'))
 }
@@ -53,7 +53,7 @@ export function createRecoveryJournal(environment: NodeJS.ProcessEnv,
   async function write(ticket: RecoveryTicket, phase: string, value: object): Promise<void> {
     try {
       const nonce = randomBytes(12)
-      const cipher = createCipheriv('aes-256-gcm', key, nonce)
+      const cipher = createCipheriv('aes-256-gcm', key, nonce, { authTagLength: 16 })
       const bytes = Buffer.concat([cipher.update(JSON.stringify({ format: 1, id: ticket.id, preparedAt: ticket.preparedAt,
         recordedAt: new Date().toISOString(), ...value })), cipher.final()])
       const body = Buffer.from(JSON.stringify({ format: 1, keyId, nonce: nonce.toString('base64'),
