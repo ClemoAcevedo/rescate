@@ -5,7 +5,48 @@ import { mkdtemp, readFile, rm, stat, symlink, writeFile, mkdir } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { backupKey, decryptBackup, encryptBackup, rotateBackups, uploadBackup } from '../scripts/support/encrypted-backups.mjs'
+import { backupKey, backupStore, decryptBackup, encryptBackup, rotateBackups, uploadBackup } from '../scripts/support/encrypted-backups.mjs'
+import { DeleteObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3'
+
+const environment = { BACKUP_S3_ENDPOINT: 'https://s3.example.com', BACKUP_S3_REGION: 'test', BACKUP_S3_BUCKET: 'test',
+  BACKUP_S3_ACCESS_KEY_ID: 'ficticia', BACKUP_S3_SECRET_ACCESS_KEY: 'ficticia' }
+
+test('retención B2: pagina todas las versiones y marcadores y conserva claves con el mismo prefijo', async () => {
+  const key = 'rescate-backups/v1/prueba.tar.enc', calls = []
+  const store = backupStore(environment, { destroy() {}, async send(command) {
+    calls.push(command)
+    if (command instanceof ListObjectVersionsCommand) return command.input.KeyMarker
+      ? { Versions: [{ Key: key, VersionId: 'older' }, { Key: key + '.json', VersionId: 'neighbor' }], DeleteMarkers: [{ Key: key, VersionId: 'marker' }] }
+      : { Versions: [{ Key: key, VersionId: 'latest' }], IsTruncated: true, NextKeyMarker: key, NextVersionIdMarker: 'latest' }
+  } })
+  await store.remove(key)
+  assert.ok(calls.slice(0, 2).every(command => command instanceof ListObjectVersionsCommand))
+  assert.equal(calls[1].input.VersionIdMarker, 'latest')
+  assert.deepEqual(calls.slice(2).map(command => command.input), ['latest', 'older', 'marker'].map(VersionId => ({ Bucket: 'test', Key: key, VersionId })))
+  assert.ok(calls.slice(2).every(command => command instanceof DeleteObjectCommand))
+})
+
+test('retención: no borra ante un inventario fallido o una clave fuera del prefijo', async () => {
+  const calls = [], key = 'rescate-backups/v1/prueba.tar.enc'
+  const store = backupStore(environment, { destroy() {}, async send(command) {
+    calls.push(command)
+    if (command.input.KeyMarker) throw new Error('sin acceso a la segunda página')
+    return { Versions: [{ Key: key, VersionId: 'latest' }], IsTruncated: true, NextKeyMarker: key, NextVersionIdMarker: 'latest' }
+  } })
+  await assert.rejects(store.remove(key), /segunda página/)
+  await assert.rejects(store.remove('otra/clave'), /no permitida/)
+  assert.ok(calls.every(command => command instanceof ListObjectVersionsCommand))
+})
+
+test('retención: admite la versión null de un bucket sin versionado y retirar una clave ausente es idempotente', async () => {
+  const calls = [], key = 'rescate-backups/v1/prueba.tar.enc'
+  const store = backupStore(environment, { destroy() {}, async send(command) {
+    calls.push(command)
+    if (command instanceof ListObjectVersionsCommand) return { Versions: command.input.Prefix === key ? [{ Key: key, VersionId: 'null' }] : [] }
+  } })
+  await store.remove(key); await store.remove(key + '.ausente')
+  assert.deepEqual(calls.filter(command => command instanceof DeleteObjectCommand).map(command => command.input), [{ Bucket: 'test', Key: key, VersionId: 'null' }])
+})
 
 function memoryStore() {
   const values = new Map()

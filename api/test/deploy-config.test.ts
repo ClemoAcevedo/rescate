@@ -17,8 +17,11 @@ function load(environment: Record<string, string>) {
 test("Vercel conserva /api en el navegador y lo elimina antes de Railway; fallback SPA al final", () => {
   const result = load({ API_PROXY_TARGET: "https://rescate-api.up.railway.app", VITE_API_BASE_URL: "/api" })
   assert.equal(result.status, 0, result.stderr)
-  const { routes } = JSON.parse(result.stdout)
+  const { routes, skipMiddlewareRequestBody, env } = JSON.parse(result.stdout)
+  assert.equal(skipMiddlewareRequestBody, true)
+  assert.deepEqual(env, { API_PROXY_SECRET: 'test'.repeat(10) })
   assert.deepEqual(routes, [
+    { src: '/api(?:/.*)?$', middlewarePath: 'middleware', continue: true },
     { src: '/api(?:/(.*))?$', dest: 'https://rescate-api.up.railway.app/$1', transforms: [
       { type: 'request.headers', op: 'set', target: { key: 'x-rescate-proxy-secret' }, args: 'test'.repeat(10) },
     ] },
