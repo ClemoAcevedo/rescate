@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
-import { S3Client, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, ListObjectVersionsCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { sha256File } from './backup.mjs'
 
 const execute = promisify(execFile)
@@ -74,7 +74,7 @@ export async function decryptBackup(archive, directory, key) {
 }
 
 /** Bucket privado fuera del host de la API; los clientes reciben solo las rutas de fotos. */
-export function backupStore(environment = process.env) {
+export function backupStore(environment = process.env, transport) {
   const value = suffix => environment[`BACKUP_S3_${suffix}`] ?? environment[`PHOTO_S3_${suffix}`]
   const endpoint = new URL(value('ENDPOINT') ?? '')
   assert.equal(endpoint.protocol, 'https:', 'El bucket de copias requiere HTTPS')
@@ -84,7 +84,7 @@ export function backupStore(environment = process.env) {
   const accessKeyId = value('ACCESS_KEY_ID')
   const secretAccessKey = value('SECRET_ACCESS_KEY')
   assert.ok(Bucket && region && accessKeyId && secretAccessKey, 'Falta configuración del bucket privado de copias')
-  const client = new S3Client({ endpoint: endpoint.href, region, forcePathStyle: true,
+  const client = transport ?? new S3Client({ endpoint: endpoint.href, region, forcePathStyle: true,
     credentials: { accessKeyId, secretAccessKey }, requestHandler: { connectionTimeout: 10_000, requestTimeout: 120_000 }, maxAttempts: 3 })
   return {
     async put(key, bytes, contentType = 'application/octet-stream', size) {
@@ -108,7 +108,22 @@ export function backupStore(environment = process.env) {
     },
     async remove(key) {
       assert.ok(key.startsWith(BACKUP_PREFIX) && !key.includes('..'), 'Clave de copia no permitida')
-      await client.send(new DeleteObjectCommand({ Bucket, Key: key }))
+      // B2 conserva los bytes si DELETE solo crea un marcador. Retirar todas las
+      // versiones de esta clave, incluidos marcadores, sin alcanzar claves vecinas.
+      const versions = []
+      let KeyMarker, VersionIdMarker
+      do {
+        const page = await client.send(new ListObjectVersionsCommand({ Bucket, Prefix: key, KeyMarker, VersionIdMarker }))
+        versions.push(...[...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])].filter(version => version.Key === key))
+        if (page.IsTruncated) assert.ok(page.NextKeyMarker, 'Listado de versiones incompleto')
+        KeyMarker = page.IsTruncated ? page.NextKeyMarker : undefined
+        VersionIdMarker = page.NextVersionIdMarker
+      } while (KeyMarker)
+      // Completar el inventario antes de borrarlo conserva los marcadores de paginación.
+      for (const version of versions) {
+        assert.ok(version.VersionId, 'Versión sin identificador')
+        await client.send(new DeleteObjectCommand({ Bucket, Key: key, VersionId: version.VersionId }))
+      }
     },
     close() { client.destroy() },
   }

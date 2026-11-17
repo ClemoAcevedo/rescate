@@ -19,7 +19,13 @@ export const config = {
   installCommand: 'npm ci',
   buildCommand: 'npm run build && node scripts/write-release.mjs',
   outputDirectory: 'dist',
+  // Disponible solo para el middleware del servidor; nunca usa el prefijo VITE_.
+  env: { API_PROXY_SECRET: secret },
+  // Solo se inspeccionan cabeceras; el cuerpo de 5 MiB continúa directo al rewrite.
+  skipMiddlewareRequestBody: true,
   routes: [
+    // Las rutas explícitas se evalúan antes del middleware automático de Vercel.
+    { src: '/api(?:/.*)?$', middlewarePath: 'middleware', continue: true },
     // Transform de petición en el CDN: conserva el proxy directo y las cargas de 5 MiB.
     // El secreto nunca es una cabecera de respuesta ni entra al bundle de Vite.
     { src: '/api(?:/(.*))?$', dest: `${origin}/$1`, transforms: [
