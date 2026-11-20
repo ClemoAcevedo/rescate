@@ -71,10 +71,10 @@ export function SiteHeader() {
         type="button"
         aria-controls="main-navigation"
         aria-expanded={isMenuOpen}
-        aria-label={unreadCount ? `${menuLabel}, Avisos, ${unreadCount} sin leer` : undefined}
+        aria-label={unreadCount ? `${menuLabel}, Avisos, ${unreadCount} sin leer` : menuLabel}
         onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
       >
-        {menuLabel}
+        Menú
         {unreadCount ? <span className="notifications-badge" aria-hidden="true" title={`Avisos, ${unreadCount} sin leer`}>{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
       </Button>
       <nav
