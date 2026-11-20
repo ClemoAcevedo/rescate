@@ -87,6 +87,8 @@ actualizar su composición de carga y la regresión correspondiente.
 - Revisar menú, controles y textos largos desde 320 px, con datos reales y con
   vacío, error y reintento. Las pruebas comprueban resultados y geometría; las
   capturas complementan esa evidencia.
+- El botón «Menú» deja espacio para el contador de avisos en la cabecera
+  compacta. Su nombre accesible indica la acción y la cantidad de avisos sin leer.
 
 ## Verificar cambios
 
