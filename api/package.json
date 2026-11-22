@@ -94,6 +94,8 @@
     "db:test:incident-followup": "npm run build && node --import tsx scripts/test-incident-followup.mjs",
     "db:test:incident-followup:compose": "node scripts/test-incident-followup-compose.mjs",
     "test:web:lot-management": "node scripts/test-web-lot-management.mjs",
+    "test:web:service-contracts": "node scripts/test-web-service-contracts.mjs",
+    "test:web:recovery": "node scripts/test-web-recovery.mjs",
     "test:web:coverage": "node scripts/test-web-coverage.mjs",
     "test:web:lot-rules": "node scripts/test-web-lot-rules.mjs",
     "db:measure:e3:railway": "npm run build && node scripts/measure-scale-railway.mjs",

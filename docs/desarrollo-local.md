@@ -244,11 +244,13 @@ aportan evidencia sobre la infraestructura real. El reporte separa estas corrida
 npm --prefix api run test:web:coverage
 ```
 
-El comando levanta Vite temporalmente y verifica las reglas puras del cliente, además
-de accesibilidad, distribución, logout y chat con respuestas controladas, sin
-PostgreSQL. En CI el mismo recolector mide todos
-los recorridos de `test:web:compose` contra API, worker y base reales. Son alcances
-distintos: el resumen identifica cuál produjo cada cifra.
+El comando levanta Vite temporalmente y verifica reglas del cliente, accesibilidad,
+distribución, sesión, fotos, contratos HTTP y chat con respuestas controladas.
+`test:web:recovery` comprueba la recuperación ante fallos en sesión y fotos desde
+la interfaz. `test:web:service-contracts` verifica que los clientes rechacen
+respuestas incoherentes y conserven la intención al reintentar una reserva.
+En CI el mismo recolector mide `test:web:compose`, que agrega flujos con API,
+worker y PostgreSQL reales. El resumen registra el alcance de cada corrida.
 
 Chromium recoge V8 y guarda los contadores antes de cada navegación o recarga, y al
 cerrar la página o contexto. Una regresión con dos documentos comprueba que las
