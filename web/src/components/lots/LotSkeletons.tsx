@@ -21,6 +21,21 @@ export function LotsSkeleton() {
   </LoadingState>
 }
 
+export function ReserveFormSkeleton() {
+  return <div className="reserve-form">
+    <div className="ui-field">
+      <span className="ui-field__label"><Skeleton width="12rem" /></span>
+      <div className="reserve-quantity">
+        <Skeleton className="skeleton-control" width="var(--control-h)" />
+        <Skeleton className="reserve-quantity__input-skeleton" />
+        <Skeleton className="skeleton-control" width="var(--control-h)" />
+      </div>
+      <span className="ui-field__description"><Skeleton width="12rem" /></span>
+    </div>
+    <Skeleton className="skeleton-control" />
+  </div>
+}
+
 export function LotDetailSkeleton() {
   return <LoadingState label="Cargando el lote…">
     <header className="public-lot__header">
@@ -38,7 +53,7 @@ export function LotDetailSkeleton() {
       <Card className="reservation-panel">
         <span className="ui-badge"><Skeleton width="7rem" /></span>
         <div className="reservation-panel__intro"><h2>Reserva tus packs</h2><p><Skeleton /><Skeleton /></p></div>
-        <div className="reserve-form"><Skeleton className="skeleton-control" /><Skeleton className="skeleton-control" /></div>
+        <ReserveFormSkeleton />
       </Card>
     </div>
   </LoadingState>

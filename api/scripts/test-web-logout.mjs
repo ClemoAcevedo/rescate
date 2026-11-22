@@ -6,7 +6,13 @@ const baseUrl = (process.env.WEB_URL ?? 'http://localhost:5173').replace(/\/$/, 
 const browser = await chromium.launch({ headless: true })
 
 try {
-  for (const scenario of ['network', 'forbidden']) {
+  const failures = {
+    network: { text: /conexión/ },
+    forbidden: { status: 403, json: { error: { code: 'FORBIDDEN', message: 'No se permite esta operación.' } }, text: /seguridad o permisos/ },
+    unavailable: { status: 503, json: { error: { code: 'SERVICE_UNAVAILABLE', message: 'Servicio no disponible.' } }, text: /no está disponible temporalmente/ },
+    gateway: { status: 502, json: {}, text: /Tu sesión podría seguir activa/ },
+  }
+  for (const [scenario, failure] of Object.entries(failures)) {
     const context = await browser.newContext({ ignoreHTTPSErrors: true })
     const page = await context.newPage()
     const pageErrors = []
@@ -37,7 +43,7 @@ try {
         attempts += 1
         if (attempts === 1) {
           if (scenario === 'network') return route.abort('failed')
-          return route.fulfill({ status: 403, json: { error: { code: 'FORBIDDEN', message: 'No se permite esta operación.' } } })
+          return route.fulfill({ status: failure.status, json: failure.json })
         }
         await confirmation
         active = false
@@ -53,7 +59,7 @@ try {
     await logout.click()
     const alert = page.getByRole('alert')
     await alert.waitFor({ state: 'visible' })
-    assert.match(await alert.textContent(), scenario === 'network' ? /conexión/ : /seguridad o permisos/)
+    assert.match(await alert.textContent(), failure.text)
     assert.equal(await logout.isEnabled(), true)
     assert.equal(await page.getByText('Sesión: persona@example.com', { exact: true }).isVisible(), true)
     assert.equal(await page.getByRole('button', { name: 'Reintentar comprobación' }).count(), 0)

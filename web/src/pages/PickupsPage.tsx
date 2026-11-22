@@ -1,4 +1,3 @@
-import { RecordSkeleton } from '../components/RecordSkeleton'
 import './pickups.css'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -9,6 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
+import { LoadingState, Skeleton } from '../components/ui/Skeleton'
 import { formatInstant, formatWindow } from '../format/date-time'
 import { lotTitle } from '../lots/lot-title'
 import { HttpError } from '../services/http-client'
@@ -50,6 +50,29 @@ function ReviewOutcome({ review, lot }: { review: Review; lot: LotResponse }) {
     return <Alert tone="warning" role="status">La ventana de retiro aún no comienza. Podrás confirmar desde {formatInstant(lot.pickupStartsAt, lot.timeZone)}.</Alert>
   }
   return <Alert tone="info" role="status">La reserva está vigente. Entrega {packs(reservation.quantity)} y confirma el retiro.</Alert>
+}
+
+const codeLabel = 'Código de retiro'
+const codeHint = 'Ocho caracteres. Mayúsculas, espacios y guiones no importan.'
+
+function PickupLoading({ label }: { label: string }) {
+  return <>
+    <p className="eyebrow">Operación</p>
+    <h1 id="pickups-title">Validar retiros</h1>
+    <LoadingState label={label}>
+      <div className="pickups__placeholder">
+        <p className="pickups__lot"><Skeleton width="32rem">Nombre del lote · 15/01/2030 15:05 a 18:00 (America/Santiago)</Skeleton></p>
+        <div className="pickups__form">
+          <div className="ui-field">
+            <span className="ui-field__label"><Skeleton width="12rem" /></span>
+            <Skeleton className="skeleton-control" />
+            <span className="ui-field__description"><Skeleton width="25rem">{codeHint}</Skeleton></span>
+          </div>
+          <Skeleton className="skeleton-control pickups__submit-skeleton" />
+        </div>
+      </div>
+    </LoadingState>
+  </>
 }
 
 function PickupDesk({ lot, csrfToken }: { lot: LotResponse; csrfToken: string }) {
@@ -130,7 +153,7 @@ function PickupDesk({ lot, csrfToken }: { lot: LotResponse; csrfToken: string })
   return (
     <div className="pickups__desk">
       <form className="pickups__form" noValidate onSubmit={submit} aria-busy={phase === 'reviewing'}>
-        <FormField label="Código de retiro" hint="Ocho caracteres. Mayúsculas, espacios y guiones no importan." required>
+        <FormField label={codeLabel} hint={codeHint} required>
           {(control) => (
             <Input
               {...control}
@@ -231,7 +254,7 @@ function Pickups({ lotId, csrfToken }: { lotId: string; csrfToken: string }) {
       </>
     )
   }
-  if (!lot) return <><h1 id="pickups-title">Validar retiros</h1><RecordSkeleton label="Cargando lote…" count={1} lines={5} /></>
+  if (!lot) return <PickupLoading label="Cargando lote…" />
   return (
     <>
       <LotHeader lot={lot} now={openedAt} />
@@ -249,8 +272,10 @@ export function PickupsPage() {
   const { pathname } = useLocation()
   const { status, session, csrfToken } = useAuth()
   let content
-  if (status === 'checking' || status === 'error' || (!session && status === 'signing-out')) {
-    content = <><h1 id="pickups-title">Validar retiros</h1><Alert role="status">{status === 'error' ? 'No fue posible comprobar tu sesión. Reintenta desde el aviso superior.' : 'Comprobando la sesión…'}</Alert></>
+  if (status === 'error') {
+    content = <><h1 id="pickups-title">Validar retiros</h1><Alert role="status">No fue posible comprobar tu sesión. Reintenta desde el aviso superior.</Alert></>
+  } else if (status === 'checking' || (!session && status === 'signing-out')) {
+    content = <PickupLoading label="Comprobando la sesión…" />
   } else if (!session || !csrfToken) {
     content = <><h1 id="pickups-title">Validar retiros</h1><p>Inicia sesión con una cuenta habilitada por el establecimiento para validar retiros.</p>
       <Link className="text-link" to={`/login?from=${encodeURIComponent(pathname)}`}>Iniciar sesión</Link></>

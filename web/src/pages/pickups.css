@@ -1,9 +1,11 @@
 /* Presentación exclusiva de la validación de retiros (K024). */
-.pickups { display: grid; gap: var(--sp-4); }
+.pickups { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
 .pickups .eyebrow { margin-bottom: 0; }
 .pickups h1 { font-size: var(--fs-display-md); }
 .pickups__lot { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
-.pickups__desk { display: grid; gap: var(--sp-4); }
+.pickups__desk, .pickups__placeholder { display: grid; gap: var(--sp-4); }
+.pickups__placeholder { grid-template-columns: minmax(0, 1fr); }
+.pickups__form > .pickups__submit-skeleton { width: 9rem; }
 .pickups__form { display: grid; gap: var(--sp-3); }
 .pickups__form > .ui-button { justify-self: start; }
 .pickups__code { font-family: var(--font-mono); letter-spacing: var(--ls-caps); text-transform: uppercase; }
@@ -19,5 +21,6 @@
 
 @media (max-width: 48rem) {
   .pickups__form > .ui-button { justify-self: stretch; }
+  .pickups__form > .pickups__submit-skeleton { width: 100%; }
   .pickups__actions > .ui-button { flex: 1 1 100%; }
 }
