@@ -11,7 +11,9 @@ function safeDestination(value: string | null) { return value && value.startsWit
 
 export function LoginPage() {
   const { login } = useAuth()
-  const form = useRef<HTMLFormElement>(null); const navigate = useNavigate(); const { search } = useLocation()
+  const form = useRef<HTMLFormElement>(null); const navigate = useNavigate(); const { search, state } = useLocation()
+  const registrationComplete = (state as { registrationComplete?: boolean } | null)?.registrationComplete === true
+  const registrationConfirmationId = registrationComplete ? 'login-registration-confirmation' : undefined
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({}); const [message, setMessage] = useState<string | null>(null); const [submitting, setSubmitting] = useState(false)
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -21,8 +23,9 @@ export function LoginPage() {
     try { await login({ email, password }); setPassword(''); navigate(safeDestination(new URLSearchParams(search).get('from')), { replace: true })
     } catch (error) { setErrors(fieldErrors(error)); setMessage(authErrorMessage(error, 'login')) } finally { setSubmitting(false) }
   }
-  return <main className="page-content"><Card as="section" className="content-card auth-card" aria-labelledby="login-title">
+  return <main className="page-content" aria-describedby={registrationConfirmationId}><Card as="section" className="content-card auth-card" aria-labelledby="login-title">
     <p className="eyebrow">Cuenta</p><h1 id="login-title">Iniciar sesión</h1><p>Ingresa con el correo y la contraseña de tu cuenta.</p>
+    {registrationComplete && <Alert id={registrationConfirmationId} className="form-result" tone="success" role="status">Tu cuenta fue creada. Ya puedes iniciar sesión.</Alert>}
     {message && <Alert className="form-result" tone="danger" role="alert">{message}</Alert>}
     <form ref={form} className="auth-form" onSubmit={submit}>
       <FormField label="Correo electrónico" error={errors.email} required>{(control) => <Input {...control} name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />}</FormField>

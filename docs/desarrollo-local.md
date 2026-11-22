@@ -99,12 +99,12 @@ de avisos en curso y sale con SIGTERM/SIGINT. Sin `DATABASE_URL` queda inactivo;
 [vencimientos](vencimientos.md) y genera los [avisos](avisos.md) del outbox, y con `PHOTO_STORAGE`
 además procesa fotos.
 
-## Persistencia y migraciones K002/K003
+## Persistencia y migraciones
 
 El volumen `postgres_data` conserva datos al recrear contenedores. La imagen
 PostGIS habilita la extensión al inicializar `POSTGRES_DB`. Las tablas de Rescate
 se crean con las [migraciones versionadas](migraciones.md), no al arrancar HTTP
-ni Compose. El [modelo K003](modelo-inicial.md) describe las cinco entidades.
+ni Compose. El [modelo de datos](modelo-inicial.md) describe las tablas.
 
 Desde el host, configurar `DATABASE_URL` en `api/.env` o en el entorno con el
 usuario, base y puerto de Compose. Ejecutar `npm run db:migrate` desde `api/`.
@@ -117,8 +117,8 @@ Los comandos `db:migrate`, `db:create`, `db:rollback` y `db:test` cargan
 `api/.env` mediante Node; una variable del entorno tiene prioridad.
 `db:test:compose` obtiene la conexión
 del servicio `db`, crea una base exclusiva desde template0 y ejecuta la prueba
-K003 con rollback/reaplicación. Conserva esa base; no prueba sobre la de desarrollo.
-Seguir los prerrequisitos de la [guía](migraciones.md#prueba-actual-de-k003).
+del historial con rollback y reaplicación. Conserva esa base; no prueba sobre la de desarrollo.
+Seguir los prerrequisitos de la [guía](migraciones.md#prueba-del-historial).
 
 Si cambia usuario/base/contraseña con un volumen existente, PostgreSQL conserva
 los valores originales. No reinicializar datos que deban conservarse.

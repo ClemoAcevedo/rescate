@@ -37,6 +37,11 @@ const incidentNotification = { ...notification, id: 'notice_incident', kind: 'in
 } }
 const operatorLot = { ...lot, establishmentId: 'est_ux', status: 'published', version: 1, reservedQuantity: 2, paused: false,
   createdAt: instant, publishedAt: instant }
+const reportedIncident = { id: 'incident_operator_ux', version: 0, status: 'reported',
+  reportReason: 'El contenido no coincide.', reportedAt: instant, versions: [] }
+const establishmentIncidents = { items: [{ ...reportedIncident, lot: { id: lot.id, description: 'Panes surtidos' } }],
+  page: 1, hasNextPage: false }
+
 const fixtures = {
   '/api/notifications/notice_incident': incidentNotification,
   '/api/public/lots': { items: [0, 1, 2].map(index => ({ ...lot, id: `lot_${index}` })), page: 1, hasNextPage: false },
@@ -50,6 +55,7 @@ const fixtures = {
   '/api/establishments/est_ux/activity': { items: [{ id: 'event_ux', kind: 'lot_published', at: instant, lot, quantity: 10 }], page: 1, hasNextPage: false },
   '/api/establishments/est_ux/lots': { items: [0, 1, 2].map(index => ({ ...operatorLot, id: `lot_${index}` })), page: 1, hasNextPage: false },
   '/api/lots/lot_ux': operatorLot,
+  '/api/lots/lot_ux/incidents': { items: [reportedIncident] },
   '/api/lots/lot_ux/photos': { items: [], limit: 3 },
   '/api/lots/lot_ux/management': { lotId: lot.id, status: 'published', version: 1, paused: false, quantity: 10, inventory, history: [] },
 }
@@ -64,6 +70,13 @@ const screens = [
   { path: '/reservas/res_ux/chat', target: '/api/reservations/res_ux/messages', selector: '.chat form', props: ['x', 'y', 'width', 'height'] },
   { path: '/operador/panel', target: '/api/establishments/est_ux/panel', selector: '.panel-stat', props: ['x', 'y', 'width', 'height'] },
   { path: '/operador/lotes', target: '/api/establishments/est_ux/lots', selector: '.my-lot', props: ['x', 'y', 'width', 'height'] },
+  { path: '/operador/incidencias', target: '/api/establishments/est_ux/incidents',
+    selector: '.incident-summary', props: ['x', 'y', 'width', 'height'],
+    operatorIncidents: { loading: 'Cargando incidencias…', empty: 'No hay incidencias', result: establishmentIncidents } },
+  { path: '/operador/lotes/lot_ux/incidencias', target: '/api/lots/lot_ux/incidents',
+    selector: '.incident-lot, .incident-report', props: ['x', 'y', 'width', 'height'],
+    operatorIncidents: { loading: 'Cargando incidencias del lote…', empty: 'No hay incidencias en este lote.',
+      result: fixtures['/api/lots/lot_ux/incidents'] } },
 ]
 
 async function boxes(page, selector) {
@@ -83,7 +96,7 @@ function sameGeometry(before, after, props, label) {
 
 try {
   for (const width of [360, 1366]) {
-    for (const screen of screens.filter(screen => !process.env.UX_PATHS || process.env.UX_PATHS.split(',').includes(screen.path))) {
+    for (const screen of screens) {
       const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true,
         timezoneId: 'Asia/Tokyo', reducedMotion: 'reduce' })
       const page = await context.newPage()
@@ -96,6 +109,7 @@ try {
         const path = new URL(route.request().url()).pathname
         if (path === '/api/auth/session') return route.fulfill({ json: { session, csrfToken: 'controlled' } })
         if (path === screen.target && pending) await held
+        if (path === screen.target && screen.operatorIncidents) return route.fulfill({ json: screen.operatorIncidents.result })
         if (path === '/api/notifications') return route.fulfill({ json: {
           items: [0, 1, 2].map(index => ({ ...(screen.path === '/incidencias' ? incidentNotification : notification), id: `notice_${index}` })), page: 1, hasNextPage: false, unreadCount: 3,
         } })
@@ -107,6 +121,12 @@ try {
         await page.locator('main .ui-skeleton').first().waitFor()
         // La sesión se resuelve antes de medir el recurso retenido.
         await page.locator('.session-status').waitFor({ state: 'attached' })
+        if (screen.operatorIncidents) {
+          await page.getByText(screen.operatorIncidents.loading, { exact: true }).waitFor({ state: 'attached' })
+          const loading = page.locator('main .loading-state[aria-busy="true"]')
+          assert.equal(await loading.count(), 1)
+          assert.ok(await loading.locator('.ui-skeleton').count() > 0)
+        }
         await page.locator(screen.selector).first().waitFor()
         const before = await boxes(page, screen.selector)
         const imageName = `${width}-${screen.path.replaceAll('/', '_')}`
@@ -184,6 +204,55 @@ try {
           refreshRelease()
           await page.locator('[aria-label="Detalle de incidencia"][aria-busy="false"]').waitFor()
           sameGeometry(settled, await boxes(page, '.incident-detail__text, .incident-detail__read'), ['x', 'y', 'width', 'height'], 'detalle actualizado')
+        }
+        if (screen.operatorIncidents) {
+          const { result, empty } = screen.operatorIncidents
+          const refresh = page.getByRole('button', { name: 'Actualizar', exact: true })
+          let next = 'hold'
+          let releaseRefresh
+          const heldRefresh = new Promise(resolve => { releaseRefresh = resolve })
+          await page.route(`**${screen.target}`, async route => {
+            if (next === 'hold') await heldRefresh
+            if (next === 'error') return route.fulfill({ status: 503, json: {} })
+            if (next === 'empty') return route.fulfill({ json: { ...result, items: [] } })
+            if (next === 'long') return route.fulfill({ json: { ...result,
+              items: result.items.map(item => ({ ...item, reportReason: 'Motivo muy extenso '.repeat(50) + 'X'.repeat(200) })),
+            } })
+            return route.fulfill({ json: result })
+          })
+          try {
+            const settled = await boxes(page, screen.selector)
+            await refresh.click()
+            await page.locator('.incidents__results[aria-busy="true"]').waitFor()
+            sameGeometry(settled, await boxes(page, screen.selector), ['x', 'y', 'width', 'height'], 'incidencias durante refresco')
+            assert.equal(await page.locator('main .ui-skeleton').count(), 0)
+            if (screen.target.startsWith('/api/lots/')) {
+              assert.equal(await page.getByRole('button', { name: 'Enviar reporte' }).isDisabled(), true)
+              assert.equal(await page.getByRole('button', { name: 'Publicar incidencia' }).isDisabled(), true)
+            } else {
+              assert.equal(await page.getByText('Página 1', { exact: true }).count(), 0)
+            }
+            next = 'populated'; releaseRefresh()
+            await page.locator('.incidents__results[aria-busy="false"]').waitFor()
+            sameGeometry(settled, await boxes(page, screen.selector), ['x', 'y', 'width', 'height'], 'incidencias actualizadas')
+            next = 'error'
+            await refresh.click()
+            await page.getByRole('alert').waitFor()
+            assert.equal(await page.locator('main .ui-skeleton').count(), 0)
+            if (screen.target.startsWith('/api/lots/')) {
+              assert.equal(await page.getByRole('button', { name: 'Enviar reporte' }).isDisabled(), true)
+              assert.equal(await page.getByRole('button', { name: 'Publicar incidencia' }).isDisabled(), true)
+            }
+            next = 'empty'
+            await refresh.click()
+            await page.getByText(empty, { exact: true }).waitFor()
+            assert.equal(await page.getByRole('alert').count(), 0)
+            assert.equal(await page.locator('main .ui-skeleton').count(), 0)
+            next = 'long'
+            await refresh.click()
+            await page.locator('.incident-summary__reason').filter({ hasText: 'Motivo muy extenso' }).waitFor()
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+          } finally { releaseRefresh() }
         }
         if (screen.path === '/operador/panel') assert.match(await page.locator('.panel-period__scope').innerText(), /01\/01\/2030 y el 15\/01\/2030/)
         console.log(`OK ${width}: ${screen.path}, geometría de carga → datos`)

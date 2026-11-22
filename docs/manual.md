@@ -16,8 +16,8 @@ menú».
 ## Cuenta y acceso
 
 - **Registro.** En «Registro» se ingresa correo, una contraseña de al menos 12 caracteres y
-  el consentimiento «Acepto que Rescate guarde mi correo…». Registrarse no inicia sesión:
-  después se entra por «Iniciar sesión».
+  el consentimiento «Acepto que Rescate guarde mi correo…». Al crear la cuenta, Rescate
+  abre «Iniciar sesión» y muestra la confirmación del registro.
 - **Sesión.** Dura 12 horas desde el inicio de sesión. Las páginas que la requieren ofrecen
   «Iniciar sesión» y, al entrar, vuelven a la misma página.
 - **Operar un establecimiento.** Registrarse no da permisos de operador. La habilitación la

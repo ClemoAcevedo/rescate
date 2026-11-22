@@ -129,7 +129,10 @@ motivo parte del reporte o de la última versión. Cerrar el lote es una casilla
 el lote abierto, y pide confirmar antes de enviar. Cada versión muestra responsable, fecha,
 motivo, instrucciones, decisión de cierre y avisos. Una respuesta perdida permite reintentar la
 misma operación con su clave; una versión desactualizada pide actualizar. Resuelta, la
-incidencia ya no ofrece acciones.
+incidencia ya no ofrece acciones. El listado y el detalle reservan espacio para las tarjetas
+y el formulario durante la primera carga. Al actualizar se mantienen los datos visibles
+y los nuevos envíos del detalle esperan una consulta exitosa. El reintento del mismo
+envío conserva su clave.
 
 ## Reporte de quien reservó
 

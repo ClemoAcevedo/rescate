@@ -100,9 +100,8 @@ cuerpo JSON `400`, `413`, `415`, `422`; no sustituyen errores de autorización.
 | `listEstablishmentCommitments` · GET `/establishments/{establishmentId}/commitments` | Sesión y permiso sobre establecimiento | No, lectura | 200, 401, 403, 404, 422, G | RF10 / K035 |
 | `listEstablishmentActivity` · GET `/establishments/{establishmentId}/activity` | Sesión y permiso sobre establecimiento | No, lectura | 200, 401, 403, 404, 422, G | RF10 / K035 |
 
-RF01/RF02 provienen de anexos A p. 1; las tarjetas se relacionan en el
-[modelo inicial](../modelo-inicial.md), sección Fuera de K003, y en la planificación
-de este trabajo. No se inventan nuevos IDs de requisitos.
+Los RF provienen de anexos A pp. 1–2; la [trazabilidad](../k013-trazabilidad.md)
+relaciona requisitos, casos de uso y tarjetas. No se inventan nuevos IDs de requisitos.
 
 Las operaciones `searchPublicLots` y `getPublicLot` son públicas y no usan sesión.
 `reservePublicLot` exige actor autenticado, Origin y CSRF; su ruta pública describe
