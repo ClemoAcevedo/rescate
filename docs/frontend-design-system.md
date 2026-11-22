@@ -57,7 +57,9 @@ descripción y metadatos; galerías conservan su relación de aspecto; el chat r
 el espacio del historial para mantener el formulario en su sitio. Los títulos
 de lote de las cargas de detalle y listados usan texto decorativo representativo
 que se ajusta al ancho, para reservar también las líneas de títulos extensos
-en móvil.
+en móvil. Mientras se comprueba la sesión, validar retiros, reportar un problema
+y reservar packs muestran la estructura del formulario sin exponer controles
+antes de que estén disponibles.
 
 Cuando existen datos, conservarlos al refrescar y expresar la carga en su región
 y controles. No insertar un aviso encima ni quitar bloques completos durante cada

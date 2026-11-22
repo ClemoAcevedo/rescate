@@ -2,10 +2,13 @@ import './incidents.css'
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { ReportIncidentForm } from '../components/incidents/ReportIncidentForm'
+import { ReportIncidentForm, ReportIncidentFormSkeleton } from '../components/incidents/ReportIncidentForm'
 import { Alert } from '../components/ui/Alert'
 import { Card } from '../components/ui/Card'
+import { LoadingState } from '../components/ui/Skeleton'
 import { lotTitle } from '../lots/lot-title'
+
+const reportHint = 'Por ejemplo, el estado del alimento o algo distinto a lo publicado. Hasta 2000 caracteres.'
 
 /**
  * Quien tiene o tuvo una reserva o una espera en el lote reporta un problema. El reporte queda
@@ -22,8 +25,10 @@ export function ReportIncidentPage() {
     ? (state as { lotDescription: string }).lotDescription : null
 
   let content
-  if (status === 'checking' || status === 'error' || (session && !csrfToken)) {
-    content = <Alert role="status">{status === 'error' ? 'No fue posible comprobar la sesión. Reintenta desde el aviso superior.' : 'Comprobando la sesión…'}</Alert>
+  if (status === 'error') {
+    content = <Alert role="status">No fue posible comprobar la sesión. Reintenta desde el aviso superior.</Alert>
+  } else if (status === 'checking' || (session && !csrfToken)) {
+    content = <LoadingState label="Comprobando la sesión…"><ReportIncidentFormSkeleton hint={reportHint} /></LoadingState>
   } else if (!session) {
     content = <Alert>Inicia sesión para reportar un problema. <Link to={`/login?from=${encodeURIComponent(pathname)}`}>Iniciar sesión</Link></Alert>
   } else if (sent) {
@@ -33,7 +38,7 @@ export function ReportIncidentPage() {
     </Alert>
   } else {
     content = <ReportIncidentForm lotId={id} csrfToken={csrfToken!} label="¿Qué problema encontraste?"
-      hint="Por ejemplo, el estado del alimento o algo distinto a lo publicado. Hasta 2000 caracteres."
+      hint={reportHint}
       onReported={() => setSent(true)} />
   }
 

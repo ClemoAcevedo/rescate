@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { Icon } from '../components/Icon'
 import { IncidentHistory, NoticeCounts } from '../components/incidents/IncidentHistory'
 import { IncidentVersionForm } from '../components/incidents/IncidentVersionForm'
-import { ReportIncidentForm } from '../components/incidents/ReportIncidentForm'
+import { ReportIncidentForm, ReportIncidentFormSkeleton } from '../components/incidents/ReportIncidentForm'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -24,6 +24,7 @@ import type { EstablishmentIncidentPage, Incident, IncidentStatus } from '../ser
 import { LotRequestError, getLot, type LotResponse } from '../services/lots-service'
 
 const description = 'Reportes de problemas sobre tus lotes, los avisos publicados y su seguimiento.'
+const operatorReportHint = 'Hasta 2000 caracteres.'
 const reportDescription = 'El reporte queda por revisar. No avisa a nadie ni cierra el lote hasta que publiques una versión.'
 
 /** Sesión y permiso de operador; la API vuelve a comprobar la membresía en cada consulta. */
@@ -87,14 +88,7 @@ function LotIncidentsSkeleton({ label = 'Cargando incidencias del lote…' }: { 
       <Card className="incident-report">
         <h2><Skeleton width="15rem" /></h2>
         <p><Skeleton>{reportDescription}</Skeleton></p>
-        <div className="incident-form">
-          <div className="ui-field">
-            <span className="ui-field__label"><Skeleton width="14rem" /></span>
-            <Skeleton className="incident-skeleton__textarea" />
-            <span className="ui-field__description"><Skeleton width="10rem" /></span>
-          </div>
-          <Skeleton className="skeleton-control" width="10rem" />
-        </div>
+        <ReportIncidentFormSkeleton hint={operatorReportHint} />
       </Card>
       <div>
         <h2><Skeleton width="8rem" /></h2>
@@ -269,7 +263,7 @@ function LotIncidents({ lotId, csrfToken }: { lotId: string; csrfToken: string }
           <Card as="section" className="incident-report" aria-labelledby="incident-report-title">
             <h2 id="incident-report-title">Reportar un problema</h2>
             <p>{reportDescription}</p>
-            <ReportIncidentForm lotId={lot.id} csrfToken={csrfToken} label="Problema detectado" hint="Hasta 2000 caracteres." disabled={loading || error !== null}
+            <ReportIncidentForm lotId={lot.id} csrfToken={csrfToken} label="Problema detectado" hint={operatorReportHint} disabled={loading || error !== null}
               onReported={() => { setNotice('Reporte registrado: queda por revisar.'); reload() }} />
           </Card>
         )}

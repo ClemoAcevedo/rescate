@@ -264,6 +264,57 @@ try {
     }
   }
 
+  // Comprueba la sesión antes de habilitar acciones, incluso si el lote público ya llegó.
+  const sessionScreens = [
+    { path: '/operador/lotes/lot_ux/retiros', form: '.pickups__form', label: 'Comprobando la sesión…' },
+    { path: '/lotes/lot_ux/reportar', form: '.incident-form', label: 'Comprobando la sesión…' },
+    { path: '/lotes/lot_ux', form: '.reserve-form', label: 'Comprobando tu sesión…' },
+  ]
+  for (const width of [360, 1366]) {
+    for (const screen of sessionScreens) {
+      const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true, reducedMotion: 'reduce' })
+      const page = await context.newPage()
+      await page.clock.setFixedTime(new Date('2030-01-15T19:00:00Z'))
+      let release
+      const held = new Promise(resolve => { release = resolve })
+      let fail = true
+      await page.route('**/api/**', async route => {
+        const path = new URL(route.request().url()).pathname
+        if (path === '/api/auth/session') {
+          await held
+          if (fail) return route.fulfill({ status: 503, json: {} })
+          return route.fulfill({ json: { session, csrfToken: 'controlled' } })
+        }
+        if (path === '/api/notifications') return route.fulfill({ json: { items: [], page: 1, hasNextPage: false, unreadCount: 0 } })
+        assert.ok(fixtures[path], `Ruta sin fixture: ${path}`)
+        return route.fulfill({ json: fixtures[path] })
+      })
+      try {
+        await page.goto(base + screen.path)
+        const formSkeleton = page.locator(`main .loading-state ${screen.form}`)
+        const status = page.getByRole('main').getByRole('status').filter({ hasText: screen.label })
+        await status.waitFor({ state: 'attached' })
+        assert.equal(await status.getAttribute('class'), 'visually-hidden')
+        assert.equal(await formSkeleton.locator('xpath=ancestor::*[@aria-busy="true"]').count(), 1)
+        assert.ok(await formSkeleton.locator('.ui-skeleton').count() > 0)
+        assert.equal(await formSkeleton.locator('input, textarea, select, button, a[href], [tabindex]').count(), 0)
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false,
+          `${screen.path}: sin desborde durante la carga`)
+        const before = await boxes(page, screen.form)
+        release()
+        await page.getByRole('button', { name: 'Reintentar comprobación' }).waitFor()
+        await formSkeleton.waitFor({ state: 'detached' })
+        fail = false
+        await page.getByRole('button', { name: 'Reintentar comprobación' }).click()
+        await page.locator(`form${screen.form}`).waitFor()
+        sameGeometry(before, await boxes(page, screen.form), ['x', 'width', 'height'], screen.path)
+        assert.equal(await status.count(), 0)
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+        console.log(`OK ${width}px: ${screen.path}, sesión lenta, error y reintento`)
+      } finally { release(); await context.close() }
+    }
+  }
+
   // Reconsulta lenta y fallida: conserva datos y dimensiones de retiro en ambos anchos.
   for (const width of [360, 1366]) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true })
