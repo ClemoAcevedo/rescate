@@ -10,8 +10,8 @@ import { FormField } from '../ui/FormField'
  * Registra un problema del lote para que el establecimiento lo revise. No cancela reservas,
  * no cierra el lote ni avisa por sí solo; una respuesta perdida se reintenta con la misma clave.
  */
-export function ReportIncidentForm({ lotId, csrfToken, label, hint, onReported }: {
-  lotId: string; csrfToken: string; label: string; hint: string; onReported: (report: IncidentReport) => void
+export function ReportIncidentForm({ lotId, csrfToken, label, hint, disabled = false, onReported }: {
+  lotId: string; csrfToken: string; label: string; hint: string; disabled?: boolean; onReported: (report: IncidentReport) => void
 }) {
   const [reason, setReason] = useState('')
   const [pending, setPending] = useState(false)
@@ -39,6 +39,7 @@ export function ReportIncidentForm({ lotId, csrfToken, label, hint, onReported }
 
   function submit(event: FormEvent) {
     event.preventDefault()
+    if (disabled) return
     if (!reason.trim()) { setError('Describe el problema antes de enviarlo.'); return }
     void send({ reason: reason.trim(), idempotencyKey: crypto.randomUUID() })
   }
@@ -47,12 +48,12 @@ export function ReportIncidentForm({ lotId, csrfToken, label, hint, onReported }
     <form className="incident-form" onSubmit={submit} aria-busy={pending}>
       {error && <Alert tone="warning" role="alert">{error}</Alert>}
       {uncertain
-        ? <Button disabled={pending} loading={pending} onClick={() => { void send(uncertain) }}>Reintentar el mismo reporte</Button>
+        ? <Button loading={pending} onClick={() => { void send(uncertain) }}>Reintentar el mismo reporte</Button>
         : <>
           <FormField label={label} required hint={hint}>{control => (
             <Textarea {...control} rows={4} maxLength={2000} value={reason} disabled={pending} onChange={event => setReason(event.target.value)} />
           )}</FormField>
-          <Button type="submit" loading={pending} disabled={pending}>Enviar reporte</Button>
+          <Button type="submit" loading={pending} disabled={disabled || pending}>Enviar reporte</Button>
         </>}
     </form>
   )
