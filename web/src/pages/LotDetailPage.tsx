@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Icon } from '../components/Icon'
-import { LotDetailSkeleton } from '../components/lots/LotSkeletons'
+import { LotDetailSkeleton, ReserveFormSkeleton } from '../components/lots/LotSkeletons'
 import { LotGallery } from '../components/lots/LotGallery'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/FormControls'
 import { FormField } from '../components/ui/FormField'
+import { LoadingState } from '../components/ui/Skeleton'
 import { formatInstant } from '../format/date-time'
 import { UnexpectedResponseError } from '../services/http-client'
 import { clearIntent, intentStorageKey, readIntent, saveIntent } from '../services/reservation-intent'
@@ -160,7 +161,7 @@ function LotDetail({ id, actor }: { id: string; actor: string }) {
                 <p>Para reservar, inicia sesión con tu cuenta. Volverás a este lote.</p>
                 <Link className="ui-button ui-button--primary ui-button--block" to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}>Inicia sesión para reservar</Link>
               </div> : status === 'error' ? <Alert tone="danger" role="alert">{sessionError ?? 'No se pudo comprobar la sesión.'} <Button variant="secondary" onClick={() => { void refreshSession() }}>Reintentar</Button></Alert>
-                : <Alert role="status">Comprobando tu sesión…</Alert>}
+                : <LoadingState label="Comprobando tu sesión…"><ReserveFormSkeleton /></LoadingState>}
           </>}
         </Card>
       </div>

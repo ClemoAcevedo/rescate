@@ -5,6 +5,18 @@ import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
 import { Textarea } from '../ui/FormControls'
 import { FormField } from '../ui/FormField'
+import { Skeleton } from '../ui/Skeleton'
+
+export function ReportIncidentFormSkeleton({ hint }: { hint: string }) {
+  return <div className="incident-form">
+    <div className="ui-field">
+      <span className="ui-field__label"><Skeleton width="14rem" /></span>
+      <Skeleton className="incident-skeleton__textarea" />
+      <span className="ui-field__description"><Skeleton width="36rem">{hint}</Skeleton></span>
+    </div>
+    <Skeleton className="skeleton-control" width="10rem" />
+  </div>
+}
 
 /**
  * Registra un problema del lote para que el establecimiento lo revise. No cancela reservas,
