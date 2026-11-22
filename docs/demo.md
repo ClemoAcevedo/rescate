@@ -68,7 +68,7 @@ publicado y el paso 3 sobre la reserva ya hecha.
 
 | Paso | Quién | Qué se muestra | RF |
 | --- | --- | --- | --- |
-| 1. Cuentas | Todos | «Registro» muestra el consentimiento del correo sin enviarlo. El operador ve el grupo «Mi establecimiento» en el menú; A y B no. | RF01 |
+| 1. Cuentas | Todos | En una ventana privada aparte, crear una cuenta ficticia con un correo nuevo y aceptar el consentimiento. Mostrar la confirmación al llegar a «Iniciar sesión». En las sesiones preparadas, el operador ve «Mi establecimiento» y A y B ven los grupos «Rescatar» y «Tu cuenta». | RF01 |
 | 2. Publicación | Operador | «Publicar lote»: 2 packs, una ventana que ya comenzó y termina después de la presentación. «Guardar borrador», «Agregar foto» hasta que deja de estar «En validación», «Publicar lote» y «Confirmar publicación». Publicado, el lote queda fijo. | RF02 |
 | 3. Búsqueda y reserva | A | «Explorar lotes» con la ubicación o la categoría; el detalle con foto, «Tu retiro» y condiciones. «Reservar 2 packs» y «Ver mi código de retiro». | RF03, RF04 |
 | 4. Espera | B | El lote muestra «Sin packs libres». «Unirme a la lista de espera» por 1 pack; «Mis esperas» muestra su lugar. La espera no retiene packs. | RF07 |

@@ -1,7 +1,7 @@
 /* Presentación exclusiva de las incidencias del operador y del reporte (K046). */
 .incidents { display: grid; gap: var(--sp-6); width: min(100%, var(--layout-max)); margin: 0 auto; }
 .incidents--narrow { width: min(100%, 44rem); }
-.incidents > div { display: grid; gap: var(--sp-6); min-width: 0; }
+.incidents > div, .incidents__results { display: grid; gap: var(--sp-6); min-width: 0; }
 .incidents .page-header, .incidents .my-lots__toolbar { margin-bottom: 0; }
 .incidents h2 { font-size: var(--fs-title-lg); }
 .incidents h3 { font-size: 1.0625rem; }
@@ -49,3 +49,5 @@
 .incident-form__close { align-items: flex-start; }
 .incident-form__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
 .incident-form .ui-alert p { margin: 0; }
+
+.incident-skeleton__textarea { block-size: calc(4lh + 2 * (var(--sp-2) + var(--border-width))); }

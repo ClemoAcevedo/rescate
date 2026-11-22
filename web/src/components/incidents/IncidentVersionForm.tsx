@@ -15,8 +15,8 @@ const actionLabels: Record<IncidentVersionRequest['action'], string> = {
  * Publicar, actualizar y resolver crean una versión que avisa a los vinculados. Cerrar el lote
  * es una decisión aparte que exige confirmación; una respuesta perdida se reintenta con la misma clave.
  */
-export function IncidentVersionForm({ incident, lotOpen, csrfToken, onPublished }: {
-  incident: Incident; lotOpen: boolean; csrfToken: string; onPublished: (result: IncidentVersionResult) => void
+export function IncidentVersionForm({ incident, lotOpen, csrfToken, disabled = false, onPublished }: {
+  incident: Incident; lotOpen: boolean; csrfToken: string; disabled?: boolean; onPublished: (result: IncidentVersionResult) => void
 }) {
   const latest = incident.versions.at(-1)
   const actions: IncidentVersionRequest['action'][] = incident.status === 'reported' ? ['publish'] : ['update', 'resolve']
@@ -31,7 +31,7 @@ export function IncidentVersionForm({ incident, lotOpen, csrfToken, onPublished 
   const busy = useRef(false)
 
   async function execute(retry?: IncidentVersionRequest) {
-    if (busy.current) return
+    if ((disabled && !retry) || busy.current) return
     const command = retry ?? { action, version: incident.version, reason: reason.trim(), instructions: instructions.trim(),
       idempotencyKey: crypto.randomUUID(), ...(lotOpen && closeLot ? { closeLot: true } : {}) }
     busy.current = true; setPending(true); setConfirming(false)
@@ -53,6 +53,7 @@ export function IncidentVersionForm({ incident, lotOpen, csrfToken, onPublished 
 
   function submit(event: FormEvent) {
     event.preventDefault()
+    if (disabled) return
     if (!reason.trim() || !instructions.trim()) { setMessage('Indica el motivo y las instrucciones para quienes reciben el aviso.'); return }
     if (lotOpen && closeLot) setConfirming(true)
     else void execute()
@@ -62,7 +63,7 @@ export function IncidentVersionForm({ incident, lotOpen, csrfToken, onPublished 
   return (
     <form className="incident-form" onSubmit={submit} aria-busy={pending}>
       {message && <Alert tone="warning" role="alert">{message}</Alert>}
-      {uncertain ? <Button disabled={pending} loading={pending} onClick={() => { void execute(uncertain) }}>Reintentar la misma operación</Button> : <>
+      {uncertain ? <Button loading={pending} onClick={() => { void execute(uncertain) }}>Reintentar la misma operación</Button> : <>
         {actions.length > 1 && <FormField label="Acción">{control => (
           <Select {...control} value={action} disabled={pending} onChange={event => setAction(event.target.value as typeof action)}>
             <option value="update">Publicar una actualización (sigue en seguimiento)</option>
@@ -85,11 +86,11 @@ export function IncidentVersionForm({ incident, lotOpen, csrfToken, onPublished 
           ? <Alert tone="warning" role="alert">
             <p>¿Confirmas publicar y cerrar el lote? No se puede deshacer, ni siquiera al resolver.</p>
             <div className="incident-form__actions">
-              <Button variant="danger" disabled={pending} onClick={() => { void execute() }}>Confirmar y cerrar el lote</Button>
+              <Button variant="danger" disabled={disabled || pending} onClick={() => { void execute() }}>Confirmar y cerrar el lote</Button>
               <Button variant="ghost" onClick={() => setConfirming(false)}>Volver</Button>
             </div>
           </Alert>
-          : <Button type="submit" loading={pending} disabled={pending}>{actionLabels[action]}</Button>}
+          : <Button type="submit" loading={pending} disabled={disabled || pending}>{actionLabels[action]}</Button>}
       </>}
     </form>
   )
