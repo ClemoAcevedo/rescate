@@ -60,8 +60,8 @@ registra su retiro; B reserva el otro y no lo retira. Al cerrar, B tiene una res
 «Vencida» (RF08) y el período muestra ese lote: 1 pack retirado, 1 no asignable, una
 reserva retirada y una vencida.
 
-**Minutos antes.** Abrir una ventana privada o un perfil de navegador por cuenta, con la
-sesión iniciada: A y B en ancho móvil, el operador en escritorio. Si no habrá tiempo para
+**Minutos antes.** Abrir un contexto de navegador independiente por cuenta con la sesión
+iniciada. Usar A y B en ancho móvil y el operador en escritorio. Si no habrá tiempo para
 publicar en vivo, `en-vivo` deja publicado el lote del guion (2 packs, ventana de 3 horas,
 `--horas`) con los 2 packs reservados por A: el paso 2 se muestra sobre ese lote ya
 publicado y el paso 3 sobre la reserva ya hecha.
@@ -71,25 +71,25 @@ publicado y el paso 3 sobre la reserva ya hecha.
 | Paso | Quién | Qué se muestra | RF |
 | --- | --- | --- | --- |
 | 1. Cuentas | Todos | En una ventana privada aparte, crear una cuenta ficticia con un correo nuevo y aceptar el consentimiento. Mostrar la confirmación al llegar a «Iniciar sesión». En las sesiones preparadas, el operador ve «Mi establecimiento» y A y B ven los grupos «Rescatar» y «Tu cuenta». | RF01 |
-| 2. Publicación | Operador | «Publicar lote»: 2 packs, una ventana que ya comenzó y termina después de la presentación. «Guardar borrador», «Agregar foto» hasta que deja de estar «En validación», «Publicar lote» y «Confirmar publicación». Publicado, el lote queda fijo. | RF02 |
-| 3. Búsqueda y reserva | A | «Explorar lotes» con la ubicación o la categoría; el detalle con foto, «Tu retiro» y condiciones. «Reservar 2 packs» y «Ver mi código de retiro». | RF03, RF04 |
+| 2. Publicación | Operador | Guardar un borrador de 2 packs con título y categoría propios. La ventana debe estar abierta durante la presentación. Usar «Agregar foto», esperar a que esté lista y pulsar «Publicar lote» y «Confirmar publicación». | RF02 |
+| 3. Búsqueda y reserva | A | En «Explorar lotes» filtrar por la categoría del recorrido y comprobar el título. Mostrar la foto, «Tu retiro» y las condiciones. Pulsar «Agregar un pack» para pasar de 1 a 2, luego «Reservar 2 packs» y «Ver mi código de retiro». | RF03, RF04 |
 | 4. Espera | B | El lote muestra «Sin packs libres». «Unirme a la lista de espera» por 1 pack; «Mis esperas» muestra su lugar. La espera no retiene packs. | RF07 |
-| 5. Cancelación y oferta | A, luego B | A elige «Cancelar reserva» y «Confirmar cancelación»; el código deja de servir. B recibe la oferta en «Avisos» con su plazo de diez minutos y elige «Aceptar 1 pack». | RF05, RF07, RF09 |
+| 5. Cancelación y oferta | A, luego B | A elige «Cancelar reserva» y «Confirmar cancelación». El código deja de servir. B abre «Ver oferta» en «Avisos» o entra al detalle desde «Mis esperas» si el aviso demora. Pulsa «Aceptar 1 pack» antes de que venza el plazo de diez minutos y abre «Ver mi código de retiro». | RF05, RF07, RF09 |
 | 6. Chat | B y operador | B abre «Chat de la reserva» y escribe. El operador recibe el aviso del mensaje y responde desde «Avisos» o los compromisos de «Mi establecimiento». | RF13, RF09 |
 | 7. Retiro | Operador | «Validar retiros»: escribe el código que muestra B, «Revisar código» y «Confirmar retiro de 1 pack». La conversación queda cerrada. | RF06 |
-| 8. Incidencia | B, operador, A | B elige «Reportar un problema» en su reserva retirada. El operador la ve en «Incidencias por revisar», la publica con instrucciones y ve los avisos pendientes, generados y leídos. B (con entrega) y A (sin entrega) reciben el «Aviso de incidencia»; B lo marca como leído. El operador elige «Resolver incidencia». | RF11, RF09 |
+| 8. Incidencia | B, operador, A | B elige «Reportar un problema» en su reserva retirada. El operador la ve en «Incidencias por revisar», la publica con instrucciones y ve los avisos pendientes, generados y leídos. B (con entrega) y A (sin entrega) reciben el «Aviso de incidencia»; B lo marca como leído. El operador pulsa «Actualizar» para comprobar la lectura, selecciona «Resolver la incidencia» en «Acción» y pulsa «Resolver incidencia». | RF11, RF09 |
 | 9. Vencimiento | B | «Mis reservas» muestra la reserva de `previo` como «Vencida», sin código. | RF08 |
 | 10. Panel | Operador | «Mi establecimiento»: el lote con 1 pack retirado y 1 libre, compromisos e historial de la sesión, y los resultados del período con las tasas de retiro y de vencimiento. | RF10, RF12 |
 
-La oferta vence a los diez minutos. Si vence, B pierde su lugar y vuelve a unirse a la
-espera; A puede reservar de nuevo para repetir el paso 5. Para mostrar un estado de error,
-tras el paso 7 la conversación responde «Conversación cerrada…» y revisar el mismo código
-muestra la reserva como «Retirada».
+Si vence la oferta, B pierde su lugar. Cuando los packs quedan libres y la cola está vacía,
+el lote vuelve a admitir reserva directa. Para repetir la espera, vuelve al paso 3 con A
+reservando los dos packs. Tras el retiro se puede demostrar que la conversación queda cerrada
+y que revisar el mismo código muestra la reserva como «Retirada».
 
 ## Comprobación de producción
 
-Se hace el día anterior y otra vez al menos una hora antes. Todo es de solo lectura,
-salvo el inicio de sesión de las cuentas.
+Se hace el día anterior y otra vez al menos una hora antes. Incluye consultas de producción
+y la comprobación de inicio y cierre de sesión con las cuentas de prueba.
 
 | Qué | Cómo | Resultado esperado |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ salvo el inicio de sesión de las cuentas.
 | Trayecto HTTPS | `WEB_URL=https://rescate-rescate1.vercel.app DEPLOY_SHA=<commit> npm --prefix api run test:deploy` | Todas las comprobaciones en `PASS` |
 | Worker, tareas y copia | `NODE_ENV=production npm --prefix api run ops:status`, con `DATABASE_URL` por el túnel SSH y las variables `PHOTO_S3_*` del servicio `api` ([revisión diaria](operacion.md#revisión-diaria)) | Worker activo, sin tareas en error y copia diaria vigente |
 | Cuentas | Iniciar sesión con las tres cuentas | El operador ve «Mi establecimiento»; A y B no |
-| Lotes | «Mis lotes» del operador | Ningún lote con la ventana abierta antes de `previo` |
+| Lotes | «Mis lotes» del operador | «Panadería Demo Rescate» tiene cero lotes con la ventana abierta antes de `previo` |
 
 Si una fila falla y no se corrige antes de la presentación, la demo usa la alternativa
 local.
@@ -110,12 +110,18 @@ Vercel ni B2, y solo tiene cuentas y datos ficticios.
 
 1. Antes de presentar, `npm --prefix api run recorridos:e3`, y luego `preparar P01` y
    `preparar P02`. La web queda en `https://localhost:5174`.
-2. Iniciar sesión con las tres cuentas locales en otras ventanas. Para los pasos 9 y 10,
-   el operador publica un lote de 2 packs con una ventana corta que cierre antes del paso 9;
-   A reserva 1 y el operador registra su retiro, y B reserva el otro sin retirarlo. Los
-   resultados del período también cuentan los lotes que retira `preparar`.
-3. Si producción falla, se cambia a esas ventanas y se sigue el guion desde el paso en
-   curso.
+2. Iniciar sesión con las tres cuentas locales en ventanas separadas. Después de ejecutar
+   ambos comandos `preparar`, dejar un borrador para el recorrido con 2 packs, foto validada,
+   título y categoría propios. Antes de proyectar, verificar que su ventana cubra la demo.
+3. Para los pasos 9 y 10, publicar otro lote local de 2 packs con título distinto y una ventana
+   corta. A reserva 1 y el operador registra su retiro. B reserva el otro y confirma en
+   «Mis reservas» que venció antes de presentar. Los resultados del período también cuentan
+   los lotes que retira `preparar`. Mostrar el vencimiento y el retiro del lote preparado.
+4. Si producción falla, anunciar el cambio a la instancia local y retomar desde el último
+   estado preparado allí. Si el punto de partida local es el borrador, continuar desde el
+   paso 2 y resumir lo que ya se mostró. Para retomar más adelante, preparar y verificar de antemano el estado
+   correspondiente con las cuentas locales, por ejemplo la reserva confirmada de B para
+   abrir el chat y validar su retiro. Ensayar el cambio de ventanas antes de presentar.
 
 ## Fuera de la demo
 
