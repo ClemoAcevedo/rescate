@@ -287,7 +287,8 @@ lo cambia.
 - **Demo y manual:** [manual de uso](docs/manual.md) por rol con RF01 a RF13 y estados de
   error; cuentas y establecimiento ficticios en producción, preparación por la API pública
   con `demo` (retiro y vencimiento previos) y guion por todos los RF con ensayo local en
-  `recorridos:e3` ([demo](docs/demo.md), K040, K052).
+  `recorridos:e3`, que también es la alternativa si producción falla; comprobación de
+  producción antes de presentar ([demo](docs/demo.md), K040, K052, K059).
 - **API:** `/health`, identidad y sesiones (K008) con consentimiento registrado, borrador/publicación y listado de
   lotes del operador (K010, #96), búsqueda PostGIS y reserva directa idempotente (K015) con inventario del lote
   protegido por la base (K021), reservas del titular con código de retiro, cancelación,
@@ -365,8 +366,8 @@ lo cambia.
   detectadas con datos ficticios. `backup:scheduled` automatiza cifrado autenticado,
   subida verificada y retención de siete días; `backup:fetch` permite una segunda copia
   cifrada en otro equipo. Un diario cifrado independiente permite identificar contactos
-  y conciliar efectos posteriores antes de reabrir (`backup:journal`). La validación
-  del cron y el ensayo real en Railway se completan en el release
+  y conciliar efectos posteriores antes de reabrir (`backup:journal`). El cron corre en
+  Railway y la recuperación se ensayó en un entorno Railway aislado dentro de 60 min
   ([operación](docs/operacion.md#copia-y-restauración-rnf08), #205/#206).
 
 El [índice de documentación](docs/README.md) lleva a cada área.

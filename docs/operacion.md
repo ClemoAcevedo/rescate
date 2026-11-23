@@ -281,12 +281,12 @@ worktree con `git worktree prune`.
 
 ### Limitaciones
 
-- El ensayo real de recuperación en Railway debe acreditar el procedimiento completo y sus tiempos (#206).
 - El diario identifica los efectos posteriores; su conciliación requiere intervención de Operación y contacto con los afectados.
 - El bucket B2 borra todas las versiones al quitar una foto: la copia es el único
   respaldo de las fotos ([fotos](fotos.md#respaldo)).
-- La copia no incluye `PICKUP_CODE_KEY`. Sin esa clave, los códigos vigentes restaurados
-  no se pueden mostrar ni verificar.
+- La copia no incluye `PICKUP_CODE_KEY`, y en Railway la variable está sellada: ni el panel
+  ni la CLI devuelven su valor. Sin esa clave, los códigos vigentes restaurados no se pueden
+  mostrar ni verificar.
 - La copia usa el usuario de la base dentro de una transacción de solo lectura; no hay un
   rol de solo lectura.
 - La API que levanta `backup:restore` escucha en todas las interfaces mientras dura la
