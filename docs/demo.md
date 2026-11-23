@@ -36,9 +36,10 @@ pipeline de despliegue.
 ## Preparación
 
 **Antes del día.** Ensayar el guion completo, primero en local (ver más abajo) y luego en
-producción, y grabarlo como respaldo. El ensayo en producción confirma que las tres
-sesiones desde una misma red no alcanzan los [límites de tráfico](seguridad.md#límites).
-Tener a mano una foto del pack (JPEG, PNG o WebP de hasta 5 MiB).
+producción. El ensayo en producción confirma que las tres sesiones desde una misma red no
+alcanzan los [límites de tráfico](seguridad.md#límites). Una grabación sirve de apoyo, pero
+no reemplaza a la [alternativa local](#si-producción-falla). Tener a mano una foto del pack
+(JPEG, PNG o WebP de hasta 5 MiB).
 
 `npm --prefix api run demo` prepara datos por la API pública con las cuentas de la demo,
 igual que la web. Exige `WEB_URL` (el origen HTTPS, sin ruta) y `DEMO_PASSWORD`, y se
@@ -51,8 +52,9 @@ WEB_URL=https://rescate-rescate1.vercel.app DEMO_PASSWORD='…' \
   npm --prefix api run demo -- previo --foto pan.jpg
 ```
 
-**Al menos una hora antes.** El panel muestra por defecto los últimos 7 días con hoy
-incluido y solo cuenta lotes cerrados ([panel](panel.md)). `previo` publica un lote de 2
+**Al menos una hora antes.** Pasar la [comprobación de producción](#comprobación-de-producción)
+y dejar en marcha la [alternativa local](#si-producción-falla). El panel muestra por
+defecto los últimos 7 días con hoy incluido y solo cuenta lotes cerrados ([panel](panel.md)). `previo` publica un lote de 2
 packs cuya ventana termina en 20 minutos (`--minutos`): A reserva 1 pack y el operador
 registra su retiro; B reserva el otro y no lo retira. Al cerrar, B tiene una reserva
 «Vencida» (RF08) y el período muestra ese lote: 1 pack retirado, 1 no asignable, una
@@ -83,6 +85,37 @@ La oferta vence a los diez minutos. Si vence, B pierde su lugar y vuelve a unirs
 espera; A puede reservar de nuevo para repetir el paso 5. Para mostrar un estado de error,
 tras el paso 7 la conversación responde «Conversación cerrada…» y revisar el mismo código
 muestra la reserva como «Retirada».
+
+## Comprobación de producción
+
+Se hace el día anterior y otra vez al menos una hora antes. Todo es de solo lectura,
+salvo el inicio de sesión de las cuentas.
+
+| Qué | Cómo | Resultado esperado |
+| --- | --- | --- |
+| Release | `curl -s https://rescate-rescate1.vercel.app/release.json` | `commit` igual a la última etiqueta, después de `git fetch --tags`: `git tag -l 'deploy-*' --sort=-creatordate \| head -1` |
+| Salud | `curl -s https://rescate-rescate1.vercel.app/api/health` | `status`, `database` y `worker` en `ok` ([salud](operacion.md#salud)) |
+| Trayecto HTTPS | `WEB_URL=https://rescate-rescate1.vercel.app DEPLOY_SHA=<commit> npm --prefix api run test:deploy` | Todas las comprobaciones en `PASS` |
+| Worker, tareas y copia | `NODE_ENV=production npm --prefix api run ops:status`, con `DATABASE_URL` por el túnel SSH y las variables `PHOTO_S3_*` del servicio `api` ([revisión diaria](operacion.md#revisión-diaria)) | Worker activo, sin tareas en error y copia diaria vigente |
+| Cuentas | Iniciar sesión con las tres cuentas | El operador ve «Mi establecimiento»; A y B no |
+| Lotes | «Mis lotes» del operador | Ningún lote con la ventana abierta antes de `previo` |
+
+Si una fila falla y no se corrige antes de la presentación, la demo usa la alternativa
+local.
+
+## Si producción falla
+
+La alternativa es la instancia del [ensayo local](#ensayo-local): no depende de Railway,
+Vercel ni B2, y solo tiene cuentas y datos ficticios.
+
+1. Antes de presentar, `npm --prefix api run recorridos:e3`, y luego `preparar P01` y
+   `preparar P02`. La web queda en `https://localhost:5174`.
+2. Iniciar sesión con las tres cuentas locales en otras ventanas. Para los pasos 9 y 10,
+   el operador publica un lote de 2 packs con una ventana corta que cierre antes del paso 9;
+   A reserva 1 y el operador registra su retiro, y B reserva el otro sin retirarlo. Los
+   resultados del período también cuentan los lotes que retira `preparar`.
+3. Si producción falla, se cambia a esas ventanas y se sigue el guion desde el paso en
+   curso.
 
 ## Fuera de la demo
 
